@@ -1,0 +1,117 @@
+// Hand-authored to match supabase/migrations/0001_init.sql. Once a project is linked, regenerate
+// with `npx supabase gen types typescript --linked > src/lib/supabase/types.ts` and diff it
+// against this file rather than trusting it blindly.
+
+type Relationships = never[];
+
+export type Database = {
+  public: {
+    Tables: {
+      trips: {
+        Row: {
+          id: string;
+          name: string;
+          location: string | null;
+          starts_on: string | null;
+          ends_on: string | null;
+          created_by: string;
+          invite_code: string;
+          completed_at: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["trips"]["Row"]> & { name: string; created_by: string };
+        Update: Partial<Database["public"]["Tables"]["trips"]["Row"]>;
+        Relationships: Relationships;
+      };
+      trip_members: {
+        Row: {
+          id: string;
+          trip_id: string;
+          user_id: string;
+          display_name: string;
+          joined_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["trip_members"]["Row"]> & {
+          trip_id: string;
+          user_id: string;
+          display_name: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["trip_members"]["Row"]>;
+        Relationships: Relationships;
+      };
+      expenses: {
+        Row: {
+          id: string;
+          trip_id: string;
+          paid_by: string;
+          amount: number;
+          description: string;
+          receipt_photo_url: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["expenses"]["Row"]> & {
+          trip_id: string;
+          paid_by: string;
+          amount: number;
+          description: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["expenses"]["Row"]>;
+        Relationships: Relationships;
+      };
+      feedback: {
+        Row: {
+          id: string;
+          user_id: string;
+          trip_id: string | null;
+          rating: "yes" | "fine" | "not_really" | null;
+          comment: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["feedback"]["Row"]> & { user_id: string };
+        Update: Partial<Database["public"]["Tables"]["feedback"]["Row"]>;
+        Relationships: Relationships;
+      };
+    };
+    Views: Record<string, never>;
+    Functions: {
+      get_trip_by_invite_code: {
+        Args: { _code: string };
+        Returns: {
+          trip_id: string;
+          name: string;
+          location: string | null;
+          starts_on: string | null;
+          ends_on: string | null;
+          is_completed: boolean;
+          organizer_name: string | null;
+        }[];
+      };
+      create_trip: {
+        Args: {
+          _name: string;
+          _display_name: string;
+          _location?: string | null;
+          _starts_on?: string | null;
+          _ends_on?: string | null;
+        };
+        Returns: { trip_id: string; invite_code: string }[];
+      };
+      join_trip: {
+        Args: { _invite_code: string; _display_name: string };
+        Returns: string;
+      };
+      complete_trip: {
+        Args: { _trip_id: string };
+        Returns: undefined;
+      };
+      is_trip_member: {
+        Args: { _trip_id: string };
+        Returns: boolean;
+      };
+      is_trip_open: {
+        Args: { _trip_id: string };
+        Returns: boolean;
+      };
+    };
+  };
+};

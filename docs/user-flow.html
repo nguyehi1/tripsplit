@@ -1,0 +1,322 @@
+<title>TripSplit User Flow</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#EFF2ED;
+    --surface:#FFFFFF;
+    --surface-authed:#E7F1EC;
+    --ink:#1F2E27;
+    --ink-soft:#56685D;
+    --ink-faint:#8A9990;
+    --line:#C7D2C6;
+    --accent:#C15A2B;
+    --accent-soft:#F3DFCB;
+    --email-fill:#E9E1CE;
+    --lane-fill: rgba(31,46,39,0.04);
+    --shared-fill: rgba(193,90,43,0.07);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#131a16;
+      --surface:#1b2420;
+      --surface-authed:#1d2b26;
+      --ink:#ECEFE9;
+      --ink-soft:#A9B7AC;
+      --ink-faint:#6E7D71;
+      --line:#33433a;
+      --accent:#E58657;
+      --accent-soft:#3a2c22;
+      --email-fill:#2a2620;
+      --lane-fill: rgba(236,239,233,0.045);
+      --shared-fill: rgba(229,134,87,0.09);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#131a16;
+    --surface:#1b2420;
+    --surface-authed:#1d2b26;
+    --ink:#ECEFE9;
+    --ink-soft:#A9B7AC;
+    --ink-faint:#6E7D71;
+    --line:#33433a;
+    --accent:#E58657;
+    --accent-soft:#3a2c22;
+    --email-fill:#2a2620;
+    --lane-fill: rgba(236,239,233,0.045);
+    --shared-fill: rgba(229,134,87,0.09);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    padding:48px 24px 72px;
+  }
+  main{ max-width:1180px; margin:0 auto; }
+
+  .eyebrow{
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-size:12px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 10px;
+  }
+  h1{
+    font-family:"Fraunces", Georgia, serif;
+    font-weight:600;
+    font-size:clamp(30px,4vw,42px);
+    line-height:1.08;
+    margin:0 0 16px;
+    text-wrap:balance;
+    color:var(--ink);
+  }
+  .intro{
+    max-width:66ch;
+    font-size:16px;
+    line-height:1.65;
+    color:var(--ink-soft);
+    margin:0 0 36px;
+  }
+  .intro strong{ color:var(--ink); font-weight:600; }
+
+  figure{ margin:0; }
+  .diagram-frame{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:8px clamp(4px,2vw,20px) 4px;
+    overflow-x:auto;
+  }
+  svg{ display:block; width:100%; height:auto; min-width:760px; }
+  svg text{ font-family:"IBM Plex Sans", sans-serif; fill:var(--ink); }
+  svg .mono{ font-family:"IBM Plex Mono", monospace; fill:var(--ink-soft); }
+  svg .label{ font-family:"IBM Plex Mono", monospace; fill:var(--ink-soft); }
+  svg .label-accent{ fill:var(--accent); font-weight:500; }
+  svg .lane-title{ font-family:"IBM Plex Mono", monospace; letter-spacing:0.1em; fill:var(--ink-faint); text-transform:uppercase; }
+
+  figcaption{
+    font-size:14px;
+    line-height:1.6;
+    color:var(--ink-soft);
+    max-width:70ch;
+    margin:18px 2px 0;
+  }
+
+  .legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:22px 30px;
+    margin:36px 2px 0;
+    padding-top:22px;
+    border-top:1px solid var(--line);
+  }
+  .legend-item{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  .swatch{ width:20px; height:14px; border-radius:4px; flex:none; }
+  .swatch.public{ background:var(--surface); border:1.5px solid var(--ink-soft); }
+  .swatch.authed{ background:var(--surface-authed); border:1.5px solid var(--ink-soft); }
+  .swatch.email{ background:var(--email-fill); border:1.5px dashed var(--ink-soft); }
+  .swatch.shared{ background:var(--accent-soft); border:1.5px solid var(--accent); }
+  .swatch.line{ height:2px; width:22px; background:var(--ink-soft); border-radius:0; }
+  .swatch.line.dashed{ background:none; border-top:2px dashed var(--ink-soft); }
+  .swatch.line.loop{ background:var(--accent); }
+</style>
+
+<main>
+  <p class="eyebrow">Auth &amp; app structure</p>
+  <h1>Two people arrive from opposite directions, and land in the same room.</h1>
+  <p class="intro">
+    An organizer creating a trip and a friend opening a shared link start on
+    opposite sides of the auth boundary, but both pass through the exact same
+    primitive &mdash; a Supabase magic-link email &mdash; before either one has
+    a session. From there they merge into one shared, RLS-protected
+    <strong>Trip Home</strong>. Inviting more people from that screen feeds
+    back into the friend's path, closing the loop that grows the trip roster.
+  </p>
+
+  <figure>
+    <div class="diagram-frame">
+      <svg viewBox="0 0 1200 1090" role="img" aria-label="Flow diagram: an organizer and a joining friend follow separate screens that both route through a Supabase magic-link email, merge at the shared Trip Home screen, and loop back out through the invite link.">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"></path>
+          </marker>
+        </defs>
+
+        <!-- lane backgrounds -->
+        <rect x="130" y="20" width="340" height="732" rx="18" fill="var(--lane-fill)"></rect>
+        <rect x="730" y="20" width="340" height="732" rx="18" fill="var(--lane-fill)"></rect>
+        <rect x="40" y="755" width="1120" height="300" rx="18" fill="var(--shared-fill)"></rect>
+
+        <text class="lane-title" x="300" y="38" text-anchor="middle" font-size="12">Organizer</text>
+        <text class="lane-title" x="900" y="38" text-anchor="middle" font-size="12">Joining friend</text>
+        <text class="lane-title" x="600" y="745" text-anchor="middle" font-size="12">Shared trip workspace &middot; authenticated + RLS</text>
+
+        <!-- ===== A1 / B1 entries ===== -->
+        <g>
+          <rect x="150" y="54" width="300" height="68" rx="10" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="300" y="83" text-anchor="middle" font-size="15" font-weight="600">Opens tripsplit.app</text>
+          <text class="mono" x="300" y="103" text-anchor="middle" font-size="11">/ &middot; unauthenticated</text>
+        </g>
+        <g>
+          <rect x="750" y="54" width="300" height="68" rx="10" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="900" y="83" text-anchor="middle" font-size="15" font-weight="600">Opens shared invite link</text>
+          <text class="mono" x="900" y="103" text-anchor="middle" font-size="11">/join/[code]</text>
+        </g>
+
+        <!-- ===== A2 / B2 ===== -->
+        <g>
+          <rect x="150" y="170" width="300" height="68" rx="10" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="300" y="199" text-anchor="middle" font-size="15" font-weight="600">Enters email</text>
+          <text class="mono" x="300" y="219" text-anchor="middle" font-size="11">/login</text>
+        </g>
+        <g>
+          <rect x="750" y="170" width="300" height="68" rx="10" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="900" y="195" text-anchor="middle" font-size="15" font-weight="600">Sees trip + join form</text>
+          <text class="mono" x="900" y="213" text-anchor="middle" font-size="10.5">/join/[code]</text>
+          <text class="mono" x="900" y="227" text-anchor="middle" font-size="10.5">get_trip_by_invite_code()</text>
+        </g>
+
+        <!-- ===== EMAIL (external) ===== -->
+        <g>
+          <rect x="410" y="290" width="380" height="68" rx="10" fill="var(--email-fill)" stroke="var(--ink-soft)" stroke-width="1.5" stroke-dasharray="5 4"></rect>
+          <g transform="translate(432,312)" stroke="var(--ink-soft)" stroke-width="1.4" fill="none">
+            <rect x="0" y="0" width="26" height="18" rx="2"></rect>
+            <path d="M0,1 L13,12 L26,1"></path>
+          </g>
+          <text x="612" y="317" text-anchor="middle" font-size="15" font-weight="600">Magic-link email sent</text>
+          <text class="mono" x="612" y="337" text-anchor="middle" font-size="11">supabase.auth.signInWithOtp()</text>
+        </g>
+
+        <!-- ===== A3 / B3 ===== -->
+        <g>
+          <rect x="150" y="410" width="300" height="68" rx="10" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="300" y="439" text-anchor="middle" font-size="15" font-weight="600">Session exchanged</text>
+          <text class="mono" x="300" y="459" text-anchor="middle" font-size="11">/auth/callback</text>
+        </g>
+        <g>
+          <rect x="750" y="410" width="300" height="68" rx="10" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="900" y="435" text-anchor="middle" font-size="14" font-weight="600">Session exchanged, joins trip</text>
+          <text class="mono" x="900" y="453" text-anchor="middle" font-size="10.5">/join/[code]/callback</text>
+          <text class="mono" x="900" y="467" text-anchor="middle" font-size="10.5">join_trip()</text>
+        </g>
+
+        <!-- ===== A4 ===== -->
+        <g>
+          <rect x="150" y="530" width="300" height="68" rx="10" fill="var(--surface-authed)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="300" y="559" text-anchor="middle" font-size="15" font-weight="600">Trip list</text>
+          <text class="mono" x="300" y="579" text-anchor="middle" font-size="11">/ &middot; signed in</text>
+        </g>
+
+        <!-- ===== A5 ===== -->
+        <g>
+          <rect x="150" y="650" width="300" height="68" rx="10" fill="var(--surface-authed)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="300" y="679" text-anchor="middle" font-size="15" font-weight="600">Names the trip</text>
+          <text class="mono" x="300" y="699" text-anchor="middle" font-size="11">/trip/new &middot; create_trip()</text>
+        </g>
+
+        <!-- ===== TRIP HOME ===== -->
+        <g>
+          <rect x="370" y="780" width="460" height="86" rx="14" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"></rect>
+          <text x="600" y="815" text-anchor="middle" font-size="19" font-weight="600">Trip Home</text>
+          <text class="mono" x="600" y="838" text-anchor="middle" font-size="12">/trip/[id] &middot; Summary &#8646; Details</text>
+        </g>
+
+        <!-- ===== ADD EXPENSE / INVITE CARD ===== -->
+        <g>
+          <rect x="150" y="970" width="300" height="68" rx="10" fill="var(--surface-authed)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="300" y="999" text-anchor="middle" font-size="15" font-weight="600">Adds an expense</text>
+          <text class="mono" x="300" y="1019" text-anchor="middle" font-size="11">/trip/[id]/add-expense</text>
+        </g>
+        <g>
+          <rect x="750" y="970" width="300" height="68" rx="10" fill="var(--surface-authed)" stroke="var(--ink-soft)" stroke-width="1.5"></rect>
+          <text x="900" y="999" text-anchor="middle" font-size="15" font-weight="600">Copies invite link</text>
+          <text class="mono" x="900" y="1019" text-anchor="middle" font-size="11">invite link card</text>
+        </g>
+
+        <!-- ===================== ARROWS ===================== -->
+        <g stroke="var(--ink-soft)" stroke-width="1.6" fill="none" color="var(--ink-soft)">
+          <!-- A1 -> A2 -->
+          <line x1="300" y1="122" x2="300" y2="168" marker-end="url(#arrow)"></line>
+          <text class="label" x="316" y="149" font-size="10.5">no session</text>
+
+          <!-- B1 -> B2 -->
+          <line x1="900" y1="122" x2="900" y2="168" marker-end="url(#arrow)"></line>
+
+          <!-- existing-session shortcut, dashed -->
+          <path d="M150,88 C88,88 88,564 150,564" stroke-dasharray="5 5" marker-end="url(#arrow)"></path>
+          <text class="label" x="60" y="330" font-size="10.5" transform="rotate(-90 60 330)" text-anchor="middle">existing session</text>
+
+          <!-- A2 -> EMAIL -->
+          <path d="M420,238 C460,258 480,268 500,288" marker-end="url(#arrow)"></path>
+          <text class="label" x="376" y="265" font-size="10.5">signInWithOtp()</text>
+
+          <!-- B2 -> EMAIL -->
+          <path d="M840,238 C780,260 750,270 725,288" marker-end="url(#arrow)"></path>
+          <text class="label" x="778" y="265" font-size="10.5" text-anchor="end">signInWithOtp()</text>
+
+          <!-- EMAIL -> A3 -->
+          <path d="M500,358 C465,380 400,392 358,408" marker-end="url(#arrow)"></path>
+          <text class="label" x="472" y="392" font-size="10.5">clicks link</text>
+
+          <!-- EMAIL -> B3 -->
+          <path d="M725,358 C765,380 830,392 850,408" marker-end="url(#arrow)"></path>
+          <text class="label" x="742" y="392" font-size="10.5">clicks link</text>
+
+          <!-- A3 -> A4 -->
+          <line x1="300" y1="478" x2="300" y2="528" marker-end="url(#arrow)"></line>
+
+          <!-- A4 -> A5 -->
+          <line x1="300" y1="598" x2="300" y2="648" marker-end="url(#arrow)"></line>
+
+          <!-- A5 -> TRIPHOME -->
+          <path d="M370,718 C410,745 420,758 435,778" marker-end="url(#arrow)"></path>
+          <text class="label" x="384" y="750" font-size="10.5">invite_code created</text>
+
+          <!-- B3 -> TRIPHOME -->
+          <path d="M900,478 C900,600 810,650 770,778" marker-end="url(#arrow)"></path>
+          <text class="label" x="905" y="610" font-size="10.5">redirect</text>
+
+          <!-- TRIPHOME -> ADD EXPENSE -->
+          <path d="M540,866 C480,905 380,935 320,968" marker-end="url(#arrow)"></path>
+          <text class="label" x="497" y="915" font-size="10.5">add expense</text>
+
+          <!-- ADD EXPENSE -> TRIPHOME -->
+          <path d="M380,968 C450,930 520,905 570,866" marker-end="url(#arrow)"></path>
+          <text class="label" x="527" y="940" font-size="10.5" text-anchor="end">saves, back to summary</text>
+
+          <!-- TRIPHOME -> INVITE CARD -->
+          <path d="M680,866 C740,900 820,935 870,968" marker-end="url(#arrow)"></path>
+          <text class="label" x="732" y="915" font-size="10.5">invite more</text>
+        </g>
+
+        <!-- growth loop, accent -->
+        <g stroke="var(--accent)" stroke-width="2" fill="none" color="var(--accent)">
+          <path d="M1050,1004 C1155,1004 1155,88 1050,88" marker-end="url(#arrow)"></path>
+        </g>
+        <text class="label-accent" x="1166" y="546" font-size="11" text-anchor="middle" transform="rotate(-90 1166 546)">shares link &rarr; friend opens it</text>
+      </svg>
+    </div>
+    <figcaption>
+      The organizer's <span class="mono" style="font-family:'IBM Plex Mono',monospace;">create_trip()</span> and the friend's <span class="mono" style="font-family:'IBM Plex Mono',monospace;">join_trip()</span> are the only two ways a <span class="mono" style="font-family:'IBM Plex Mono',monospace;">trip_members</span> row gets created &mdash; both still require a session, so both funnel through the same magic-link email first. The orange loop on the right is the only growth mechanism in v1: every new member arrives by re-walking the friend path.
+    </figcaption>
+  </figure>
+
+  <div class="legend">
+    <span class="legend-item"><span class="swatch public"></span>Public screen</span>
+    <span class="legend-item"><span class="swatch authed"></span>Authenticated screen</span>
+    <span class="legend-item"><span class="swatch email"></span>External &middot; email</span>
+    <span class="legend-item"><span class="swatch shared"></span>Trip Home (shared)</span>
+    <span class="legend-item"><span class="swatch line"></span>Redirect / action</span>
+    <span class="legend-item"><span class="swatch line dashed"></span>Returning-user shortcut</span>
+    <span class="legend-item"><span class="swatch line loop"></span>Invite / growth loop</span>
+  </div>
+</main>

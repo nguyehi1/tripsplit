@@ -1,0 +1,181 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowRightIcon, CalendarIcon, CloseIcon } from "@/components/icons";
+import {
+  Avatar,
+  BottomBar,
+  Button,
+  Card,
+  Divider,
+  Field,
+  IconButton,
+  Kicker,
+  Screen,
+  ScreenContent,
+  TopBar,
+} from "@/components/ui";
+import { initialsFor } from "@/lib/avatar";
+import { createTrip } from "@/lib/data/trips";
+import { createClient } from "@/lib/supabase/client";
+
+function lengthLabel(startsOn: string, endsOn: string) {
+  const start = new Date(`${startsOn}T00:00:00`);
+  const end = new Date(`${endsOn}T00:00:00`);
+  const days = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  if (!Number.isFinite(days) || days < 1) return null;
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { weekday: "long" });
+  return `${days} day${days === 1 ? "" : "s"} · ${fmt(start)} to ${fmt(end)}`;
+}
+
+export default function NewTripPage() {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [startsOn, setStartsOn] = useState("");
+  const [endsOn, setEndsOn] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const tripLength = useMemo(
+    () => (startsOn && endsOn ? lengthLabel(startsOn, endsOn) : null),
+    [startsOn, endsOn],
+  );
+
+  async function handleCreate() {
+    if (!name.trim() || !displayName.trim()) {
+      setError("Trip name and your name are both required.");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      const supabase = createClient();
+      const { tripId } = await createTrip(supabase, {
+        name: name.trim(),
+        displayName: displayName.trim(),
+        location: location.trim() || undefined,
+        startsOn: startsOn || undefined,
+        endsOn: endsOn || undefined,
+      });
+      router.push(`/trip/${tripId}/invite`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't create the trip — try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Screen>
+      <ScreenContent>
+        <TopBar
+          title="New trip"
+          leading={
+            <IconButton onClick={() => router.back()}>
+              <CloseIcon size={18} strokeWidth={2.3} />
+            </IconButton>
+          }
+        />
+        <div className="h-4" />
+        <h1 className="text-display text-[30px]">
+          What are we
+          <br />
+          calling it?
+        </h1>
+        <div className="h-[18px]" />
+
+        <Field
+          label="Trip name"
+          placeholder="Tahoe Ski Trip"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <div className="h-4" />
+        <Field
+          label="Location"
+          hint="optional"
+          placeholder="Lake Tahoe, CA"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+        />
+        <div className="h-4" />
+
+        <Kicker>Dates</Kicker>
+        <div className="h-1.5" />
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="text-[11.5px] text-ink/[0.72]">Start</div>
+              <input
+                type="date"
+                value={startsOn}
+                onChange={(e) => setStartsOn(e.target.value)}
+                className="text-display mt-0.5 w-full bg-transparent text-[20px] outline-none"
+              />
+            </div>
+            <div className="h-[34px] w-px bg-ink/10" />
+            <div className="flex-1">
+              <div className="text-[11.5px] text-ink/[0.72]">End</div>
+              <input
+                type="date"
+                value={endsOn}
+                min={startsOn || undefined}
+                onChange={(e) => setEndsOn(e.target.value)}
+                className="text-display mt-0.5 w-full bg-transparent text-[20px] outline-none"
+              />
+            </div>
+            <span
+              className="flex size-9 flex-none items-center justify-center rounded-[12px]"
+              style={{ background: "oklch(0.95 0.04 88)", color: "oklch(0.38 0.08 80)" }}
+            >
+              <CalendarIcon size={19} />
+            </span>
+          </div>
+          {tripLength ? (
+            <>
+              <div className="h-3" />
+              <Divider />
+              <div className="h-3" />
+              <div className="text-[12.5px] text-ink/[0.72]">{tripLength}</div>
+            </>
+          ) : null}
+        </Card>
+        <div className="h-4" />
+
+        <Field
+          label="Your name"
+          hint="how others on the trip will see you"
+          placeholder="e.g. Alex"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+        />
+        <div className="h-4" />
+
+        <div
+          className="flex items-start gap-[11px] rounded-[18px] p-4"
+          style={{ background: "oklch(0.95 0.035 44)" }}
+        >
+          <Avatar
+            initials={displayName ? initialsFor(displayName) : "?"}
+            color={{ bg: "oklch(0.45 0.09 80)", fg: "#fff" }}
+            size={32}
+          />
+          <div className="text-[13px] leading-[1.45] text-ink/[0.72]">
+            You&apos;ll be the trip&apos;s planner — you invite people and you decide when the
+            trip is complete.
+          </div>
+        </div>
+        {error ? <p className="mt-3 text-[13px] text-terracotta">{error}</p> : null}
+      </ScreenContent>
+      <BottomBar>
+        <Button variant="primary" className="text-[16px]" onClick={handleCreate} disabled={submitting}>
+          {submitting ? "Creating…" : "Create trip"}
+          {submitting ? null : <ArrowRightIcon size={18} strokeWidth={2.4} />}
+        </Button>
+      </BottomBar>
+    </Screen>
+  );
+}

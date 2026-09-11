@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --color-paper: #f5f0e6;
+  --color-paper-deep: #eae3d5;
+  --color-ink: #231c12;
+  --color-card: #ffffff;
+
+  --color-accent: oklch(0.45 0.09 80);
+  --color-accent-strong: oklch(0.4 0.085 80);
+  --color-accent-soft: oklch(0.95 0.04 88);
+
+  --color-terracotta: oklch(0.42 0.09 44);
+  --color-terracotta-soft: oklch(0.95 0.035 44);
+}
+
+@theme inline {
+  --color-paper: var(--color-paper);
+  --color-paper-deep: var(--color-paper-deep);
+  --color-ink: var(--color-ink);
+  --color-card: var(--color-card);
+  --color-accent: var(--color-accent);
+  --color-accent-strong: var(--color-accent-strong);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-terracotta: var(--color-terracotta);
+  --color-terracotta-soft: var(--color-terracotta-soft);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-body);
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+@layer components {
+  .text-display {
+    font-family: var(--font-display), system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .text-kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--color-ink) 70%, transparent);
+  }
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
