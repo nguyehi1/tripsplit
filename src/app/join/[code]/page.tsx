@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRightIcon, DollarSignIcon } from "@/components/icons";
 import { BottomBar, Button, Field, Screen, ScreenContent } from "@/components/ui";
 import { initialsFor } from "@/lib/avatar";
@@ -11,15 +11,20 @@ import { createClient } from "@/lib/supabase/client";
 
 type InviteInfo = NonNullable<Awaited<ReturnType<typeof getTripByInviteCode>>>;
 
-export default function JoinTripPage() {
+function JoinTripContent() {
   const router = useRouter();
   const { code } = useParams<{ code: string }>();
+  const searchParams = useSearchParams();
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    searchParams.get("error") === "auth"
+      ? "That link expired or was already used — enter your details again for a new one."
+      : null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +62,10 @@ export default function JoinTripPage() {
         return;
       }
       const back = encodeURIComponent(`/join/${code}`);
-      router.push(`/check-email?email=${encodeURIComponent(email.trim())}&back=${back}`);
+      const redirect = encodeURIComponent(redirectUrl.toString());
+      router.push(
+        `/check-email?email=${encodeURIComponent(email.trim())}&back=${back}&redirect=${redirect}`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't send a sign-in link — try again.");
     } finally {
@@ -148,5 +156,13 @@ export default function JoinTripPage() {
         </Button>
       </BottomBar>
     </Screen>
+  );
+}
+
+export default function JoinTripPage() {
+  return (
+    <Suspense>
+      <JoinTripContent />
+    </Suspense>
   );
 }

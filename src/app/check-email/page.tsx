@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeftIcon, ClockIcon, MailIcon } from "@/components/icons";
 import { BottomBar, Button, Card, IconButton, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { createClient } from "@/lib/supabase/client";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -18,8 +19,10 @@ function CheckEmailContent() {
   const params = useSearchParams();
   const email = params.get("email") ?? "you@email.com";
   const back = params.get("back") ?? "/";
+  const redirect = params.get("redirect");
   const [secondsLeft, setSecondsLeft] = useState(RESEND_COOLDOWN_SECONDS);
   const [justResent, setJustResent] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   useEffect(() => {
     if (secondsLeft <= 0) return;
@@ -27,11 +30,25 @@ function CheckEmailContent() {
     return () => clearInterval(id);
   }, [secondsLeft]);
 
-  function resend() {
-    if (secondsLeft > 0) return;
-    setSecondsLeft(RESEND_COOLDOWN_SECONDS);
-    setJustResent(true);
-    setTimeout(() => setJustResent(false), 2000);
+  async function resend() {
+    if (secondsLeft > 0 || !redirect) return;
+    setResendError(null);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: redirect },
+      });
+      if (error) {
+        setResendError(error.message);
+        return;
+      }
+      setSecondsLeft(RESEND_COOLDOWN_SECONDS);
+      setJustResent(true);
+      setTimeout(() => setJustResent(false), 2000);
+    } catch (e) {
+      setResendError(e instanceof Error ? e.message : "Couldn't resend — try again.");
+    }
   }
 
   return (
@@ -78,6 +95,7 @@ function CheckEmailContent() {
             </span>
           </div>
         </Card>
+        {resendError ? <p className="mt-3 text-[13px] text-terracotta">{resendError}</p> : null}
         <div className="h-3" />
         <Button variant="ghost" className="h-[50px] text-[14px]" onClick={() => router.push(back)}>
           Use a different email
@@ -85,9 +103,9 @@ function CheckEmailContent() {
       </ScreenContent>
       <BottomBar>
         <Button
-          variant={secondsLeft > 0 ? "muted" : "primary"}
+          variant={secondsLeft > 0 || !redirect ? "muted" : "primary"}
           className="text-[15.5px]"
-          disabled={secondsLeft > 0}
+          disabled={secondsLeft > 0 || !redirect}
           onClick={resend}
         >
           {justResent ? "Link sent" : secondsLeft > 0 ? `Resend link (${formatCountdown(secondsLeft)})` : "Resend link"}

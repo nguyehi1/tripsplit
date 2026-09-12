@@ -38,7 +38,9 @@ function SignInContent() {
         setError(authError.message);
         return;
       }
-      router.push(`/check-email?email=${encodeURIComponent(email)}`);
+      router.push(
+        `/check-email?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectUrl.toString())}`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong — try again.");
     } finally {

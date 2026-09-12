@@ -3,11 +3,11 @@
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangleIcon, ArrowRightIcon } from "@/components/icons";
-import { BottomBar, Button, Card, Kicker, Screen, ScreenContent } from "@/components/ui";
+import { BottomBar, Button, Screen, ScreenContent } from "@/components/ui";
 
 function LinkExpiredContent() {
   const router = useRouter();
-  const email = useSearchParams().get("email") ?? "ana@email.com";
+  const next = useSearchParams().get("next");
 
   return (
     <Screen>
@@ -26,21 +26,17 @@ function LinkExpiredContent() {
         </h1>
         <div className="h-3.5" />
         <p className="max-w-[295px] text-[14.5px] leading-[1.5] text-ink/[0.73]">
-          Sign-in links expire after 15 minutes and can only be used once. Send yourself a fresh
-          one.
+          Sign-in links expire after 15 minutes, can only be used once, and only work in the
+          browser you requested them from. Enter your email again to get a fresh one.
         </p>
-        <div className="h-[22px]" />
-        <Kicker>Email</Kicker>
-        <div className="h-1.5" />
-        <Card className="flex h-[54px] items-center px-[18px] text-[16px] font-medium">{email}</Card>
       </ScreenContent>
       <BottomBar>
         <Button
           variant="primary"
           className="text-[16px]"
-          onClick={() => router.push(`/check-email?email=${encodeURIComponent(email)}`)}
+          onClick={() => router.push(next ? `/?next=${encodeURIComponent(next)}` : "/")}
         >
-          Send a new link
+          Enter your email again
           <ArrowRightIcon size={18} strokeWidth={2.4} />
         </Button>
       </BottomBar>
