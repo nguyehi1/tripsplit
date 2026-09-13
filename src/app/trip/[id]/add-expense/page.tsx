@@ -7,6 +7,7 @@ import { Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, TopBa
 import { formatCents } from "@/lib/currency";
 import { addExpense } from "@/lib/data/trips";
 import { createClient } from "@/lib/supabase/client";
+import { isValidExpenseInput } from "@/lib/validation/expense";
 
 export default function AddExpensePage() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function AddExpensePage() {
   const splitCents = memberCount ? Math.round(amountCents / memberCount) : 0;
 
   async function handleSubmit() {
-    if (amountCents <= 0 || !description.trim()) {
+    if (!isValidExpenseInput(amountCents, description)) {
       setError("Enter an amount and what it was for.");
       return;
     }

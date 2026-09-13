@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRightIcon, DollarSignIcon } from "@/components/icons";
 import { BottomBar, Button, Field, Screen, ScreenContent } from "@/components/ui";
 import { initialsFor } from "@/lib/avatar";
+import { friendlyAuthError } from "@/lib/auth-errors";
 import { getTripByInviteCode } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/client";
@@ -58,7 +59,7 @@ function JoinTripContent() {
         options: { emailRedirectTo: redirectUrl.toString() },
       });
       if (authError) {
-        setError(authError.message);
+        setError(friendlyAuthError(authError));
         return;
       }
       const back = encodeURIComponent(`/join/${code}`);

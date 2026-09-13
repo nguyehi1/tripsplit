@@ -4,7 +4,7 @@ import { getSupabaseEnv } from "@/lib/supabase/env";
 
 // Protected by an optimistic cookie check here; the real enforcement is Postgres RLS
 // (see supabase/migrations/0001_init.sql) via the Supabase clients each route/RPC uses.
-const PROTECTED_PATTERNS = [/^\/trip\/new/, /^\/trip\/[^/]+/];
+const PROTECTED_PATTERNS = [/^\/trips/, /^\/trip\/new/, /^\/trip\/[^/]+/];
 
 function isProtectedPath(pathname: string) {
   return PROTECTED_PATTERNS.some((pattern) => pattern.test(pathname));

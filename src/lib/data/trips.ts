@@ -85,6 +85,96 @@ export async function addExpense(
   return data;
 }
 
+/**
+ * Deliberately has no `tripId`/`paidBy` param — both are immutable once an expense is created
+ * (see migration `0006_restrict_expense_update_to_payer.sql`), and RLS's `paid_by = auth.uid()`
+ * check would reject a change to either anyway. Keeping them off the signature stops a future
+ * edit here from silently reintroducing a way to send them.
+ */
+export async function updateExpense(
+  supabase: Client,
+  input: { expenseId: string; amountCents: number; description: string },
+) {
+  const { data, error } = await supabase
+    .from("expenses")
+    .update({
+      amount: centsToDollars(input.amountCents),
+      description: input.description,
+    })
+    .eq("id", input.expenseId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Fetches every trip the current user belongs to (RLS already scopes `trips` and `trip_members`
+ * to the caller's own trips), with just enough shape for a summary list: member avatars, total
+ * spend, and the caller's own net balance on each trip.
+ */
+export async function getMyTrips(supabase: Client, currentUserId: string) {
+  const tripsResult = await supabase.from("trips").select("*").order("created_at", { ascending: false });
+  if (tripsResult.error) throw tripsResult.error;
+  const tripRows = tripsResult.data ?? [];
+  if (tripRows.length === 0) return [];
+
+  const tripIds = tripRows.map((t) => t.id);
+  const [membersResult, expensesResult] = await Promise.all([
+    supabase.from("trip_members").select("*").in("trip_id", tripIds).order("joined_at", { ascending: true }),
+    supabase.from("expenses").select("*").in("trip_id", tripIds),
+  ]);
+  if (membersResult.error) throw membersResult.error;
+  if (expensesResult.error) throw expensesResult.error;
+
+  const memberRows = membersResult.data ?? [];
+  const expenseRows = expensesResult.data ?? [];
+
+  return tripRows.map((tripRow) => {
+    const tripMemberRows = memberRows.filter((m) => m.trip_id === tripRow.id);
+    const tripExpenseRows = expenseRows.filter((e) => e.trip_id === tripRow.id);
+
+    const settlementMembers = tripMemberRows.map((m) => ({
+      id: m.user_id,
+      displayName: m.display_name,
+      joinedAt: m.joined_at,
+    }));
+    const settlementExpenses = tripExpenseRows.map((e) => ({
+      id: e.id,
+      paidBy: e.paid_by,
+      amountCents: dollarsToCents(Number(e.amount)),
+      description: e.description,
+    }));
+    const balances = computeBalances(settlementMembers, settlementExpenses);
+    const yourBalance = balances.find((b) => b.memberId === currentUserId) ?? null;
+
+    const members = tripMemberRows.map((m, i) => ({
+      id: m.user_id,
+      displayName: m.display_name,
+      isOrganizer: m.user_id === tripRow.created_by,
+      initials: initialsFor(m.display_name),
+      avatar: avatarColorFor(i, m.user_id === tripRow.created_by),
+    }));
+
+    const totalCents = settlementExpenses.reduce((sum, e) => sum + e.amountCents, 0);
+
+    return {
+      id: tripRow.id,
+      name: tripRow.name,
+      location: tripRow.location,
+      startsOn: tripRow.starts_on,
+      endsOn: tripRow.ends_on,
+      isCompleted: tripRow.completed_at !== null,
+      createdAt: tripRow.created_at,
+      members,
+      totalCents,
+      yourNetCents: yourBalance?.netCents ?? 0,
+    };
+  });
+}
+
+export type MyTrip = Awaited<ReturnType<typeof getMyTrips>>[number];
+
 function formatDayLabel(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { weekday: "short" });
 }

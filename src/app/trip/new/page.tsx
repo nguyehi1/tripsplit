@@ -60,6 +60,12 @@ export default function NewTripPage() {
         startsOn: startsOn || undefined,
         endsOn: endsOn || undefined,
       });
+      // Best-effort — a failed confirmation email shouldn't stop the trip from being created.
+      await fetch("/api/trip-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId }),
+      }).catch(() => {});
       router.push(`/trip/${tripId}/invite`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't create the trip — try again.");

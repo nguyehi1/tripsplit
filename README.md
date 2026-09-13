@@ -6,7 +6,8 @@ beyond a magic-link email), log expenses as you go, and see who owes who.
 ## Status
 
 Core v1 flow is implemented: Supabase schema/auth/RLS, invite-link join, trip dashboard
-(expenses + settle-up), add-expense, and feedback. Pre-production hardening still pending.
+(expenses + settle-up), add-expense, edit-own-expense, and feedback. Pre-production hardening
+still pending.
 
 ## Docs
 
@@ -25,6 +26,9 @@ Core v1 flow is implemented: Supabase schema/auth/RLS, invite-link join, trip da
 
 - Whole-trip equal split (total ÷ member count), computed live.
 - Manual expense entry (amount + description).
+- The member who paid for an expense can edit its amount/description afterward, until the trip
+  is completed; editing another member's expense is rejected server-side (RLS), not just hidden
+  in the UI.
 - Two views: Summary (settle-up transactions) and Details (per-person paid/share table).
 - Displays amounts owed; no payment integration yet.
 

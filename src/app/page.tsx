@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRightIcon } from "@/components/icons";
 import { Button, Field, Screen, ScreenContent } from "@/components/ui";
+import { friendlyAuthError } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 
 function extractInviteCode(input: string) {
@@ -35,7 +36,7 @@ function SignInContent() {
         options: { emailRedirectTo: redirectUrl.toString() },
       });
       if (authError) {
-        setError(authError.message);
+        setError(friendlyAuthError(authError));
         return;
       }
       router.push(

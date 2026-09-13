@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowsLeftRightIcon, LockIcon, MessageSquareIcon, PlusIcon } from "@/components/icons";
+import {
+  ArrowsLeftRightIcon,
+  ChevronLeftIcon,
+  LockIcon,
+  MessageSquareIcon,
+  PencilIcon,
+  PlusIcon,
+} from "@/components/icons";
 import {
   AvatarStack,
   Avatar,
@@ -82,7 +89,16 @@ export default function TripDashboardPage() {
     <Screen>
       <ScreenContent className="pt-0.5">
         <div className="flex items-center justify-between py-3">
-          <span className="text-[12.5px] font-semibold text-ink/[0.72]">Your trip</span>
+          <div className="flex items-center gap-2">
+            <IconButton
+              title="All trips"
+              className="text-ink/[0.73]"
+              onClick={() => router.push("/trips")}
+            >
+              <ChevronLeftIcon size={18} strokeWidth={2.3} />
+            </IconButton>
+            <span className="text-[12.5px] font-semibold text-ink/[0.72]">Your trip</span>
+          </div>
           <div className="flex gap-2">
             <IconButton
               title="New trip"
@@ -190,23 +206,43 @@ export default function TripDashboardPage() {
             <p className="px-1 text-[13px] text-ink/60">No expenses logged yet.</p>
           ) : (
             <Card className="px-4 py-1">
-              {expenses.map((expense, i) => (
-                <div
-                  key={expense.id}
-                  className={`flex items-center gap-3 py-[13px] ${
-                    i < expenses.length - 1 ? "border-b border-ink/[0.07]" : ""
-                  }`}
-                >
-                  <Avatar initials={expense.payer.initials} color={expense.payer.avatar} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[15px] font-semibold">{expense.description}</div>
-                    <div className="mt-px text-[12px] text-ink/[0.72]">
-                      {expense.payer.displayName} · {expense.day}
+              {expenses.map((expense, i) => {
+                const editable = expense.payer.id === you?.id && !trip.isCompleted;
+                return (
+                  <div
+                    key={expense.id}
+                    className={`flex items-center gap-3 py-[13px] ${
+                      i < expenses.length - 1 ? "border-b border-ink/[0.07]" : ""
+                    } ${editable ? "cursor-pointer" : ""}`}
+                    role={editable ? "button" : undefined}
+                    tabIndex={editable ? 0 : undefined}
+                    aria-label={editable ? `Edit ${expense.description}, ${formatCents(expense.amountCents)}` : undefined}
+                    onClick={
+                      editable ? () => router.push(`/trip/${id}/expense/${expense.id}/edit`) : undefined
+                    }
+                    onKeyDown={
+                      editable
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              router.push(`/trip/${id}/expense/${expense.id}/edit`);
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    <Avatar initials={expense.payer.initials} color={expense.payer.avatar} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[15px] font-semibold">{expense.description}</div>
+                      <div className="mt-px text-[12px] text-ink/[0.72]">
+                        {expense.payer.displayName} · {expense.day}
+                      </div>
                     </div>
+                    <div className="text-display text-[17px]">{formatCents(expense.amountCents)}</div>
+                    {editable ? <PencilIcon size={14} strokeWidth={2.2} className="text-ink/40" /> : null}
                   </div>
-                  <div className="text-display text-[17px]">{formatCents(expense.amountCents)}</div>
-                </div>
-              ))}
+                );
+              })}
             </Card>
           )
         ) : (
