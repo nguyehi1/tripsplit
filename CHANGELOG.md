@@ -10,11 +10,17 @@ a release moves that section under a dated version heading.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-12
+
 ### Added
 
-### Changed
-
-### Fixed
+- Sign-in screen now remembers the last email used on a given browser/device
+  and prefills it on return visits (`src/lib/remembered-email.ts`, backed by
+  namespaced `localStorage`), with a "Not you? Clear" affordance to remove
+  it. Storage is local-only, best-effort (fails silently if unavailable,
+  e.g. private browsing), and independent of sign-out. The email field also
+  now sets `name="email"`/`autoComplete="email"` so native browser autofill
+  works as a baseline alongside this.
 
 ## [0.2.0] - 2026-09-12
 

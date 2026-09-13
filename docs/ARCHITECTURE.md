@@ -30,6 +30,15 @@ RLS policy on `expenses` (`insert`/`update`/`delete`) requires it, so no
 expense can be added, edited, or deleted on a completed trip. UI mirrors this
 with a locked-state screen (see `src/app/trip/[id]/add-expense/page.tsx`).
 
+**Client-local device state**: not everything needs to be server state.
+Browser `localStorage` is used for small, non-sensitive, per-device
+conveniences that don't warrant a DB column or session data (e.g. the
+sign-in screen remembering the last-used email — see
+`src/lib/remembered-email.ts`). Convention for this kind of module: a
+namespaced key, and every read/write wrapped in try/catch so the feature
+degrades to today's behavior (not an error) when storage is unavailable or
+blocked (private browsing, disabled storage).
+
 ## Data model
 
 Schema is managed via `supabase/migrations/NNNN_*.sql` (sequential, never
@@ -95,6 +104,13 @@ this before adding a parallel implementation.
   blocks nearly every RLS policy on `trips`/`trip_members`/`expenses` is
   built from — extend by composing with these rather than re-deriving
   membership/lock logic inline in a new policy.
+- `src/lib/remembered-email.ts` — the one client-`localStorage` helper in
+  the app (`getRememberedEmail`/`setRememberedEmail`/`clearRememberedEmail`,
+  namespaced key `tripsplit:last-signin-email`), used by the sign-in screen
+  (`src/app/page.tsx`) to prefill the last-used email on the same device.
+  If a future feature wants a second piece of per-device local state, check
+  here first — same try/catch-wrapped pattern applies rather than a new
+  ad hoc `localStorage` call site.
 
 ## ADR index
 

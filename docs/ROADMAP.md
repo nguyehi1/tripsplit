@@ -17,6 +17,11 @@ _(none yet)_
 
 ## Shipped
 
+### Remember sign-in email (remember-signin-email)
+- Status: shipped
+- Requirements: [docs/features/remember-signin-email/requirements.md](features/remember-signin-email/requirements.md)
+- Prefills the sign-in form with the last-used email on a returning device so users don't retype it every time they request a new magic link (local storage only — not an extended-login-session feature).
+
 ### Edit own expense (edit-own-expense)
 - Status: shipped
 - Requirements: [docs/features/edit-own-expense/requirements.md](features/edit-own-expense/requirements.md)

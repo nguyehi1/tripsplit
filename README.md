@@ -6,8 +6,9 @@ beyond a magic-link email), log expenses as you go, and see who owes who.
 ## Status
 
 Core v1 flow is implemented: Supabase schema/auth/RLS, invite-link join, trip dashboard
-(expenses + settle-up), add-expense, edit-own-expense, and feedback. Pre-production hardening
-still pending.
+(expenses + settle-up), add-expense, edit-own-expense, and feedback. The sign-in screen
+remembers the last email used on a device (local-only, with an easy "clear" option) so
+returning users don't have to retype it. Pre-production hardening still pending.
 
 ## Docs
 

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRightIcon } from "@/components/icons";
 import { Button, Field, Screen, ScreenContent } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/auth-errors";
+import { clearRememberedEmail, getRememberedEmail, setRememberedEmail } from "@/lib/remembered-email";
 import { createClient } from "@/lib/supabase/client";
 
 function extractInviteCode(input: string) {
@@ -16,7 +17,8 @@ function extractInviteCode(input: string) {
 function SignInContent() {
   const router = useRouter();
   const next = useSearchParams().get("next");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => getRememberedEmail());
+  const [remembered, setRemembered] = useState(() => getRememberedEmail());
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +41,8 @@ function SignInContent() {
         setError(friendlyAuthError(authError));
         return;
       }
+      setRememberedEmail(email);
+      setRemembered(email);
       router.push(
         `/check-email?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectUrl.toString())}`,
       );
@@ -48,6 +52,18 @@ function SignInContent() {
       setSending(false);
     }
   }
+
+  function handleClearRemembered() {
+    clearRememberedEmail();
+    setRemembered("");
+    setEmail("");
+    document.getElementById("email")?.focus();
+  }
+
+  // Hides itself once the user edits away from the remembered value (they've
+  // already solved their own problem by typing over it), and reappears if
+  // they clear back to empty or retype the exact remembered address.
+  const showClear = remembered !== "" && email === remembered;
 
   return (
     <Screen>
@@ -70,13 +86,28 @@ function SignInContent() {
         </p>
         <div className="h-7" />
 
-        <Field
-          label="Your email"
-          type="email"
-          placeholder="you@email.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <div className="relative">
+          <Field
+            id="email"
+            name="email"
+            autoComplete="email"
+            label="Your email"
+            type="email"
+            placeholder="you@email.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          {showClear ? (
+            <button
+              type="button"
+              onClick={handleClearRemembered}
+              className="absolute right-0 top-0 -m-2 p-2 text-[12px] font-medium"
+              style={{ color: "var(--color-accent-strong)" }}
+            >
+              Not you? Clear
+            </button>
+          ) : null}
+        </div>
         {error ? <p className="mt-2 text-[13px] text-terracotta">{error}</p> : null}
         <div className="h-2.5" />
         <Button variant="accent" className="text-[16px]" onClick={sendLink} disabled={sending}>
