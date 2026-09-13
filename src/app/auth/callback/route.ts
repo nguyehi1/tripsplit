@@ -13,6 +13,12 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }
+    // Temporary: exposes the real reason (e.g. "both auth code and code
+    // verifier should be non-empty" means the PKCE cookie wasn't found —
+    // check server logs / Vercel function logs for this line, then remove it.
+    console.error("[auth/callback] exchangeCodeForSession failed:", error.status, error.code, error.message);
+  } else {
+    console.error("[auth/callback] no code param on request:", request.url);
   }
 
   return NextResponse.redirect(`${origin}/link-expired?next=${encodeURIComponent(next)}`);
