@@ -59,10 +59,6 @@ export async function sendTripEmail(input: {
     ].join("\n"),
     html: `
       <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #231c12;">
-        <div style="width: 40px; height: 40px; border-radius: 12px; background: #c26a3a; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; line-height: 40px; text-align: center;">
-          ts
-        </div>
-        <div style="height: 20px;"></div>
         <h1 style="font-size: 22px; margin: 0 0 12px;">${heading}</h1>
         <p style="font-size: 15px; color: #4a4033; line-height: 1.55; margin: 0 0 20px;">${lede}</p>
 
