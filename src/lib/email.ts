@@ -1,6 +1,17 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "TripSplit <onboarding@resend.dev>";
+const FROM_ADDRESS = process.env.GMAIL_FROM_EMAIL ?? `TripSplit <${process.env.GMAIL_USER}>`;
+
+function getTransport() {
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) throw new Error("GMAIL_USER or GMAIL_APP_PASSWORD is not set");
+
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
+}
 
 function escapeHtml(input: string) {
   return input
@@ -13,9 +24,8 @@ function escapeHtml(input: string) {
 
 /**
  * Confirmation email sent when a user creates or joins a trip, so they have a link back to it
- * even if they lose the invite or close the tab. Resend's free tier only delivers to the
- * account's own verified address until a sending domain is verified — see RESEND_FROM_EMAIL in
- * .env.local.example.
+ * even if they lose the invite or close the tab. Sent via Gmail SMTP — see GMAIL_USER and
+ * GMAIL_APP_PASSWORD in .env.local.example.
  */
 export async function sendTripEmail(input: {
   to: string;
@@ -23,8 +33,7 @@ export async function sendTripEmail(input: {
   tripUrl: string;
   kind: "created" | "joined";
 }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("RESEND_API_KEY is not set");
+  const transport = getTransport();
 
   const tripName = escapeHtml(input.tripName);
   const tripUrl = escapeHtml(input.tripUrl);
@@ -36,7 +45,7 @@ export async function sendTripEmail(input: {
       ? "You created a new trip on TripSplit. Bookmark this link — it's how you and everyone you invite gets back in."
       : "You joined a trip on TripSplit. Bookmark this link — it's how you get back in to log expenses and see who owes what.";
 
-  const { error } = await new Resend(apiKey).emails.send({
+  await transport.sendMail({
     from: FROM_ADDRESS,
     to: input.to,
     subject,
@@ -78,5 +87,4 @@ export async function sendTripEmail(input: {
       </div>
     `,
   });
-  if (error) throw new Error(error.message);
 }

@@ -10,6 +10,12 @@ a release moves that section under a dated version heading.
 
 ## [Unreleased]
 
+### Changed
+
+- Trip create/join confirmation emails now send via Gmail SMTP (`nodemailer`)
+  instead of Resend — set `GMAIL_USER` and `GMAIL_APP_PASSWORD` in
+  `.env.local` (see `.env.local.example`).
+
 ## [0.2.1] - 2026-09-12
 
 ### Added

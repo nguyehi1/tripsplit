@@ -9,8 +9,8 @@ reconstruct it from this file's edit history.
 ## System overview
 
 TripSplit is a Next.js 16 (App Router) app with Supabase for auth, database,
-and row-level security, and Resend for transactional email. Deployed on
-Vercel.
+and row-level security, and Gmail SMTP (via `nodemailer`) for transactional
+email. Deployed on Vercel.
 
 **Mutation pattern**: almost all writes go directly from client components
 through the Supabase browser client (`src/lib/supabase/client.ts`), calling
@@ -18,8 +18,8 @@ either a table `.insert()`/`.update()` or a `security definer` RPC (e.g.
 `create_trip`, `join_trip`, `complete_trip`), with **RLS as the authorization
 boundary** — there is deliberately no Next.js route handler in that path.
 `src/app/api/` is reserved for the rare case where a server-held secret is
-involved (currently just `trip-email/route.ts`, which needs the Resend API
-key). New CRUD-style mutations should default to the direct-client pattern
+involved (currently just `trip-email/route.ts`, which needs the Gmail App
+Password). New CRUD-style mutations should default to the direct-client pattern
 and only add an API route when there's a genuine server-secret or
 server-only-computation reason to.
 
