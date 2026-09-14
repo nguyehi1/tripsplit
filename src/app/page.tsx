@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useLayoutEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRightIcon } from "@/components/icons";
 import { Button, Field, Screen, ScreenContent } from "@/components/ui";
@@ -17,10 +17,23 @@ function extractInviteCode(input: string) {
 function SignInContent() {
   const router = useRouter();
   const next = useSearchParams().get("next");
-  const [email, setEmail] = useState(() => getRememberedEmail());
-  const [remembered, setRemembered] = useState(() => getRememberedEmail());
+  const [email, setEmail] = useState("");
+  const [remembered, setRemembered] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reads localStorage post-mount (synchronously, before paint) rather than in the initial
+  // state, so the server-rendered (window-less) markup matches the client's first render
+  // without a visible flash of the empty field.
+  useLayoutEffect(() => {
+    const stored = getRememberedEmail();
+    if (stored) {
+      // Syncing from localStorage, an external system unreadable during SSR/initial render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEmail(stored);
+      setRemembered(stored);
+    }
+  }, []);
 
   async function sendLink() {
     if (!email) {
@@ -31,21 +44,15 @@ function SignInContent() {
     setSending(true);
     try {
       const supabase = createClient();
-      const redirectUrl = new URL("/auth/callback", window.location.origin);
-      if (next) redirectUrl.searchParams.set("next", next);
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: redirectUrl.toString() },
-      });
+      const { error: authError } = await supabase.auth.signInWithOtp({ email });
       if (authError) {
         setError(friendlyAuthError(authError));
         return;
       }
       setRememberedEmail(email);
       setRemembered(email);
-      router.push(
-        `/check-email?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectUrl.toString())}`,
-      );
+      const nextParam = next ? `&next=${encodeURIComponent(next)}` : "";
+      router.push(`/check-email?email=${encodeURIComponent(email)}${nextParam}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong — try again.");
     } finally {
@@ -111,7 +118,7 @@ function SignInContent() {
         {error ? <p className="mt-2 text-[13px] text-terracotta">{error}</p> : null}
         <div className="h-2.5" />
         <Button variant="accent" className="text-[16px]" onClick={sendLink} disabled={sending}>
-          {sending ? "Sending…" : "Send me a sign-in link"}
+          {sending ? "Sending…" : "Send me a sign-in code"}
           {sending ? null : <ArrowRightIcon size={18} strokeWidth={2.4} />}
         </Button>
         <div className="h-2.5" />

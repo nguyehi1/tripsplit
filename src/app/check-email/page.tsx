@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeftIcon, ClockIcon, MailIcon } from "@/components/icons";
-import { BottomBar, Button, Card, IconButton, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { ChevronLeftIcon, MailIcon } from "@/components/icons";
+import { BottomBar, Button, Field, IconButton, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 
@@ -20,10 +20,15 @@ function CheckEmailContent() {
   const params = useSearchParams();
   const email = params.get("email") ?? "you@email.com";
   const back = params.get("back") ?? "/";
-  const redirect = params.get("redirect");
+  const next = params.get("next") ?? "/trips";
+  const invite = params.get("invite");
+  const displayName = params.get("name") ?? "";
   const [secondsLeft, setSecondsLeft] = useState(RESEND_COOLDOWN_SECONDS);
   const [justResent, setJustResent] = useState(false);
   const [resendError, setResendError] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (secondsLeft <= 0) return;
@@ -32,14 +37,12 @@ function CheckEmailContent() {
   }, [secondsLeft]);
 
   async function resend() {
-    if (secondsLeft > 0 || !redirect) return;
+    if (secondsLeft > 0) return;
     setResendError(null);
+    setVerifyError(null);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: redirect },
-      });
+      const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) {
         setResendError(friendlyAuthError(error));
         return;
@@ -49,6 +52,39 @@ function CheckEmailContent() {
       setTimeout(() => setJustResent(false), 2000);
     } catch (e) {
       setResendError(e instanceof Error ? e.message : "Couldn't resend — try again.");
+    }
+  }
+
+  async function confirm() {
+    if (code.trim().length < 6) return;
+    setVerifyError(null);
+    setVerifying(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: "email" });
+      if (error) {
+        setVerifyError(friendlyAuthError(error));
+        return;
+      }
+      if (invite) {
+        const res = await fetch("/api/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inviteCode: invite, displayName }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          router.push(`/join/${invite}?error=join`);
+          return;
+        }
+        router.push(`/join/${invite}/welcome?tripId=${data.tripId}`);
+        return;
+      }
+      router.push(next);
+    } catch (e) {
+      setVerifyError(e instanceof Error ? e.message : "Couldn't confirm that code — try again.");
+    } finally {
+      setVerifying(false);
     }
   }
 
@@ -72,31 +108,43 @@ function CheckEmailContent() {
         </div>
         <div className="h-5" />
         <h1 className="text-display text-[34px]">
-          Check your
+          Enter your
           <br />
-          email.
+          code.
         </h1>
         <div className="h-3.5" />
         <p className="max-w-[295px] text-[14.5px] leading-[1.5] text-ink/[0.73]">
-          We sent a sign-in link to <strong className="font-semibold">{email}</strong>. It works
-          once, and it expires in 15 minutes.
+          We sent a 6-digit code to <strong className="font-semibold">{email}</strong>. It works
+          once, and it expires in 60 minutes.
         </p>
         <div className="h-[22px]" />
-        <Card className="flex items-center gap-[13px] p-4">
-          <span className="flex size-9 flex-none items-center justify-center rounded-full bg-ink/[0.05] text-ink/[0.72]">
-            <ClockIcon size={18} strokeWidth={2.2} />
-          </span>
-          <div className="flex-1 text-[13.5px] leading-[1.4] text-ink/70">
-            Didn&apos;t arrive?
-            <br />
-            <span className="text-[12.5px] text-ink/[0.72]">
-              {secondsLeft > 0
-                ? `Check spam, or resend in ${formatCountdown(secondsLeft)}`
-                : "Check spam, or resend it below"}
-            </span>
-          </div>
-        </Card>
-        {resendError ? <p className="mt-3 text-[13px] text-terracotta">{resendError}</p> : null}
+        <Field
+          label="Sign-in code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          placeholder="123456"
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          inputClassName="tracking-[0.3em] text-center"
+        />
+        {verifyError ? <p className="mt-2 text-[13px] text-terracotta">{verifyError}</p> : null}
+        <div className="h-3.5" />
+        <p className="text-[12.5px] text-ink/[0.72]">
+          {secondsLeft > 0
+            ? `Didn't arrive? Check spam, or resend in ${formatCountdown(secondsLeft)}`
+            : "Didn't arrive? Check spam, or resend it below"}
+        </p>
+        {resendError ? <p className="mt-2 text-[13px] text-terracotta">{resendError}</p> : null}
+        <Button
+          variant="ghost"
+          className="h-9 px-0 text-[13.5px]"
+          style={{ color: "var(--color-accent-strong)" }}
+          disabled={secondsLeft > 0}
+          onClick={resend}
+        >
+          {justResent ? "Code sent" : secondsLeft > 0 ? `Resend code (${formatCountdown(secondsLeft)})` : "Resend code"}
+        </Button>
         <div className="h-3" />
         <Button variant="ghost" className="h-[50px] text-[14px]" onClick={() => router.push(back)}>
           Use a different email
@@ -104,12 +152,12 @@ function CheckEmailContent() {
       </ScreenContent>
       <BottomBar>
         <Button
-          variant={secondsLeft > 0 || !redirect ? "muted" : "primary"}
+          variant={verifying || code.trim().length < 6 ? "muted" : "primary"}
           className="text-[15.5px]"
-          disabled={secondsLeft > 0 || !redirect}
-          onClick={resend}
+          disabled={verifying || code.trim().length < 6}
+          onClick={confirm}
         >
-          {justResent ? "Link sent" : secondsLeft > 0 ? `Resend link (${formatCountdown(secondsLeft)})` : "Resend link"}
+          {verifying ? "Confirming…" : "Confirm code"}
         </Button>
       </BottomBar>
     </Screen>

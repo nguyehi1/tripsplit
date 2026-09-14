@@ -22,9 +22,7 @@ function JoinTripContent() {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(
-    searchParams.get("error") === "auth"
-      ? "That link expired or was already used — enter your details again for a new one."
-      : null,
+    searchParams.get("error") === "join" ? "Couldn't join the trip — try again." : null,
   );
 
   useEffect(() => {
@@ -52,23 +50,19 @@ function JoinTripContent() {
     setSubmitting(true);
     try {
       const supabase = createClient();
-      const redirectUrl = new URL(`/join/${code}/callback`, window.location.origin);
-      redirectUrl.searchParams.set("name", name.trim());
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: redirectUrl.toString() },
-      });
+      const { error: authError } = await supabase.auth.signInWithOtp({ email: email.trim() });
       if (authError) {
         setError(friendlyAuthError(authError));
         return;
       }
       const back = encodeURIComponent(`/join/${code}`);
-      const redirect = encodeURIComponent(redirectUrl.toString());
+      const invite = encodeURIComponent(code);
+      const displayName = encodeURIComponent(name.trim());
       router.push(
-        `/check-email?email=${encodeURIComponent(email.trim())}&back=${back}&redirect=${redirect}`,
+        `/check-email?email=${encodeURIComponent(email.trim())}&back=${back}&invite=${invite}&name=${displayName}`,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't send a sign-in link — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't send a sign-in code — try again.");
     } finally {
       setSubmitting(false);
     }

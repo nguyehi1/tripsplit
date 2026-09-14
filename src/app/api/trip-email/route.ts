@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * Sends the "you created a trip" confirmation email. Called from the client right after
- * `createTrip` succeeds (the "joined" case is sent server-side from the join callback route,
- * which already has an authenticated session).
+ * `createTrip` succeeds (the "joined" case is sent server-side from /api/join, which already
+ * has an authenticated session).
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
