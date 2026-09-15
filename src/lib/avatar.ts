@@ -23,3 +23,14 @@ export function initialsFor(displayName: string): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
+
+/**
+ * The one place "{name} (placeholder)" gets built, so every display site (payer picker, Details
+ * table, Summary/settle-up, roster) renders it identically — see
+ * docs/features/add-placeholder-members/requirements.md AC5. Never bake this into the raw
+ * `displayName` field itself: `initialsFor(displayName)` and rename/edit flows need the
+ * unadorned name.
+ */
+export function displayNameFor(displayName: string, isPlaceholder: boolean): string {
+  return isPlaceholder ? `${displayName} (placeholder)` : displayName;
+}

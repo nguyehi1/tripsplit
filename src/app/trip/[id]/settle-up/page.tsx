@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowRightIcon, ChevronLeftIcon, CheckIcon, LockIcon } from "@/components/icons";
 import { Avatar, BottomBar, Button, Card, IconButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { displayNameFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
 import { completeTrip, getTripView, type TripView } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
@@ -133,7 +134,8 @@ export default function SettleUpPage() {
                     }`}
                   >
                     <span className="text-[15px] font-medium">
-                      {s.from.displayName} → {s.to.displayName}
+                      {displayNameFor(s.from.displayName, s.from.isPlaceholder)} →{" "}
+                      {displayNameFor(s.to.displayName, s.to.isPlaceholder)}
                     </span>
                     <span className="text-display text-[18px]">{formatCents(s.amountCents)}</span>
                   </div>
@@ -213,7 +215,8 @@ export default function SettleUpPage() {
                     <Avatar initials={s.to.initials} color={s.to.avatar} size={32} />
                   </div>
                   <div className="min-w-0 flex-1 text-[14.5px] font-medium">
-                    {s.from.displayName} pays {s.to.displayName}
+                    {displayNameFor(s.from.displayName, s.from.isPlaceholder)} pays{" "}
+                    {displayNameFor(s.to.displayName, s.to.isPlaceholder)}
                   </div>
                   <div className="text-display text-[22px]" style={{ color: "oklch(0.4 0.08 80)" }}>
                     {formatCents(s.amountCents)}
@@ -243,6 +246,15 @@ export default function SettleUpPage() {
               </div>
             ))}
           </Card>
+        ) : null}
+        {members.some((m) => m.isPlaceholder) ? (
+          <>
+            <div className="h-3" />
+            <p className="px-1 text-[12.5px] leading-[1.5] text-ink/60">
+              &quot;(placeholder)&quot; members can&apos;t pay in-app — settle up with them
+              directly, then mark it paid.
+            </p>
+          </>
         ) : null}
       </ScreenContent>
       <BottomBar>

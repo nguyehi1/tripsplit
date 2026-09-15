@@ -17,6 +17,16 @@ _(none yet)_
 
 ## Shipped
 
+### Placeholder members (add-placeholder-members)
+- Status: shipped
+- Requirements: [docs/features/add-placeholder-members/requirements.md](features/add-placeholder-members/requirements.md)
+- Lets the organizer add a name-only "placeholder" member (no invite, no account) so people who won't use the app still count in the equal split; organizer-only add/remove/rename, placeholders can never be a payer, no auto-merge with a real member who joins later.
+
+### Expense date (expense-date-month)
+- Status: shipped
+- Requirements: [docs/features/expense-date-month/requirements.md](features/expense-date-month/requirements.md)
+- Lets a member record the actual date an expense happened (separate from the log-entry timestamp), shown inline per expense (e.g. "Mon, 9/14") in place of today's weekday-only label. No month grouping/headers.
+
 ### Remember sign-in email (remember-signin-email)
 - Status: shipped
 - Requirements: [docs/features/remember-signin-email/requirements.md](features/remember-signin-email/requirements.md)

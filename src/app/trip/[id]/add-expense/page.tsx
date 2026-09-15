@@ -6,8 +6,9 @@ import { CloseIcon, LockIcon, PlusIcon } from "@/components/icons";
 import { Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
 import { addExpense } from "@/lib/data/trips";
+import { todayIso } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/client";
-import { isValidExpenseInput } from "@/lib/validation/expense";
+import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
 
 export default function AddExpensePage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function AddExpensePage() {
   const [locked, setLocked] = useState<boolean | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [date, setDate] = useState(todayIso());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,8 +41,8 @@ export default function AddExpensePage() {
   const splitCents = memberCount ? Math.round(amountCents / memberCount) : 0;
 
   async function handleSubmit() {
-    if (!isValidExpenseInput(amountCents, description)) {
-      setError("Enter an amount and what it was for.");
+    if (!isValidExpenseInput(amountCents, description) || (date && !isValidExpenseDate(date))) {
+      setError("Enter an amount, what it was for, and a valid date (today or earlier).");
       return;
     }
     setError(null);
@@ -57,6 +59,7 @@ export default function AddExpensePage() {
         paidBy: user.id,
         amountCents,
         description: description.trim(),
+        date: date || undefined,
       });
 
       router.push(`/trip/${id}`);
@@ -142,6 +145,21 @@ export default function AddExpensePage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full bg-transparent text-[17px] font-medium outline-none placeholder:font-normal placeholder:text-ink/40"
+          />
+          <div className="h-3.5" />
+          <Divider />
+          <div className="h-3.5" />
+          <Kicker>
+            Date
+            <span className="font-normal normal-case tracking-normal text-ink/60"> — optional, defaults to today</span>
+          </Kicker>
+          <div className="h-1" />
+          <input
+            type="date"
+            value={date}
+            max={todayIso()}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full bg-transparent text-[17px] font-medium outline-none"
           />
         </Card>
         <div className="h-4" />

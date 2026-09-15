@@ -6,9 +6,12 @@ beyond a magic-link email), log expenses as you go, and see who owes who.
 ## Status
 
 Core v1 flow is implemented: Supabase schema/auth/RLS, invite-link join, trip dashboard
-(expenses + settle-up), add-expense, edit-own-expense, and feedback. The sign-in screen
-remembers the last email used on a device (local-only, with an easy "clear" option) so
-returning users don't have to retype it. Pre-production hardening still pending.
+(expenses + settle-up), add-expense, edit-own-expense, and feedback. The trip organizer can
+also add name-only "placeholder" members — no account or invite needed — for people who won't
+use the app, so the equal split still accounts for everyone on the trip; the organizer can
+rename or remove them later. The sign-in screen remembers the last email used on a device
+(local-only, with an easy "clear" option) so returning users don't have to retype it.
+Pre-production hardening still pending.
 
 ## Docs
 
@@ -26,10 +29,20 @@ returning users don't have to retype it. Pre-production hardening still pending.
 ## v1 scope
 
 - Whole-trip equal split (total ÷ member count), computed live.
-- Manual expense entry (amount + description).
-- The member who paid for an expense can edit its amount/description afterward, until the trip
-  is completed; editing another member's expense is rejected server-side (RLS), not just hidden
-  in the UI.
+- Manual expense entry (amount + description + date — date is optional and defaults to today
+  when left blank).
+- The member who paid for an expense can edit its amount/description/date afterward, until the
+  trip is completed (date is required on edit); editing another member's expense is rejected
+  server-side (RLS), not just hidden in the UI.
+- The expense list shows each expense's actual date (e.g. "Mon, 9/14"), not just the log-entry
+  weekday.
+- The organizer can add name-only "placeholder" members (no invite or account needed) to the
+  trip's roster (`/trip/[id]/invite`) so someone who won't use the app still counts in the equal
+  split; a placeholder always displays as "<name> (placeholder)", counts as a full member with
+  $0 paid, and can never be an expense's payer. The organizer can rename or remove a placeholder
+  at any time (up to 20 per trip); there's no auto-claim/merge, so once the real person joins
+  for real, the organizer must manually remove the stale placeholder or that person is
+  double-counted. Add/rename/remove are all locked once the trip is completed.
 - Two views: Summary (settle-up transactions) and Details (per-person paid/share table).
 - Displays amounts owed; no payment integration yet.
 

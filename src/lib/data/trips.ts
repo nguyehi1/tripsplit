@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { avatarColorFor, initialsFor } from "@/lib/avatar";
 import { centsToDollars, dollarsToCents } from "@/lib/currency";
+import { formatDayDate, todayIso } from "@/lib/dates";
 import { computeBalances, simplifyDebts } from "@/lib/settlement";
 import type { Database } from "@/lib/supabase/types";
 
@@ -54,6 +55,31 @@ export async function completeTrip(supabase: Client, tripId: string) {
   if (error) throw error;
 }
 
+/** Organizer-only, at most 20 per trip, blocked once the trip is completed — enforced by the RPC. */
+export async function addPlaceholderMember(supabase: Client, input: { tripId: string; displayName: string }) {
+  const { data, error } = await supabase.rpc("add_placeholder_member", {
+    _trip_id: input.tripId,
+    _display_name: input.displayName,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Organizer-only, placeholder-only (by construction of the RPC's query), blocked once the trip is completed. */
+export async function renamePlaceholderMember(supabase: Client, input: { memberId: string; displayName: string }) {
+  const { error } = await supabase.rpc("rename_placeholder_member", {
+    _member_id: input.memberId,
+    _display_name: input.displayName,
+  });
+  if (error) throw error;
+}
+
+/** Organizer-only, placeholder-only (by construction of the RPC's query), blocked once the trip is completed. */
+export async function removePlaceholderMember(supabase: Client, memberId: string) {
+  const { error } = await supabase.rpc("remove_placeholder_member", { _member_id: memberId });
+  if (error) throw error;
+}
+
 export async function submitFeedback(
   supabase: Client,
   input: { userId: string; tripId?: string; rating?: "yes" | "fine" | "not_really"; comment?: string },
@@ -69,7 +95,7 @@ export async function submitFeedback(
 
 export async function addExpense(
   supabase: Client,
-  input: { tripId: string; paidBy: string; amountCents: number; description: string },
+  input: { tripId: string; paidBy: string; amountCents: number; description: string; date?: string },
 ) {
   const { data, error } = await supabase
     .from("expenses")
@@ -78,6 +104,7 @@ export async function addExpense(
       paid_by: input.paidBy,
       amount: centsToDollars(input.amountCents),
       description: input.description,
+      date: input.date ?? todayIso(),
     })
     .select()
     .single();
@@ -93,13 +120,14 @@ export async function addExpense(
  */
 export async function updateExpense(
   supabase: Client,
-  input: { expenseId: string; amountCents: number; description: string },
+  input: { expenseId: string; amountCents: number; description: string; date: string },
 ) {
   const { data, error } = await supabase
     .from("expenses")
     .update({
       amount: centsToDollars(input.amountCents),
       description: input.description,
+      date: input.date,
     })
     .eq("id", input.expenseId)
     .select()
@@ -134,24 +162,33 @@ export async function getMyTrips(supabase: Client, currentUserId: string) {
     const tripMemberRows = memberRows.filter((m) => m.trip_id === tripRow.id);
     const tripExpenseRows = expenseRows.filter((e) => e.trip_id === tripRow.id);
 
+    // Member identity is the trip_members row id, not user_id — see ADR 0004. A placeholder's
+    // user_id is null and (up to 20 per trip) not unique, so user_id can no longer double as a
+    // stable per-member key.
+    const userIdToMemberId = new Map(
+      tripMemberRows.filter((m) => m.user_id !== null).map((m) => [m.user_id as string, m.id]),
+    );
+
     const settlementMembers = tripMemberRows.map((m) => ({
-      id: m.user_id,
+      id: m.id,
       displayName: m.display_name,
       joinedAt: m.joined_at,
     }));
     const settlementExpenses = tripExpenseRows.map((e) => ({
       id: e.id,
-      paidBy: e.paid_by,
+      paidBy: userIdToMemberId.get(e.paid_by) ?? e.paid_by,
       amountCents: dollarsToCents(Number(e.amount)),
       description: e.description,
     }));
     const balances = computeBalances(settlementMembers, settlementExpenses);
-    const yourBalance = balances.find((b) => b.memberId === currentUserId) ?? null;
+    const yourMemberId = userIdToMemberId.get(currentUserId) ?? null;
+    const yourBalance = balances.find((b) => b.memberId === yourMemberId) ?? null;
 
     const members = tripMemberRows.map((m, i) => ({
-      id: m.user_id,
+      id: m.id,
       displayName: m.display_name,
       isOrganizer: m.user_id === tripRow.created_by,
+      isPlaceholder: m.is_placeholder,
       initials: initialsFor(m.display_name),
       avatar: avatarColorFor(i, m.user_id === tripRow.created_by),
     }));
@@ -175,10 +212,6 @@ export async function getMyTrips(supabase: Client, currentUserId: string) {
 
 export type MyTrip = Awaited<ReturnType<typeof getMyTrips>>[number];
 
-function formatDayLabel(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { weekday: "short" });
-}
-
 /**
  * Fetches a trip's members and expenses, runs them through the settlement math, and shapes the
  * result the way the UI components consume it.
@@ -187,7 +220,12 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
   const [tripResult, membersResult, expensesResult] = await Promise.all([
     supabase.from("trips").select("*").eq("id", tripId).single(),
     supabase.from("trip_members").select("*").eq("trip_id", tripId).order("joined_at", { ascending: true }),
-    supabase.from("expenses").select("*").eq("trip_id", tripId).order("created_at", { ascending: false }),
+    supabase
+      .from("expenses")
+      .select("*")
+      .eq("trip_id", tripId)
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false }),
   ]);
 
   if (tripResult.error) throw tripResult.error;
@@ -198,14 +236,23 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
   const memberRows = membersResult.data ?? [];
   const expenseRows = expensesResult.data ?? [];
 
+  // Member identity is the trip_members row id, not user_id — see ADR 0004. A placeholder's
+  // user_id is null and (up to 20 per trip) not unique, so user_id can no longer double as the
+  // key for balanceByMember/memberById below. paid_by (still always a real user_id) is
+  // translated through this lookup before being handed to settlement.ts.
+  const userIdToMemberId = new Map(
+    memberRows.filter((m) => m.user_id !== null).map((m) => [m.user_id as string, m.id]),
+  );
+  const memberIdForPaidBy = (paidBy: string) => userIdToMemberId.get(paidBy) ?? paidBy;
+
   const settlementMembers = memberRows.map((m) => ({
-    id: m.user_id,
+    id: m.id,
     displayName: m.display_name,
     joinedAt: m.joined_at,
   }));
   const settlementExpenses = expenseRows.map((e) => ({
     id: e.id,
-    paidBy: e.paid_by,
+    paidBy: memberIdForPaidBy(e.paid_by),
     amountCents: dollarsToCents(Number(e.amount)),
     description: e.description,
   }));
@@ -215,14 +262,15 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
   const settlements = simplifyDebts(balances);
 
   const members = memberRows.map((m, i) => {
-    const balance = balanceByMember.get(m.user_id)!;
+    const balance = balanceByMember.get(m.id)!;
     const isOrganizer = m.user_id === tripRow.created_by;
-    const memberExpenses = expenseRows.filter((e) => e.paid_by === m.user_id);
+    const memberExpenses = expenseRows.filter((e) => memberIdForPaidBy(e.paid_by) === m.id);
     return {
-      id: m.user_id,
+      id: m.id,
       displayName: m.display_name,
       joinedAt: m.joined_at,
       isOrganizer,
+      isPlaceholder: m.is_placeholder,
       initials: initialsFor(m.display_name),
       avatar: avatarColorFor(i, isOrganizer),
       paidCents: balance.paidCents,
@@ -235,11 +283,11 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
 
   const expenses = expenseRows.map((e) => ({
     id: e.id,
-    paidBy: e.paid_by,
+    paidBy: memberIdForPaidBy(e.paid_by),
     amountCents: dollarsToCents(Number(e.amount)),
     description: e.description,
-    day: formatDayLabel(e.created_at),
-    payer: memberById.get(e.paid_by)!,
+    day: formatDayDate(e.date),
+    payer: memberById.get(memberIdForPaidBy(e.paid_by))!,
   }));
 
   const resolvedSettlements = settlements.map((s) => ({
@@ -250,6 +298,8 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
 
   const totalCents = expenses.reduce((sum, e) => sum + e.amountCents, 0);
   const avgPerPersonCents = members.length > 0 ? Math.round(totalCents / members.length) : 0;
+
+  const yourMemberId = userIdToMemberId.get(currentUserId) ?? null;
 
   return {
     trip: {
@@ -266,7 +316,7 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
     settlements: resolvedSettlements,
     totalCents,
     avgPerPersonCents,
-    you: memberById.get(currentUserId) ?? null,
+    you: yourMemberId ? (memberById.get(yourMemberId) ?? null) : null,
   };
 }
 

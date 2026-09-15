@@ -8,6 +8,7 @@ import {
   LockIcon,
   MessageSquareIcon,
   PencilIcon,
+  PeopleIcon,
   PlusIcon,
 } from "@/components/icons";
 import {
@@ -24,6 +25,7 @@ import {
   ScreenContent,
   TabSwitch,
 } from "@/components/ui";
+import { displayNameFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
 import { getTripView, type TripView } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
@@ -106,6 +108,13 @@ export default function TripDashboardPage() {
               onClick={() => router.push("/trip/new")}
             >
               <PlusIcon size={19} strokeWidth={2.4} />
+            </IconButton>
+            <IconButton
+              title="Trip roster"
+              className="text-ink/[0.73]"
+              onClick={() => router.push(`/trip/${id}/invite`)}
+            >
+              <PeopleIcon size={19} strokeWidth={2.2} />
             </IconButton>
             <IconButton
               title="Settle up"
@@ -235,7 +244,7 @@ export default function TripDashboardPage() {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[15px] font-semibold">{expense.description}</div>
                       <div className="mt-px text-[12px] text-ink/[0.72]">
-                        {expense.payer.displayName} · {expense.day}
+                        {displayNameFor(expense.payer.displayName, expense.payer.isPlaceholder)} · {expense.day}
                       </div>
                     </div>
                     <div className="text-display text-[17px]">{formatCents(expense.amountCents)}</div>
@@ -257,7 +266,9 @@ export default function TripDashboardPage() {
                   </>
                 ) : null}
                 <div className="flex items-baseline justify-between">
-                  <div className="text-display text-[24px]">{member.displayName}</div>
+                  <div className="text-display text-[24px]">
+                    {displayNameFor(member.displayName, member.isPlaceholder)}
+                  </div>
                   <div
                     className="text-display text-[24px]"
                     style={{ color: member.netCents >= 0 ? "oklch(0.38 0.08 80)" : "inherit" }}

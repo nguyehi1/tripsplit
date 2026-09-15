@@ -27,13 +27,13 @@ export type Database = {
         Row: {
           id: string;
           trip_id: string;
-          user_id: string;
+          user_id: string | null;
           display_name: string;
           joined_at: string;
+          is_placeholder: boolean;
         };
         Insert: Partial<Database["public"]["Tables"]["trip_members"]["Row"]> & {
           trip_id: string;
-          user_id: string;
           display_name: string;
         };
         Update: Partial<Database["public"]["Tables"]["trip_members"]["Row"]>;
@@ -47,6 +47,7 @@ export type Database = {
           amount: number;
           description: string;
           receipt_photo_url: string | null;
+          date: string;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["expenses"]["Row"]> & {
@@ -102,6 +103,18 @@ export type Database = {
       };
       complete_trip: {
         Args: { _trip_id: string };
+        Returns: undefined;
+      };
+      add_placeholder_member: {
+        Args: { _trip_id: string; _display_name: string };
+        Returns: string;
+      };
+      rename_placeholder_member: {
+        Args: { _member_id: string; _display_name: string };
+        Returns: undefined;
+      };
+      remove_placeholder_member: {
+        Args: { _member_id: string };
         Returns: undefined;
       };
       is_trip_member: {

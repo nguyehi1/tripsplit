@@ -6,8 +6,9 @@ import { CheckIcon, CloseIcon, LockIcon } from "@/components/icons";
 import { Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
 import { updateExpense } from "@/lib/data/trips";
+import { todayIso } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/client";
-import { isValidExpenseInput } from "@/lib/validation/expense";
+import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
 
 export default function EditExpensePage() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function EditExpensePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [date, setDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +39,7 @@ export default function EditExpensePage() {
       }
       setAmount(Number(expenseResult.data.amount).toFixed(2));
       setDescription(expenseResult.data.description);
+      setDate(expenseResult.data.date);
       setMemberCount(membersResult.count ?? 1);
       setLocked(Boolean(tripResult.data?.completed_at));
     });
@@ -49,8 +52,8 @@ export default function EditExpensePage() {
   const splitCents = memberCount ? Math.round(amountCents / memberCount) : 0;
 
   async function handleSubmit() {
-    if (!isValidExpenseInput(amountCents, description)) {
-      setError("Enter an amount and what it was for.");
+    if (!isValidExpenseInput(amountCents, description) || !date || !isValidExpenseDate(date)) {
+      setError("Enter an amount, what it was for, and a valid date (today or earlier).");
       return;
     }
     setError(null);
@@ -61,6 +64,7 @@ export default function EditExpensePage() {
         expenseId,
         amountCents,
         description: description.trim(),
+        date,
       });
 
       router.push(`/trip/${id}`);
@@ -168,6 +172,18 @@ export default function EditExpensePage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full bg-transparent text-[17px] font-medium outline-none placeholder:font-normal placeholder:text-ink/40"
+          />
+          <div className="h-3.5" />
+          <Divider />
+          <div className="h-3.5" />
+          <Kicker>Date</Kicker>
+          <div className="h-1" />
+          <input
+            type="date"
+            value={date}
+            max={todayIso()}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full bg-transparent text-[17px] font-medium outline-none"
           />
         </Card>
         <div className="h-4" />
