@@ -8,6 +8,7 @@ import { initialsFor } from "@/lib/avatar";
 import { friendlyAuthError } from "@/lib/auth-errors";
 import { getTripByInviteCode } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
+import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
 type InviteInfo = NonNullable<Awaited<ReturnType<typeof getTripByInviteCode>>>;
@@ -24,6 +25,10 @@ function JoinTripContent() {
   const [error, setError] = useState<string | null>(
     searchParams.get("error") === "join" ? "Couldn't join the trip — try again." : null,
   );
+
+  useEffect(() => {
+    trackEvent("trip_join_start");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

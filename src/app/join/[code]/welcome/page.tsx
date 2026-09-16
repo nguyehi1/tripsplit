@@ -7,6 +7,7 @@ import { AvatarStack, BottomBar, Button, Card, Divider, Kicker, Screen, ScreenCo
 import { getTripView, type TripView } from "@/lib/data/trips";
 import { formatCents } from "@/lib/currency";
 import { formatDateRange } from "@/lib/dates";
+import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
 function ordinal(n: number) {
@@ -20,6 +21,10 @@ export default function JoinWelcomePage() {
   const tripId = useSearchParams().get("tripId");
   const [view, setView] = useState<TripView | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackEvent("trip_join_complete");
+  }, []);
 
   useEffect(() => {
     if (!tripId) return;

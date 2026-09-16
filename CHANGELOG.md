@@ -10,6 +10,15 @@ a release moves that section under a dated version heading.
 
 ## [Unreleased]
 
+### Added
+
+- **Vercel Analytics integration**: The app now tracks Web Vitals (performance metrics: LCP, INP, CLS)
+  and 14 custom events across key user flows — trip creation/joining, expense logging/editing, member
+  invites, sign-in, and settlement. Events are privacy-first (no PII, email, or IDs), automatic via
+  Vercel Analytics, and visible in the Vercel dashboard for product insights. See
+  [docs/ANALYTICS.md](docs/ANALYTICS.md) for the complete event catalog, access instructions, and
+  developer guidance.
+
 ### Fixed
 
 - `/trips` and `/trip/[id]` no longer render a "Loading your trip(s)…"

@@ -13,7 +13,10 @@ _(none yet)_
 
 ## Planned
 
-_(none yet)_
+### Vercel Analytics – Full Enable and Custom Event Tracking (vercel-analytics)
+- Status: planned
+- Requirements: [docs/features/vercel-analytics/requirements.md](features/vercel-analytics/requirements.md)
+- Enable all Vercel Analytics capabilities (Web Vitals) and add custom event tracking for key user flows (trip creation, expenses, invites, settlement) to measure product engagement and performance; include privacy safeguards and dashboard-accessible documentation.
 
 ## Shipped
 
@@ -50,4 +53,3 @@ Entry format:
 - Requirements: [docs/features/<slug>/requirements.md](features/<slug>/requirements.md)
 - One-line why this exists
 -->
-</content>

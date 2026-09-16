@@ -71,6 +71,17 @@ supabase link --project-ref <project-ref>
 supabase db push
 ```
 
+## Analytics
+
+TripSplit uses **Vercel Analytics** to measure performance and understand user behavior. The app automatically tracks:
+
+- **Web Vitals** — page performance metrics (Largest Contentful Paint, Interaction to Next Paint, Cumulative Layout Shift)
+- **Custom events** — 14 key user actions (trip creation, expense logging, member invites, sign-in, settlement)
+
+All events are privacy-first: no personally identifiable information (names, emails, trip IDs, amounts) is collected. Data is retained for 30+ days on Vercel and is not shared with third parties.
+
+See [docs/ANALYTICS.md](./docs/ANALYTICS.md) for the complete event catalog, how to view metrics in the Vercel dashboard, and developer guidance for adding new events.
+
 ## Deployment
 
 Deployed on Vercel from this repo:

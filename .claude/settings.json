@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(chmod +x /private/tmp/claude-501/-Users-hiennguyen-Desktop-10--TripSplit/1e44a4c8-c160-4667-adf4-dfac63234107/scratchpad/check_pii.sh)",
+      "Bash(/private/tmp/claude-501/-Users-hiennguyen-Desktop-10--TripSplit/1e44a4c8-c160-4667-adf4-dfac63234107/scratchpad/check_pii.sh)",
+      "Bash(chmod +x /private/tmp/claude-501/-Users-hiennguyen-Desktop-10--TripSplit/1e44a4c8-c160-4667-adf4-dfac63234107/scratchpad/check_use_client.sh)",
+      "Bash(/private/tmp/claude-501/-Users-hiennguyen-Desktop-10--TripSplit/1e44a4c8-c160-4667-adf4-dfac63234107/scratchpad/check_use_client.sh)",
+      "Bash(chmod +x /private/tmp/claude-501/-Users-hiennguyen-Desktop-10--TripSplit/1e44a4c8-c160-4667-adf4-dfac63234107/scratchpad/verify_docs_consistency.sh)",
+      "Bash(/private/tmp/claude-501/-Users-hiennguyen-Desktop-10--TripSplit/1e44a4c8-c160-4667-adf4-dfac63234107/scratchpad/verify_docs_consistency.sh)"
     ]
   }
 }

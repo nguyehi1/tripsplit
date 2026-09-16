@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeftIcon, MailIcon } from "@/components/icons";
 import { BottomBar, Button, Field, IconButton, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/auth-errors";
+import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -66,6 +67,7 @@ function CheckEmailContent() {
         setVerifyError(friendlyAuthError(error));
         return;
       }
+      trackEvent("sign_in_complete");
       if (invite) {
         const res = await fetch("/api/join", {
           method: "POST",

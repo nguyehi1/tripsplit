@@ -12,6 +12,7 @@ import {
   renamePlaceholderMember,
   type TripView,
 } from "@/lib/data/trips";
+import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
 const MAX_PLACEHOLDERS = 20;
@@ -70,6 +71,7 @@ export default function TripInvitePage() {
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(inviteUrl);
+      trackEvent("member_invite_send");
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -81,6 +83,7 @@ export default function TripInvitePage() {
     if (navigator.share) {
       try {
         await navigator.share({ title: view?.trip.name, url: inviteUrl });
+        trackEvent("member_invite_send");
       } catch {
         // user cancelled — no-op
       }
@@ -100,6 +103,7 @@ export default function TripInvitePage() {
     try {
       const supabase = createClient();
       await addPlaceholderMember(supabase, { tripId: id, displayName: trimmed });
+      trackEvent("member_placeholder_add");
       setAddName("");
       await refresh();
     } catch (e) {

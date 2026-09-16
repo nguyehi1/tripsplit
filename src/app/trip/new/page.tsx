@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightIcon, CalendarIcon, CloseIcon } from "@/components/icons";
+import { trackEvent } from "@/lib/tracking";
 import {
   Avatar,
   BottomBar,
@@ -39,6 +40,10 @@ export default function NewTripPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    trackEvent("trip_create_start");
+  }, []);
+
   const tripLength = useMemo(
     () => (startsOn && endsOn ? lengthLabel(startsOn, endsOn) : null),
     [startsOn, endsOn],
@@ -60,6 +65,7 @@ export default function NewTripPage() {
         startsOn: startsOn || undefined,
         endsOn: endsOn || undefined,
       });
+      trackEvent("trip_create_complete");
       // Best-effort — a failed confirmation email shouldn't stop the trip from being created.
       await fetch("/api/trip-email", {
         method: "POST",

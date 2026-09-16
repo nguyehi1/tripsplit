@@ -28,10 +28,17 @@ Work through these steps in order and stop at the first hard failure:
    for each; do not silently skip a failing one.
 
 4. **Commit message**: If there are uncommitted changes the user wants
-   committed, draft ONE concise commit message (imperative mood, explains
-   *why* not *what*, no fluff) following this repo's existing style from
-   step 1. Do not commit it yourself — hand it back for the user/parent
-   session to use, since committing is a user-facing action.
+   committed, draft ONE short, clear, concise commit message following this
+   repo's existing style from step 1:
+   - Subject line: imperative mood, ~50 chars, no period.
+   - Body: only if the subject can't carry it alone. When needed, 1-2 short
+     sentences max explaining *why*, not *what* (the diff already shows
+     what). No multi-paragraph explanations, no restating the diff, no
+     listing every file/change — that belongs in the PR description, not
+     the commit.
+   - Cut anything a reader could infer from the code itself.
+   Do not commit it yourself — hand it back for the user/parent session to
+   use, since committing is a user-facing action.
 
 5. **Final report**: A short summary with three sections — Issues found
    (if any), Check results (lint/typecheck/test/build), and Verdict

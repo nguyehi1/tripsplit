@@ -7,6 +7,7 @@ import { Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, TopBa
 import { formatCents } from "@/lib/currency";
 import { addExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
+import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
 
@@ -20,6 +21,10 @@ export default function AddExpensePage() {
   const [date, setDate] = useState(todayIso());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackEvent("expense_add_start");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +67,7 @@ export default function AddExpensePage() {
         date: date || undefined,
       });
 
+      trackEvent("expense_add_complete");
       router.push(`/trip/${id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't add that expense — try again.");

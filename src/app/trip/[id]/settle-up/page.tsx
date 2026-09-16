@@ -8,6 +8,7 @@ import { displayNameFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
 import { completeTrip, getTripView, type TripView } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
+import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SettleUpPage() {
@@ -17,6 +18,10 @@ export default function SettleUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
   const [paid, setPaid] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    trackEvent("settlement_view");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +48,7 @@ export default function SettleUpPage() {
     try {
       const supabase = createClient();
       await completeTrip(supabase, id);
+      trackEvent("settlement_complete");
       const {
         data: { user },
       } = await supabase.auth.getUser();

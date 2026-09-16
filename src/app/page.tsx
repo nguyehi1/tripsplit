@@ -6,6 +6,7 @@ import { ArrowRightIcon } from "@/components/icons";
 import { Button, Field, Screen, ScreenContent } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/auth-errors";
 import { clearRememberedEmail, getRememberedEmail, setRememberedEmail } from "@/lib/remembered-email";
+import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
 function extractInviteCode(input: string) {
@@ -43,6 +44,7 @@ function SignInContent() {
     setError(null);
     setSending(true);
     try {
+      trackEvent("sign_in_start");
       const supabase = createClient();
       const { error: authError } = await supabase.auth.signInWithOtp({ email });
       if (authError) {

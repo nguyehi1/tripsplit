@@ -7,6 +7,7 @@ import { Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, TopBa
 import { formatCents } from "@/lib/currency";
 import { updateExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
+import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
 
@@ -21,6 +22,10 @@ export default function EditExpensePage() {
   const [date, setDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackEvent("expense_edit_start");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +72,7 @@ export default function EditExpensePage() {
         date,
       });
 
+      trackEvent("expense_edit_complete");
       router.push(`/trip/${id}`);
     } catch (e) {
       // PGRST116 ("0 rows") is how PostgREST reports an update that RLS silently excluded — the

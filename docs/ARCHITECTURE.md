@@ -72,6 +72,18 @@ namespaced key, and every read/write wrapped in try/catch so the feature
 degrades to today's behavior (not an error) when storage is unavailable or
 blocked (private browsing, disabled storage).
 
+**Analytics & event tracking**: Vercel Analytics (`@vercel/analytics`) collects
+Web Vitals (LCP, INP, CLS) automatically via the `<Analytics />` component in
+the root layout (`src/app/layout.tsx`). Custom event tracking (trip creation,
+expense flows, joins, invites, sign-in, settlement) is implemented via a shared
+wrapper `src/lib/tracking.ts` that calls Vercel's `track()` function — event
+names only, no custom data fields, to avoid PII risk. All tracking is
+client-only (runs in `"use client"` components). Events fire on page mount (for
+page-view events like `trip_create_start`) or in success callbacks after data
+mutations (like `trip_create_complete`). See
+[`docs/features/vercel-analytics/architecture.md`](features/vercel-analytics/architecture.md)
+for the full event list, placement, and privacy safeguards.
+
 **Additive `not null` schema changes on populated tables**: sequence as add
 nullable -> backfill -> set DB-level default -> set `not null`, all in one
 migration file (see
@@ -220,6 +232,12 @@ this before adding a parallel implementation.
   (placeholder)` suffix if applicable" helper added by the
   add-placeholder-members feature, rather than reimplementing that string
   concatenation at each of the several places a member's name is rendered.
+- `src/lib/tracking.ts` — the one analytics event-tracking module
+  (`trackEvent(eventName)`), a thin wrapper around `@vercel/analytics`'s
+  `track()` with client-only guards and silent-failure error handling. All
+  custom event tracking calls go through here. See
+  [`docs/features/vercel-analytics/architecture.md`](features/vercel-analytics/architecture.md)
+  for the event list and placement strategy.
 - `is_trip_member(_trip_id)` and `is_trip_open(_trip_id)` (both
   `security definer` SQL functions, `supabase/migrations/0001_init.sql` and
   `0005_lock_expenses_when_trip_completed.sql`) are the shared building
