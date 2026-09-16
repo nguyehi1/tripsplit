@@ -354,7 +354,7 @@ export default function TripInvitePage() {
                         <div className="mt-px text-[12px] text-ink/[0.72]">Placeholder</div>
                         {isOrganizer && !locked ? (
                           <div className="mt-1 text-[11.5px] leading-[1.4] text-ink/60">
-                            Remove this once {member.displayName} joins for real — TripSplit
+                            Remove this once {member.displayName} joins for real — Splitiful
                             won&apos;t do it automatically.
                           </div>
                         ) : null}

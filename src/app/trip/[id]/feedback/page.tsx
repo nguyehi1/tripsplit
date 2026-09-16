@@ -59,7 +59,7 @@ export default function FeedbackPage() {
         />
         <div className="h-[18px]" />
         <h1 className="text-display text-[28px]">
-          How&apos;s TripSplit
+          How&apos;s Splitiful
           <br />
           treating you?
         </h1>

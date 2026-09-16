@@ -65,13 +65,13 @@ describe("remembered-email", () => {
   it("uses a namespaced key so it doesn't collide with other localStorage consumers", () => {
     const store = installFakeLocalStorage();
     setRememberedEmail("pat@example.com");
-    expect([...store.keys()]).toEqual(["tripsplit:last-signin-email"]);
+    expect([...store.keys()]).toEqual(["splitiful:last-signin-email"]);
   });
 
   it("stores only the raw email string, nothing else (no tokens/metadata, per AC6/non-goals)", () => {
     const store = installFakeLocalStorage();
     setRememberedEmail("pat@example.com");
-    expect(store.get("tripsplit:last-signin-email")).toBe("pat@example.com");
+    expect(store.get("splitiful:last-signin-email")).toBe("pat@example.com");
   });
 
   it("getRememberedEmail falls back to '' when localStorage access throws (AC7, e.g. Safari private mode)", () => {

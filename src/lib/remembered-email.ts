@@ -1,4 +1,4 @@
-const KEY = "tripsplit:last-signin-email";
+const KEY = "splitiful:last-signin-email";
 
 export function getRememberedEmail(): string {
   try {

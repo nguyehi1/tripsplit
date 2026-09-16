@@ -1,16 +1,12 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const FROM_ADDRESS = process.env.GMAIL_FROM_EMAIL ?? `TripSplit <${process.env.GMAIL_USER}>`;
+const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "Splitiful <noreply@splitiful.app>";
 
-function getTransport() {
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  if (!user || !pass) throw new Error("GMAIL_USER or GMAIL_APP_PASSWORD is not set");
+function getClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY is not set");
 
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass },
-  });
+  return new Resend(apiKey);
 }
 
 function escapeHtml(input: string) {
@@ -24,8 +20,8 @@ function escapeHtml(input: string) {
 
 /**
  * Confirmation email sent when a user creates or joins a trip, so they have a link back to it
- * even if they lose the invite or close the tab. Sent via Gmail SMTP — see GMAIL_USER and
- * GMAIL_APP_PASSWORD in .env.local.example.
+ * even if they lose the invite or close the tab. Sent via Resend — see RESEND_API_KEY in
+ * .env.local.example.
  */
 export async function sendTripEmail(input: {
   to: string;
@@ -33,7 +29,7 @@ export async function sendTripEmail(input: {
   tripUrl: string;
   kind: "created" | "joined";
 }) {
-  const transport = getTransport();
+  const client = getClient();
 
   const tripName = escapeHtml(input.tripName);
   const tripUrl = escapeHtml(input.tripUrl);
@@ -42,10 +38,10 @@ export async function sendTripEmail(input: {
   const heading = input.kind === "created" ? "Your trip is ready" : "You're on the trip";
   const lede =
     input.kind === "created"
-      ? "You created a new trip on TripSplit. Bookmark this link — it's how you and everyone you invite gets back in."
-      : "You joined a trip on TripSplit. Bookmark this link — it's how you get back in to log expenses and see who owes what.";
+      ? "You created a new trip on Splitiful. Bookmark this link — it's how you and everyone you invite gets back in."
+      : "You joined a trip on Splitiful. Bookmark this link — it's how you get back in to log expenses and see who owes what.";
 
-  await transport.sendMail({
+  const { error } = await client.emails.send({
     from: FROM_ADDRESS,
     to: input.to,
     subject,
@@ -83,4 +79,6 @@ export async function sendTripEmail(input: {
       </div>
     `,
   });
+
+  if (error) throw new Error(error.message);
 }

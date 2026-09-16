@@ -17,7 +17,7 @@ const instrumentSans = Instrument_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "TripSplit",
+  title: "Splitiful",
   description: "Split trip expenses with a friend group. No accounts, no daily limits.",
 };
 
