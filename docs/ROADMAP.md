@@ -17,6 +17,11 @@ _(none yet)_
 
 ## Shipped
 
+### Server-render trip pages (ssr-trip-pages)
+- Status: shipped
+- Requirements: [docs/features/ssr-trip-pages/requirements.md](features/ssr-trip-pages/requirements.md)
+- Converts `/trips` and `/trip/[id]` from client-fetched pages (loading state → client `auth.getUser()` → data fetch) to Server Components that fetch data during SSR, removing the fetch waterfall reported as slow page loads. Pure performance refactor — no UX/visual change, aside from one documented accessibility delta (the editable expense row now activates on Enter but not Space, since it's a real link). `src/proxy.ts` also changed as part of this push, but as a separate, deliberate fix made ahead of this feature's pipeline (skips the Supabase auth round trip on non-protected paths) — not by this feature's implementation. Live-verified redirect behavior is unchanged; see the QA report for the trace.
+
 ### Placeholder members (add-placeholder-members)
 - Status: shipped
 - Requirements: [docs/features/add-placeholder-members/requirements.md](features/add-placeholder-members/requirements.md)
@@ -45,3 +50,4 @@ Entry format:
 - Requirements: [docs/features/<slug>/requirements.md](features/<slug>/requirements.md)
 - One-line why this exists
 -->
+</content>

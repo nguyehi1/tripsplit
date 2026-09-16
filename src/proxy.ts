@@ -11,6 +11,13 @@ function isProtectedPath(pathname: string) {
 }
 
 export async function proxy(request: NextRequest) {
+  // Only protected paths need the auth check below, which costs a network round trip to
+  // Supabase's Auth server on every request — skip it for the rest (public pages, including
+  // the sign-in flow itself) so they aren't slowed down by a check they don't need.
+  if (!isProtectedPath(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   const env = getSupabaseEnv();
   if (!env) {
     // Supabase isn't configured yet (no .env.local) — let requests through unauthenticated
@@ -37,7 +44,7 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && isProtectedPath(request.nextUrl.pathname)) {
+  if (!user) {
     const signInUrl = new URL("/", request.url);
     signInUrl.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(signInUrl);

@@ -1,0 +1,127 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { PencilIcon } from "@/components/icons";
+import { Avatar, Card, Divider, ProgressBar, TabSwitch } from "@/components/ui";
+import { displayNameFor } from "@/lib/avatar";
+import { formatCents } from "@/lib/currency";
+import type { TripView } from "@/lib/data/trips";
+
+export function TripTabs({
+  tripId,
+  members,
+  expenses,
+  you,
+  isCompleted,
+}: {
+  tripId: string;
+  members: TripView["members"];
+  expenses: TripView["expenses"];
+  you: TripView["you"];
+  isCompleted: boolean;
+}) {
+  // Default must stay "expenses" to match the parent Server Component's implicit first paint —
+  // changing it here without a corresponding server-side default would cause a hydration
+  // mismatch (see design.md section 5).
+  const [tab, setTab] = useState<"expenses" | "details">("expenses");
+  const maxPaidCents = Math.max(1, ...members.map((m) => m.paidCents));
+
+  return (
+    <>
+      <TabSwitch
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: "expenses", label: "Expenses" },
+          { value: "details", label: "Details" },
+        ]}
+      />
+      <div className="h-3.5" />
+
+      {tab === "expenses" ? (
+        expenses.length === 0 ? (
+          <p className="px-1 text-[13px] text-ink/60">No expenses logged yet.</p>
+        ) : (
+          <Card className="px-4 py-1">
+            {expenses.map((expense, i) => {
+              const editable = expense.payer.id === you?.id && !isCompleted;
+              const rowClassName = `flex items-center gap-3 py-[13px] ${
+                i < expenses.length - 1 ? "border-b border-ink/[0.07]" : ""
+              } ${editable ? "cursor-pointer" : ""}`;
+              const children = (
+                <>
+                  <Avatar initials={expense.payer.initials} color={expense.payer.avatar} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-semibold">{expense.description}</div>
+                    <div className="mt-px text-[12px] text-ink/[0.72]">
+                      {displayNameFor(expense.payer.displayName, expense.payer.isPlaceholder)} · {expense.day}
+                    </div>
+                  </div>
+                  <div className="text-display text-[17px]">{formatCents(expense.amountCents)}</div>
+                  {editable ? <PencilIcon size={14} strokeWidth={2.2} className="text-ink/40" /> : null}
+                </>
+              );
+              // A real <a> here (vs. the old div[role=button]) activates on Enter but not
+              // Space — a deliberate, documented accessibility delta, not an oversight
+              // (see ADR 0005 point 2).
+              return editable ? (
+                <Link
+                  key={expense.id}
+                  href={`/trip/${tripId}/expense/${expense.id}/edit`}
+                  aria-label={`Edit ${expense.description}, ${formatCents(expense.amountCents)}`}
+                  className={rowClassName}
+                >
+                  {children}
+                </Link>
+              ) : (
+                <div key={expense.id} className={rowClassName}>
+                  {children}
+                </div>
+              );
+            })}
+          </Card>
+        )
+      ) : (
+        <Card className="px-[18px] py-4">
+          {members.map((member, i) => (
+            <div key={member.id}>
+              {i > 0 ? (
+                <>
+                  <div className="h-4" />
+                  <Divider className="bg-ink/[0.08]" />
+                  <div className="h-4" />
+                </>
+              ) : null}
+              <div className="flex items-baseline justify-between">
+                <div className="text-display text-[24px]">
+                  {displayNameFor(member.displayName, member.isPlaceholder)}
+                </div>
+                <div
+                  className="text-display text-[24px]"
+                  style={{ color: member.netCents >= 0 ? "oklch(0.38 0.08 80)" : "inherit" }}
+                >
+                  {formatCents(member.paidCents)}
+                </div>
+              </div>
+              <div className="h-2.5" />
+              <ProgressBar
+                percent={(member.paidCents / maxPaidCents) * 100}
+                color={member.netCents >= 0 ? "oklch(0.68 0.12 85)" : "oklch(0.7 0.1 44)"}
+              />
+              <div className="h-2" />
+              <span
+                className="text-[12px] font-semibold"
+                style={{ color: member.netCents >= 0 ? "oklch(0.38 0.08 80)" : "rgba(35,28,18,0.73)" }}
+              >
+                {member.netCents >= 0
+                  ? `Up ${formatCents(member.netCents)} on their share`
+                  : `Down ${formatCents(-member.netCents)}`}
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
+    </>
+  );
+}

@@ -23,6 +23,30 @@ Password). New CRUD-style mutations should default to the direct-client pattern
 and only add an API route when there's a genuine server-secret or
 server-only-computation reason to.
 
+**Read/render pattern**: data-fetch-then-render pages default to **Server
+Components** that fetch via `src/lib/supabase/server.ts`'s `createClient()`
+during SSR, not client components that fetch on mount. `src/app/trips/page.tsx`
+and `src/app/trip/[id]/page.tsx` (the trips list and trip dashboard) were
+converted from the latter to the former by the ssr-trip-pages feature,
+specifically to remove a redundant client-side `supabase.auth.getUser()` +
+data-fetch waterfall that `src/proxy.ts`'s existing server-side auth gate had
+already made unnecessary. Interactive-only pieces (state that doesn't need a
+server round trip, e.g. a tab switch) are split into small, co-located
+`"use client"` leaves fed by props from the Server Component; pure navigation
+(`router.push` for a plain link) is expressed as `<Link>` (or the
+`LinkButton`/`IconLinkButton` primitives in `src/components/ui.tsx`) instead
+of a client-side `onClick` handler, since a function prop can't cross the
+Server → Client boundary but an `href` string can. See
+[ADR 0005](adr/0005-ssr-page-conversion-pattern.md) for the full pattern —
+it's the template for the still-deferred conversions of `check-email`,
+`join/[code]`, and the home page, which are more form-heavy and will need a
+case-by-case split rather than converting wholesale. `src/proxy.ts` remains
+the sole place `/trips`/`/trip/*` auth-gating happens (session existence
+only); a Server Component page additionally checks trip *membership* itself
+(via RLS surfacing an error from `getTripView`/`getMyTrips`, rendered as the
+existing inline "couldn't load" UI) since that's a check `proxy.ts`
+structurally cannot make.
+
 **Locking**: a trip can be marked completed (`trips.completed_at`, set by the
 `complete_trip` RPC, organizer-only, one-way — no "reopen" RPC exists). Once
 completed, `public.is_trip_open(trip_id)` returns false and every write-side
@@ -158,6 +182,13 @@ this before adding a parallel implementation.
   returns — see the `trip_members` entry above and ADR 0004. Any new
   function added here that shapes member data should reuse that same
   row-id-based identity rather than reintroducing `user_id` as a display key.
+  Both functions take a generic `SupabaseClient<Database>`, satisfied by
+  both `src/lib/supabase/client.ts`'s browser client and
+  `src/lib/supabase/server.ts`'s server client — as of the ssr-trip-pages
+  feature they're called from a Server Component (`src/app/trip/[id]/page.tsx`,
+  `src/app/trips/page.tsx`) as well as several remaining client components
+  (`settle-up`, `invite`, `join/[code]/welcome`), with no signature change
+  needed for either caller type.
 - Amount/description validation for an expense (positive amount, non-empty
   description) lives in `src/lib/validation/expense.ts`
   (`isValidExpenseInput`), shared by `src/app/trip/[id]/add-expense/page.tsx`
@@ -174,7 +205,16 @@ this before adding a parallel implementation.
   `Date` handling at the call site — in particular, `todayIso()` is the
   browser-local "today," deliberately not the DB's `current_date` (UTC);
   see [ADR 0003](adr/0003-expense-date-column-sequencing.md) for why the
-  distinction matters.
+  distinction matters. As of the ssr-trip-pages feature, `formatDate`/
+  `formatDayDate`/`formatDateRange` (everything *except* `todayIso`, which is
+  deliberately left local-anchored) parse and format their plain-calendar-date
+  inputs against an explicit, fixed `"UTC"` zone rather than relying on the
+  runtime's implicit local timezone — needed once code calling them could run
+  server-side (a fixed process timezone) as well as client-side (the
+  visitor's own), and applied at the shared-module level so every caller,
+  converted or not, gets the same environment-independent, correct-by-construction
+  formatting rather than two different behaviors depending on where the
+  caller happens to run.
 - `src/lib/avatar.ts` — per-member display derivations (`initialsFor`,
   `avatarColorFor`); recommended home for a shared "name, with `
   (placeholder)` suffix if applicable" helper added by the
@@ -196,6 +236,25 @@ this before adding a parallel implementation.
   If a future feature wants a second piece of per-device local state, check
   here first — same try/catch-wrapped pattern applies rather than a new
   ad hoc `localStorage` call site.
+- `src/components/ui.tsx` — shared, hook-free UI primitives (`Button`,
+  `IconButton`, `Card`, `TabSwitch`, etc.) usable from either a Server or
+  Client Component as long as no function prop (`onClick`/`onChange`) is
+  passed from a Server Component parent. As of the ssr-trip-pages feature,
+  it also exports `LinkButton`/`IconLinkButton` — `next/link`-based
+  siblings of `Button`/`IconButton` with the same class strings, for a
+  styled control whose action is pure navigation (an `href`, which *can*
+  cross the Server → Client boundary) rather than a client-side operation (a
+  function, which can't). Use `Button`/`IconButton` when the action needs to
+  run code before/instead of navigating (from inside a Client Component);
+  use `LinkButton`/`IconLinkButton` when it's just a styled link.
+- `src/proxy.ts` — the sole server-side auth gate for `/trips` and
+  `/trip/*` (session existence only, via `supabase.auth.getUser()`,
+  redirecting to `/?next=...` when absent). Page-level code under those
+  paths must not re-derive this redirect; it may, and as of ssr-trip-pages
+  does, perform its own additional `getUser()` call for reasons other than
+  gating (e.g. needing `user.id` to shape response data) and its own
+  additional checks `proxy.ts` structurally can't make (e.g. trip
+  membership, via RLS).
 
 ## ADR index
 
@@ -206,3 +265,4 @@ List notable ones here as they're added:
 - [0002](adr/0002-restrict-expense-update-rls-to-payer.md) — Restrict `expenses` UPDATE RLS to the paying member
 - [0003](adr/0003-expense-date-column-sequencing.md) — Sequencing the `expenses.date` migration for zero-downtime, and sourcing "today" from the app not the DB
 - [0004](adr/0004-placeholder-member-nullable-user-id-and-identity-key.md) — Nullable `user_id` for placeholder members, and keying member identity off `trip_members.id`
+- [0005](adr/0005-ssr-page-conversion-pattern.md) — Pattern for converting a client-fetched page to a Server Component (Server Component + `"use client"` leaves + `Link`-based navigation), and why the residual server-side `getUser()` round trip is an accepted tradeoff

@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import Link, { type LinkProps } from "next/link";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import type { AvatarColor } from "@/lib/avatar";
 
 export function Screen({ children }: { children: ReactNode }) {
@@ -60,6 +61,24 @@ export function IconButton({
   );
 }
 
+export function IconLinkButton({
+  className = "",
+  variant = "card",
+  ...props
+}: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps> &
+  LinkProps & { variant?: "card" | "plain" }) {
+  const base =
+    variant === "card"
+      ? "bg-white text-ink shadow-[0_1px_3px_rgba(35,28,18,0.08)]"
+      : "bg-transparent text-ink";
+  return (
+    <Link
+      className={`flex size-9 flex-none cursor-pointer items-center justify-center rounded-full ${base} ${className}`}
+      {...props}
+    />
+  );
+}
+
 type ButtonVariant = "primary" | "accent" | "soft" | "muted" | "ghost";
 
 export function Button({
@@ -78,6 +97,30 @@ export function Button({
   return (
     <button
       type="button"
+      className={`flex h-14 cursor-pointer items-center justify-center gap-2 rounded-full font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+        block ? "w-full" : ""
+      } ${variants[variant]} ${className}`}
+      {...props}
+    />
+  );
+}
+
+export function LinkButton({
+  variant = "primary",
+  className = "",
+  block = true,
+  ...props
+}: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps> &
+  LinkProps & { variant?: ButtonVariant; block?: boolean }) {
+  const variants: Record<ButtonVariant, string> = {
+    primary: "bg-ink text-white",
+    accent: "bg-accent text-white",
+    soft: "bg-ink/[0.06] text-ink",
+    muted: "bg-ink/[0.07] text-ink/70 cursor-default",
+    ghost: "bg-transparent text-ink/70",
+  };
+  return (
+    <Link
       className={`flex h-14 cursor-pointer items-center justify-center gap-2 rounded-full font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
         block ? "w-full" : ""
       } ${variants[variant]} ${className}`}

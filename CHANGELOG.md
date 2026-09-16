@@ -10,6 +10,38 @@ a release moves that section under a dated version heading.
 
 ## [Unreleased]
 
+### Fixed
+
+- `/trips` and `/trip/[id]` no longer render a "Loading your trip(s)…"
+  placeholder that then swaps in data after a client-side
+  `supabase.auth.getUser()` + fetch round trip; both pages are now Server
+  Components that fetch data during SSR (via `src/lib/supabase/server.ts`),
+  so the initial HTML response already contains real trip/expense content.
+  This removes a full client-side auth-then-data waterfall diagnosed as a
+  cause of slow page loads. `src/proxy.ts`'s auth-gating is unchanged; the
+  pages' own `getUser()` call remains as a defensive fallback and to obtain
+  `user.id`. Purely internal — no new user-facing capability, and markup/
+  copy/empty-states/error-copy are unchanged, with one documented
+  accessibility delta: the editable expense row is now a real link, so
+  keyboard activation works via Enter but no longer via Space (see
+  [ADR 0005](docs/adr/0005-ssr-page-conversion-pattern.md)).
+- `src/lib/dates.ts` (`formatDate`, `formatDayDate`, `formatDateRange`) now
+  parse and format dates against an explicit, fixed `UTC` zone instead of
+  the runtime's implicit local timezone. This is a latent-bug fix required
+  by the SSR conversion above — these calls previously only ever ran in the
+  browser, where parse and format zone always matched by construction, but
+  running server-side would otherwise have made the displayed date/weekday
+  depend on the server's zone for visitors outside it. No visible change
+  for any existing caller (verified across multiple timezones, including
+  callers not touched by this change).
+
+### Added
+
+- `LinkButton`/`IconLinkButton` in `src/components/ui.tsx`: `next/link`-based
+  siblings of `Button`/`IconButton` with identical styling, for navigation
+  controls that don't need a client-component boundary. `Button`/
+  `IconButton` are unchanged.
+
 ## [0.3.0] - 2026-09-15
 
 ### Added
