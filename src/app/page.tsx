@@ -1,161 +1,44 @@
-"use client";
+import { redirect } from "next/navigation";
+import { Screen } from "@/components/ui";
+import { createClient } from "@/lib/supabase/server";
+import { HomeScreen } from "./home-screen";
 
-import { Suspense, useLayoutEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRightIcon } from "@/components/icons";
-import { Button, Field, Screen, ScreenContent } from "@/components/ui";
-import { friendlyAuthError } from "@/lib/auth-errors";
-import { clearRememberedEmail, getRememberedEmail, setRememberedEmail } from "@/lib/remembered-email";
-import { trackEvent } from "@/lib/tracking";
-import { createClient } from "@/lib/supabase/client";
+/**
+ * Session-aware routing for `/` (design.md section 7) — done server-side, before paint, so a
+ * returning visitor with a session never sees a flash of welcome content before being routed
+ * into their trip(s) (design.md section 2's explicit "avoid a flash" note). `?signin=1` forces
+ * the welcome content to stay (the "no browser memory" sign-in path, design.md section 8) even
+ * if a session happens to exist, since that link is meant to always be reachable from `/`.
+ */
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ signin?: string }>;
+}) {
+  const { signin } = await searchParams;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-function extractInviteCode(input: string) {
-  const trimmed = input.trim();
-  const match = trimmed.match(/\/join\/([^/?#\s]+)/);
-  return match ? match[1] : trimmed;
-}
+  if (user && signin !== "1") {
+    const isAnonymous = user.is_anonymous === true;
+    const { data: memberships } = await supabase.from("trip_members").select("trip_id").eq("user_id", user.id);
+    const tripIds = new Set((memberships ?? []).map((m) => m.trip_id));
 
-function SignInContent() {
-  const router = useRouter();
-  const next = useSearchParams().get("next");
-  const [email, setEmail] = useState("");
-  const [remembered, setRemembered] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Reads localStorage post-mount (synchronously, before paint) rather than in the initial
-  // state, so the server-rendered (window-less) markup matches the client's first render
-  // without a visible flash of the empty field.
-  useLayoutEffect(() => {
-    const stored = getRememberedEmail();
-    if (stored) {
-      // Syncing from localStorage, an external system unreadable during SSR/initial render.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setEmail(stored);
-      setRemembered(stored);
+    if (tripIds.size === 1) {
+      redirect(`/trip/${[...tripIds][0]}`);
     }
-  }, []);
-
-  async function sendLink() {
-    if (!email) {
-      setError("Enter your email first.");
-      return;
+    if (!isAnonymous || tripIds.size >= 2) {
+      redirect("/trips");
     }
-    setError(null);
-    setSending(true);
-    try {
-      trackEvent("sign_in_start");
-      const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithOtp({ email });
-      if (authError) {
-        setError(friendlyAuthError(authError));
-        return;
-      }
-      setRememberedEmail(email);
-      setRemembered(email);
-      const nextParam = next ? `&next=${encodeURIComponent(next)}` : "";
-      router.push(`/check-email?email=${encodeURIComponent(email)}${nextParam}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong — try again.");
-    } finally {
-      setSending(false);
-    }
+    // Anonymous session owning 0 trips (e.g. a cleared-then-restored partial state) falls
+    // through to the welcome screen below — same as no session at all (design.md section 7).
   }
-
-  function handleClearRemembered() {
-    clearRememberedEmail();
-    setRemembered("");
-    setEmail("");
-    document.getElementById("email")?.focus();
-  }
-
-  // Hides itself once the user edits away from the remembered value (they've
-  // already solved their own problem by typing over it), and reappears if
-  // they clear back to empty or retype the exact remembered address.
-  const showClear = remembered !== "" && email === remembered;
 
   return (
-    <Screen>
-      <ScreenContent className="pt-8">
-        <div
-          className="flex size-[42px] items-center justify-center rounded-[14px] text-[17px] font-bold text-white"
-          style={{ background: "var(--color-accent)" }}
-        >
-          ts
-        </div>
-        <div className="h-7" />
-        <h1 className="text-display text-[42px]">
-          Trips are fun.
-          <br />
-          The math isn&apos;t.
-        </h1>
-        <div className="h-3.5" />
-        <p className="max-w-[290px] text-[15px] leading-[1.5] text-ink/[0.73]">
-          Join with one link, log what you spend, and we&apos;ll work out who owes who.
-        </p>
-        <div className="h-7" />
-
-        <div className="relative">
-          <Field
-            id="email"
-            name="email"
-            autoComplete="email"
-            label="Your email"
-            type="email"
-            placeholder="you@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          {showClear ? (
-            <button
-              type="button"
-              onClick={handleClearRemembered}
-              className="absolute right-0 top-0 -m-2 p-2 text-[12px] font-medium"
-              style={{ color: "var(--color-accent-strong)" }}
-            >
-              Not you? Clear
-            </button>
-          ) : null}
-        </div>
-        {error ? <p className="mt-2 text-[13px] text-terracotta">{error}</p> : null}
-        <div className="h-2.5" />
-        <Button variant="accent" className="text-[16px]" onClick={sendLink} disabled={sending}>
-          {sending ? "Sending…" : "Send me a sign-in code"}
-          {sending ? null : <ArrowRightIcon size={18} strokeWidth={2.4} />}
-        </Button>
-        <div className="h-2.5" />
-        <Button
-          variant="ghost"
-          className="h-[52px] text-[15px]"
-          style={{ color: "var(--color-accent-strong)" }}
-          onClick={() => {
-            const input = window.prompt("Paste your invite link or code");
-            if (input) router.push(`/join/${extractInviteCode(input)}`);
-          }}
-        >
-          I have an invite link
-        </Button>
-
-        <div className="h-6" />
-        <div className="flex gap-2.5">
-          <div className="flex-1 rounded-[20px] p-4 pb-3.5" style={{ background: "oklch(0.95 0.04 88)" }}>
-            <div className="text-display text-[30px]">∞</div>
-            <div className="mt-1.5 text-[12.5px] leading-[1.35] text-ink/[0.73]">expenses a day</div>
-          </div>
-          <div className="flex-1 rounded-[20px] p-4 pb-3.5" style={{ background: "oklch(0.95 0.035 44)" }}>
-            <div className="text-display text-[30px]">0</div>
-            <div className="mt-1.5 text-[12.5px] leading-[1.35] text-ink/[0.73]">accounts to join</div>
-          </div>
-        </div>
-      </ScreenContent>
+    <Screen glow>
+      <HomeScreen showSignIn={signin === "1"} />
     </Screen>
-  );
-}
-
-export default function SignInPage() {
-  return (
-    <Suspense>
-      <SignInContent />
-    </Suspense>
   );
 }

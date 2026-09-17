@@ -40,12 +40,74 @@ Server → Client boundary but an `href` string can. See
 [ADR 0005](adr/0005-ssr-page-conversion-pattern.md) for the full pattern —
 it's the template for the still-deferred conversions of `check-email`,
 `join/[code]`, and the home page, which are more form-heavy and will need a
-case-by-case split rather than converting wholesale. `src/proxy.ts` remains
-the sole place `/trips`/`/trip/*` auth-gating happens (session existence
-only); a Server Component page additionally checks trip *membership* itself
-(via RLS surfacing an error from `getTripView`/`getMyTrips`, rendered as the
-existing inline "couldn't load" UI) since that's a check `proxy.ts`
-structurally cannot make.
+case-by-case split rather than converting wholesale. At the time of that
+feature, `src/proxy.ts` was the sole place `/trips`/`/trip/*` auth-gating
+happened (session existence only); a Server Component page additionally
+checked trip *membership* itself (via RLS surfacing an error from
+`getTripView`/`getMyTrips`, rendered as the existing inline "couldn't load"
+UI) since that's a check `proxy.ts` structurally cannot make. **As of the
+simplified-onboarding feature this is no longer true for `/trip/*`** — see
+the "Auth model" note directly below; `/trips` alone still matches the
+description above unchanged.
+
+**Auth model — anonymous sessions + a three-tier verification boundary**: as
+of the simplified-onboarding feature, not every session is a permanent,
+email-verified identity. `supabase.auth.signInAnonymously()` (Supabase
+anonymous auth) issues a real `auth.users` row and session — `auth.uid()`
+is never null for an anonymous session, only `auth.jwt() ->>
+'is_anonymous'` distinguishes it from a permanent one — so RLS ownership
+(`trips.created_by = auth.uid()`) works identically for both from the
+moment a trip is created, with no separate client-only ownership flag.
+Trip-scoped data now has three access tiers, checked in RLS/RPCs (not
+`src/proxy.ts`, which only ever checked session existence and still does):
+(1) a trip's **summary** (aggregated totals, who-owes-whom — no line
+items) is readable with **no session at all**, via the `get_trip_summary`
+`security definer` RPC (same public-RPC pattern as
+`get_trip_by_invite_code`); (2) **detailed** expense line items and the
+member roster require `is_owner_or_verified_member(trip_id)` — true for a
+trip's owner (any session, anonymous or not) or for any non-anonymous
+session that's a trip member; (3) **writes** (expenses, "invite"'s
+server-side effects, placeholder-member management, and `complete_trip`
+"settle up") require the narrower `is_verified_trip_member(trip_id)` (or, for
+`complete_trip` specifically as of migration 0011, an equivalent standalone
+`is_anonymous = false` guard) — true only for a *non-anonymous*
+owner-or-member, deliberately excluding the pre-verification owner, so
+that viewing one's own trip is free but mutating it always requires
+completing the existing OTP code flow at least once. `complete_trip` was a
+gap in this rule from when anonymous auth first shipped (migration 0009)
+until migration 0011 closed it — see
+`docs/features/simplified-onboarding/architecture.md`'s "Settle-up
+(Decision 13)" section. Both non-`complete_trip` predicates are `security
+definer` SQL functions built from the existing `is_trip_member`/ownership
+checks, added by `docs/features/simplified-onboarding/architecture.md`; see
+that doc and
+[ADR 0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md) for
+the full policy list and the Supabase anonymous-to-permanent linking
+mechanism (`updateUser({ email })` + `verifyOtp({ type: 'email_change' })`)
+used to carry that ownership forward when an anonymous session's email is
+confirmed — a different call pair than the `signInWithOtp`/
+`verifyOtp({ type: 'email' })` pair still used, unchanged, for a returning
+visitor with no active anonymous session. `src/proxy.ts` no longer gates
+`/trip/new` or `/trip/[id]*` on session existence at all (only `/trips`
+still requires *some* session) — RLS/the RPC tier above is the real
+enforcement for those paths now, more so than before.
+
+**Client-side gating mechanics differ by relationship to the trip.** For an
+**invitee**, the trigger to verify is still attempt-then-redirect: viewing
+detail or writing an expense redirects to the full-page `/check-email` OTP
+flow and resumes the attempted action on success
+(`src/lib/auth-gate.ts`'s `requireVerifiedSession` +
+`src/lib/pending-action.ts`'s save-draft-and-resume). For the **organizer's
+own trip**, this was replaced by a hide-and-reveal pattern: the trip page
+hides its mutating entry points (Add expense, Settle up, Invite others)
+entirely while the owner's session is unverified and shows a persistent
+inline email/code verification widget in their place, with no navigation to
+`/check-email` — see
+`docs/features/simplified-onboarding/architecture.md`'s "Update:
+hide-and-reveal replaces attempt-then-redirect for the organizer" section
+for the full mechanics and rationale. Both mechanisms sit in front of the
+same RLS/RPC enforcement described above; neither is itself the security
+boundary.
 
 **Locking**: a trip can be marked completed (`trips.completed_at`, set by the
 `complete_trip` RPC, organizer-only, one-way — no "reopen" RPC exists). Once
@@ -156,27 +218,38 @@ schema; summarized here as it stabilizes:
 
 **RLS on `expenses`** (the policy set most likely to need attention as
 future features touch expenses — see ADRs before changing further):
-- `select` — any trip member.
-- `insert` — any trip member, only while `is_trip_open(trip_id)`, and only
-  if `paid_by` is itself a trip member. This `exists` check against
-  `trip_members` (`user_id = expenses.paid_by`) can never match a
-  placeholder row, since a placeholder's `user_id` is `null` and SQL's
-  `null = <anything>` is never true — combined with `paid_by`'s own `not
-  null` FK to `auth.users(id)` (a table placeholders never appear in at
-  all), this policy needed no change to keep placeholders permanently
-  unable to be a payer.
+- `select` — as of simplified-onboarding, `is_owner_or_verified_member(trip_id)`
+  (a trip's owner, any session; or a non-anonymous member) — **not** plain
+  `is_trip_member`, since an unverified non-owner must not see line items
+  (tier 2 of the three-tier model above).
+- `insert` — as of simplified-onboarding, `is_verified_trip_member(trip_id)`
+  (excludes the pre-verification owner, unlike `select`'s predicate) and
+  `is_trip_open(trip_id)`, and only if `paid_by` is itself a trip member.
+  This `exists` check against `trip_members` (`user_id = expenses.paid_by`)
+  can never match a placeholder row, since a placeholder's `user_id` is
+  `null` and SQL's `null = <anything>` is never true — combined with
+  `paid_by`'s own `not null` FK to `auth.users(id)` (a table placeholders
+  never appear in at all), this policy needed no change to keep
+  placeholders permanently unable to be a payer.
 - `update` — as of the edit-own-expense feature, only the row's own
   `paid_by` (i.e., only the member who logged it), only while
-  `is_trip_open(trip_id)`. See
+  `is_trip_open(trip_id)`; as of simplified-onboarding, that member check is
+  `is_verified_trip_member(trip_id)`. See
   [ADR 0002](adr/0002-restrict-expense-update-rls-to-payer.md) for why this
   was narrowed from "any trip member" and what it doesn't (yet) guarantee
   (`trip_id` isn't independently pinned by this policy — mitigated at the
   application layer today, not the DB).
-- `delete` — still any trip member, on an open trip — **intentionally not
-  yet scoped to `paid_by`**, because no delete UI/flow exists yet. This is
-  now *more* permissive than `update` on the same table; a future delete
-  feature should revisit whether to apply the same payer-scoping (see ADR
-  0002's consequences).
+- `delete` — still any *verified* member (`is_verified_trip_member`, as of
+  simplified-onboarding), on an open trip — **intentionally not yet scoped
+  to `paid_by`**, because no delete UI/flow exists yet. This is now *more*
+  permissive than `update` on the same table; a future delete feature
+  should revisit whether to apply the same payer-scoping (see ADR 0002's
+  consequences).
+
+**RLS on `trip_members`** (`select`): as of simplified-onboarding,
+`is_owner_or_verified_member(trip_id)` — same predicate and same rationale
+as `expenses`' `select` above (roster identity is detail-tier, readable by
+a pre-verification owner, gated behind verification for anyone else).
 
 ## Known integration points / shared code
 
@@ -186,8 +259,11 @@ this before adding a parallel implementation.
 - `src/lib/data/trips.ts` — the one data-access module for trips/expenses;
   wraps every read/write against `trips`, `trip_members`, and `expenses`
   behind typed functions (`createTrip`, `joinTrip`, `completeTrip`,
-  `addExpense`, `updateExpense`, `getMyTrips`, `getTripView`). New
-  trip/expense read or write logic belongs here, not inlined in a page.
+  `addExpense`, `updateExpense`, `getMyTrips`, `getTripView`, and as of
+  simplified-onboarding, `getTripSummary` — the zero-auth, aggregates-only
+  sibling of `getTripView` wrapping the `get_trip_summary` RPC; see that
+  feature's architecture doc). New trip/expense read or write logic belongs
+  here, not inlined in a page.
   As of the add-placeholder-members feature, this is also where the
   `user_id`-nullable-per-row reality of `trip_members` is translated into a
   stable `trip_members.id`-based identity for every shaped member object it
@@ -246,12 +322,25 @@ this before adding a parallel implementation.
   membership/lock logic inline in a new policy. `is_trip_member` continues
   to work unchanged for placeholders: it matches on `user_id = auth.uid()`,
   which a placeholder (no auth session, ever) can never satisfy either as
-  caller or as target.
+  caller or as target. As of simplified-onboarding, two more `security
+  definer` functions compose on top of it: `is_verified_trip_member(_trip_id)`
+  (owner-or-member **and** non-anonymous — the tier-2/tier-3 gate) and
+  `is_owner_or_verified_member(_trip_id)` (adds back the pre-verification
+  owner's own read access — tier-2 only, deliberately not used by any write
+  policy). New trip-scoped tables/policies that need to distinguish
+  "verified" from "merely a member" should compose these, not re-check
+  `auth.jwt() ->> 'is_anonymous'` inline — see
+  [ADR 0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md).
 - `src/lib/remembered-email.ts` — the one client-`localStorage` helper in
   the app (`getRememberedEmail`/`setRememberedEmail`/`clearRememberedEmail`,
-  namespaced key `tripsplit:last-signin-email`), used by the sign-in screen
-  (`src/app/page.tsx`) to prefill the last-used email on the same device.
-  If a future feature wants a second piece of per-device local state, check
+  namespaced key `tripsplit:last-signin-email`), used to prefill the
+  last-used email on the same device. As of simplified-onboarding, this is
+  read from three places instead of one: `src/app/home-screen.tsx`'s
+  no-browser-memory sign-in form (`/?signin=1`, the direct descendant of
+  the old `/` email screen), and, via the shared `src/lib/use-otp-flow.ts`
+  hook, both `src/app/check-email/page.tsx` (invitee flow) and
+  `src/app/trip/[id]/verify-inline.tsx` (organizer's inline widget). If a
+  future feature wants a second piece of per-device local state, check
   here first — same try/catch-wrapped pattern applies rather than a new
   ad hoc `localStorage` call site.
 - `src/components/ui.tsx` — shared, hook-free UI primitives (`Button`,
@@ -265,14 +354,16 @@ this before adding a parallel implementation.
   function, which can't). Use `Button`/`IconButton` when the action needs to
   run code before/instead of navigating (from inside a Client Component);
   use `LinkButton`/`IconLinkButton` when it's just a styled link.
-- `src/proxy.ts` — the sole server-side auth gate for `/trips` and
-  `/trip/*` (session existence only, via `supabase.auth.getUser()`,
-  redirecting to `/?next=...` when absent). Page-level code under those
-  paths must not re-derive this redirect; it may, and as of ssr-trip-pages
-  does, perform its own additional `getUser()` call for reasons other than
-  gating (e.g. needing `user.id` to shape response data) and its own
-  additional checks `proxy.ts` structurally can't make (e.g. trip
-  membership, via RLS).
+- `src/proxy.ts` — the server-side session-existence gate. As of
+  simplified-onboarding, it gates **only** `/trips` (session required,
+  redirecting to `/?next=...` when absent, unchanged from before) —
+  `/trip/new` and `/trip/[id]*` are no longer in its gated set at all,
+  since both now need to work with no session or with just an anonymous
+  one (see the auth-model section above). Page-level code under `/trip/*`
+  must not assume `proxy.ts` guaranteed a session; it performs its own
+  `getUser()` calls and RLS-backed tiered fetches instead (summary via
+  `get_trip_summary`, always; detail via `getTripView`, only when
+  entitled).
 
 ## ADR index
 
@@ -284,3 +375,4 @@ List notable ones here as they're added:
 - [0003](adr/0003-expense-date-column-sequencing.md) — Sequencing the `expenses.date` migration for zero-downtime, and sourcing "today" from the app not the DB
 - [0004](adr/0004-placeholder-member-nullable-user-id-and-identity-key.md) — Nullable `user_id` for placeholder members, and keying member identity off `trip_members.id`
 - [0005](adr/0005-ssr-page-conversion-pattern.md) — Pattern for converting a client-fetched page to a Server Component (Server Component + `"use client"` leaves + `Link`-based navigation), and why the residual server-side `getUser()` round trip is an accepted tradeoff
+- [0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md) — Supabase anonymous auth for pre-verification trip ownership, and anonymous-to-permanent linking (`updateUser`/`email_change`) instead of `signInWithOtp` when verifying an anonymous session

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CheckIcon, CloseIcon, CopyIcon, LockIcon, PencilIcon, PlusIcon, ShareIcon } from "@/components/icons";
 import { Avatar, BottomBar, Button, Card, Kicker, Screen, ScreenContent } from "@/components/ui";
+import { isUnverifiedOwner } from "@/lib/auth-gate";
 import { displayNameFor } from "@/lib/avatar";
 import {
   addPlaceholderMember,
@@ -47,10 +48,21 @@ export default function TripInvitePage() {
       .then(async ({ data: { user } }) => {
         if (!user) throw new Error("Not signed in.");
         if (!cancelled) setUserId(user.id);
-        return getTripView(supabase, id, user.id);
+        const result = await getTripView(supabase, id, user.id);
+        // Direct-URL guard (design.md section 4.0): the trip page hides this screen's own entry
+        // point (the roster/Invite icon) from an unverified owner, but hiding a link doesn't stop
+        // a typed or bookmarked URL from reaching this route directly — that must itself redirect
+        // back. `view.you?.isOrganizer` is the same ownership signal the rest of this screen
+        // already uses (e.g. for the placeholder controls below); a verified or unverified
+        // invitee is never the owner, so this never fires for their unchanged flow.
+        if (isUnverifiedOwner(user, Boolean(result?.you?.isOrganizer))) {
+          router.replace(`/trip/${id}`);
+          return null;
+        }
+        return result;
       })
       .then((result) => {
-        if (!cancelled) setView(result);
+        if (!cancelled && result) setView(result);
       })
       .catch(() => {
         if (!cancelled) setError("Couldn't load this trip.");
@@ -58,6 +70,7 @@ export default function TripInvitePage() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function refresh() {
@@ -68,6 +81,17 @@ export default function TripInvitePage() {
 
   const inviteUrl = view ? `${window.location.origin}/join/${view.trip.inviteCode}` : "";
 
+  /**
+   * Copy/share and placeholder-member management (add/rename/remove) used to be gated by an
+   * attempt-then-redirect-to-check-email-then-resume dance (`requireVerifiedSession` +
+   * `pending-action.ts`'s now-removed `PendingInviteAction`/`PendingPlaceholderAction`). Decision
+   * 12 removed that: this screen's own entry point (the trip page's roster/Invite icon) is now
+   * hidden entirely until the organizer's session is verified (see
+   * `src/app/trip/[id]/verify-inline.tsx`), so there is no unverified caller left to gate against
+   * in practice — the RPCs themselves (migration 0010) remain independently guarded server-side
+   * as defense-in-depth. See docs/features/simplified-onboarding/architecture.md's "Update:
+   * hide-and-reveal replaces attempt-then-redirect for the organizer".
+   */
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(inviteUrl);

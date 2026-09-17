@@ -1,30 +1,32 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRightIcon, DollarSignIcon } from "@/components/icons";
-import { BottomBar, Button, Field, Screen, ScreenContent } from "@/components/ui";
+import { useParams, useSearchParams } from "next/navigation";
+import { Button, Card, Divider, Kicker, LinkButton, Screen, ScreenContent } from "@/components/ui";
 import { initialsFor } from "@/lib/avatar";
-import { friendlyAuthError } from "@/lib/auth-errors";
-import { getTripByInviteCode } from "@/lib/data/trips";
+import { formatCents } from "@/lib/currency";
+import { getTripByInviteCode, getTripSummary, type TripSummary } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
 type InviteInfo = NonNullable<Awaited<ReturnType<typeof getTripByInviteCode>>>;
 
+/**
+ * Invitee entry point, redesigned per docs/features/simplified-onboarding/design.md section 5:
+ * opening an invite link now opens directly onto the trip's public, zero-auth summary — no
+ * name/email form up front. That collection is deferred to "See full details"/"Add an expense",
+ * which route into the same email/OTP trigger as the organizer's (design.md section 6).
+ */
 function JoinTripContent() {
-  const router = useRouter();
   const { code } = useParams<{ code: string }>();
   const searchParams = useSearchParams();
+  const joinError = searchParams.get("error") === "join" ? "Couldn't join the trip — try again." : null;
   const [invite, setInvite] = useState<InviteInfo | null>(null);
+  const [summary, setSummary] = useState<TripSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(
-    searchParams.get("error") === "join" ? "Couldn't join the trip — try again." : null,
-  );
+  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     trackEvent("trip_join_start");
@@ -32,129 +34,153 @@ function JoinTripContent() {
 
   useEffect(() => {
     let cancelled = false;
-    getTripByInviteCode(createClient(), code)
-      .then((result) => {
+    // Resets on every (re)load, including a manual retry (reloadKey bump) — synchronous inside
+    // the effect body is intentional here, not a derivable-from-render value.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    setLoadError(null);
+    const supabase = createClient();
+    getTripByInviteCode(supabase, code)
+      .then(async (result) => {
         if (cancelled) return;
-        if (!result) setLoadError("This invite link doesn't match a trip anymore.");
-        else setInvite(result);
+        if (!result) {
+          setLoadError("This invite link doesn't match a trip anymore.");
+          return;
+        }
+        setInvite(result);
+        const summaryResult = await getTripSummary(supabase, result.tripId);
+        if (!cancelled) setSummary(summaryResult);
       })
       .catch((e) => {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : "Couldn't load this invite.");
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : "Couldn't load this trip — check your connection and try again.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [code]);
-
-  async function handleJoin() {
-    if (!name.trim() || !email.trim()) {
-      setError("Your name and email are both required.");
-      return;
-    }
-    setError(null);
-    setSubmitting(true);
-    try {
-      const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithOtp({ email: email.trim() });
-      if (authError) {
-        setError(friendlyAuthError(authError));
-        return;
-      }
-      const back = encodeURIComponent(`/join/${code}`);
-      const invite = encodeURIComponent(code);
-      const displayName = encodeURIComponent(name.trim());
-      router.push(
-        `/check-email?email=${encodeURIComponent(email.trim())}&back=${back}&invite=${invite}&name=${displayName}`,
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't send a sign-in code — try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  }, [code, reloadKey]);
 
   if (loadError) {
     return (
       <Screen>
         <ScreenContent className="pt-14">
           <p className="text-[15px] text-ink/70">{loadError}</p>
+          {loadError !== "This invite link doesn't match a trip anymore." ? (
+            <>
+              <div className="h-3" />
+              <Button block={false} variant="soft" className="px-5" onClick={() => setReloadKey((k) => k + 1)}>
+                Try again
+              </Button>
+            </>
+          ) : null}
         </ScreenContent>
       </Screen>
     );
   }
 
+  if (loading || !invite) {
+    return (
+      <Screen>
+        <ScreenContent className="pt-14">
+          <p className="text-[15px] text-ink/70">Loading trip…</p>
+        </ScreenContent>
+      </Screen>
+    );
+  }
+
+  const detailNext = encodeURIComponent(`/trip/${invite.tripId}?tab=details`);
+  const addExpenseNext = encodeURIComponent(`/trip/${invite.tripId}/add-expense`);
+  const back = encodeURIComponent(`/join/${code}`);
+  const tripNameParam = encodeURIComponent(invite.name);
+
   return (
     <Screen>
       <ScreenContent className="pt-3.5">
+        {joinError ? (
+          <>
+            <p className="text-[13px] text-terracotta">{joinError}</p>
+            <div className="h-3" />
+          </>
+        ) : null}
         <div className="rounded-[22px] p-5 text-white" style={{ background: "var(--color-accent)" }}>
           <div className="flex items-center gap-[9px]">
             <span className="flex size-7 items-center justify-center rounded-full bg-white/[0.22] text-[10px] font-semibold">
-              {invite ? initialsFor(invite.organizerName ?? "?") : "…"}
+              {initialsFor(invite.organizerName ?? "?")}
             </span>
             <span className="text-[12.5px] opacity-85">
-              {invite?.organizerName ? `${invite.organizerName} invited you` : "You're invited"}
+              {invite.organizerName ? `${invite.organizerName} invited you` : "You're invited"}
             </span>
           </div>
           <div className="h-3.5" />
-          <div className="text-display text-[30px]">{invite?.name ?? "Loading trip…"}</div>
+          <div className="text-display text-[30px]">{invite.name}</div>
           <div className="h-2.5" />
           <div className="flex gap-3.5 text-[13px] opacity-85">
-            {invite ? (
-              <>
-                {formatDateRange(invite.startsOn, invite.endsOn) ? (
-                  <span>{formatDateRange(invite.startsOn, invite.endsOn)}</span>
-                ) : null}
-                {invite.location ? <span>{invite.location}</span> : null}
-              </>
+            {formatDateRange(invite.startsOn, invite.endsOn) ? (
+              <span>{formatDateRange(invite.startsOn, invite.endsOn)}</span>
             ) : null}
+            {invite.location ? <span>{invite.location}</span> : null}
           </div>
         </div>
-        <div className="h-[18px]" />
-        <h1 className="text-display text-[24px]">
-          Add your name
-          <br />
-          to join.
-        </h1>
-        <div className="h-[18px]" />
-
-        <Field
-          label="Your name"
-          placeholder="e.g. Cleo"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <div className="h-4" />
-        <Field
-          label="Email"
-          type="email"
-          placeholder="you@email.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        {error ? <p className="mt-2 text-[13px] text-terracotta">{error}</p> : null}
         <div className="h-4" />
 
-        <div
-          className="flex items-start gap-[11px] rounded-[18px] p-4"
-          style={{ background: "oklch(0.95 0.04 88)" }}
-        >
-          <span
-            className="flex size-8 flex-none items-center justify-center rounded-full bg-white"
-            style={{ color: "oklch(0.38 0.08 80)" }}
-          >
-            <DollarSignIcon size={17} strokeWidth={2.2} />
-          </span>
-          <div className="text-[13px] leading-[1.45] text-ink/[0.72]">
-            Everything on this trip splits equally. You&apos;ll log what you pay for.
+        <Card className="p-[18px]">
+          <div className="flex">
+            <div className="flex-1">
+              <Kicker>Total so far</Kicker>
+              <div className="text-display mt-1 text-[28px]">{formatCents(summary?.totalCents ?? 0)}</div>
+            </div>
+            <div className="mx-4 w-px bg-ink/10" />
+            <div className="flex-1 text-right">
+              <Kicker>Avg / person</Kicker>
+              <div className="text-display mt-1 text-[28px]">{formatCents(summary?.avgPerPersonCents ?? 0)}</div>
+            </div>
           </div>
+          {summary && summary.settlements.length > 0 ? (
+            <>
+              <div className="h-4" />
+              <Divider />
+              <div className="h-4" />
+              <Kicker>Who owes who</Kicker>
+              <div className="h-2" />
+              {summary.settlements.map((s, i) => (
+                <div key={i} className="flex items-baseline justify-between py-1">
+                  <span className="text-[14px] font-medium">
+                    {s.from.displayName} owes {s.to.displayName}
+                  </span>
+                  <span className="text-display text-[16px]">{formatCents(s.amountCents)}</span>
+                </div>
+              ))}
+            </>
+          ) : null}
+        </Card>
+        <div className="h-4" />
+
+        <div className="rounded-[20px] p-4" style={{ background: "oklch(0.95 0.04 88)" }}>
+          <div className="text-[15px] font-semibold">Want the full expense list?</div>
+          <div className="mt-1.5 text-[13px] leading-[1.45] text-ink/[0.72]">
+            See exactly what was spent and add your own — just confirm your email.
+          </div>
+          <div className="h-3" />
+          <LinkButton
+            href={`/check-email?trigger=detail&invite=${code}&tripName=${tripNameParam}&next=${detailNext}&back=${back}`}
+            variant="accent"
+            className="text-[15px]"
+          >
+            See full details
+          </LinkButton>
+          <div className="h-2" />
+          <LinkButton
+            href={`/check-email?trigger=invitee-expense&invite=${code}&tripName=${tripNameParam}&next=${addExpenseNext}&back=${back}`}
+            variant="ghost"
+            className="h-11 text-[13.5px]"
+            style={{ color: "var(--color-accent-strong)" }}
+          >
+            Add an expense
+          </LinkButton>
         </div>
       </ScreenContent>
-      <BottomBar>
-        <Button variant="primary" className="text-[16px]" onClick={handleJoin} disabled={submitting || !invite}>
-          {submitting ? "Sending…" : "Join the trip"}
-          {submitting ? null : <ArrowRightIcon size={18} strokeWidth={2.4} />}
-        </Button>
-      </BottomBar>
     </Screen>
   );
 }

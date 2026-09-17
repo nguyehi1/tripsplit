@@ -58,6 +58,19 @@ export default function NewTripPage() {
     setSubmitting(true);
     try {
       const supabase = createClient();
+      // First-time visitor with no session at all (simplified-onboarding): start an anonymous
+      // session before creating the trip, so RLS ownership (`trips.created_by = auth.uid()`)
+      // has a real, server-backed user id to attach to from the moment of creation — no email
+      // required yet. A second visit in the same browser (session already anonymous or
+      // upgraded) skips this and reuses the existing session (AC 4 — "Create your first trip"
+      // never enforces a one-trip limit). See docs/features/simplified-onboarding/architecture.md.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        const { error: anonError } = await supabase.auth.signInAnonymously();
+        if (anonError) throw anonError;
+      }
       const { tripId } = await createTrip(supabase, {
         name: name.trim(),
         displayName: displayName.trim(),
@@ -72,7 +85,10 @@ export default function NewTripPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tripId }),
       }).catch(() => {});
-      router.push(`/trip/${tripId}/invite`);
+      // Land directly on the trip dashboard, not the invite screen — creation and viewing are
+      // both free (AC 3); reaching invite now happens by tapping "Invite" from the dashboard,
+      // itself one of the two mutation triggers (design.md section 3).
+      router.push(`/trip/${tripId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't create the trip — try again.");
     } finally {

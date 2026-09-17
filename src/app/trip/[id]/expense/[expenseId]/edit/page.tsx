@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CheckIcon, CloseIcon, LockIcon } from "@/components/icons";
 import { Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { requireVerifiedSession } from "@/lib/auth-gate";
 import { formatCents } from "@/lib/currency";
 import { updateExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
+import { savePendingExpenseDraft, takePendingExpenseDraft } from "@/lib/pending-action";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
@@ -42,9 +44,13 @@ export default function EditExpensePage() {
         setLoadError("Couldn't load this expense.");
         return;
       }
-      setAmount(Number(expenseResult.data.amount).toFixed(2));
-      setDescription(expenseResult.data.description);
-      setDate(expenseResult.data.date);
+      // Resume intent: if this edit was redirected out to the OTP trigger and back (design.md
+      // section 4 "Resuming intent"), restore whatever was typed before the redirect instead of
+      // the freshly-loaded, pre-edit values.
+      const draft = takePendingExpenseDraft(expenseId);
+      setAmount(draft?.amount ?? Number(expenseResult.data.amount).toFixed(2));
+      setDescription(draft?.description ?? expenseResult.data.description);
+      setDate(draft?.date ?? expenseResult.data.date);
       setMemberCount(membersResult.count ?? 1);
       setLocked(Boolean(tripResult.data?.completed_at));
     });
@@ -65,6 +71,16 @@ export default function EditExpensePage() {
     setSubmitting(true);
     try {
       const supabase = createClient();
+
+      // The mutation gate (simplified-onboarding) — see the add-expense screen's identical
+      // comment. Saving is the trigger, not viewing/editing the form.
+      if (!(await requireVerifiedSession(supabase))) {
+        savePendingExpenseDraft(expenseId, { amount, description, date });
+        const next = encodeURIComponent(`/trip/${id}/expense/${expenseId}/edit`);
+        router.push(`/check-email?trigger=invitee-expense&next=${next}&back=${next}`);
+        return;
+      }
+
       await updateExpense(supabase, {
         expenseId,
         amountCents,

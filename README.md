@@ -1,16 +1,40 @@
 # TripSplit
 
-Split trip/event expenses with a friend group. Join a trip by link (no upfront account needed
-beyond a magic-link email), log expenses as you go, and see who owes who.
+Split trip/event expenses with a friend group. Create a trip in seconds — no account or email
+required — add expenses as you go, and see who owes who. Anyone with an invite link can see a
+trip's running totals with zero sign-up; an email is only ever asked for at the moment someone
+wants the itemized expense list or wants to add/edit an expense.
 
 ## Status
 
-Core v1 flow is implemented: Supabase schema/auth/RLS, invite-link join, trip dashboard
-(expenses + settle-up), add-expense, edit-own-expense, and feedback. The trip organizer can
-also add name-only "placeholder" members — no account or invite needed — for people who won't
-use the app, so the equal split still accounts for everyone on the trip; the organizer can
-rename or remove them later. The sign-in screen remembers the last email used on a device
-(local-only, with an easy "clear" option) so returning users don't have to retype it.
+Core v1 flow is implemented: Supabase schema/auth/RLS, trip dashboard (expenses + settle-up),
+add-expense, edit-own-expense, and feedback. The trip organizer can also add name-only
+"placeholder" members — no account or invite needed — for people who won't use the app, so the
+equal split still accounts for everyone on the trip; the organizer can rename or remove them
+later.
+
+**Onboarding** is a two-track model (see
+[docs/features/simplified-onboarding/requirements.md](./docs/features/simplified-onboarding/requirements.md)
+for the full spec):
+
+- **Organizer**: tapping "Create your first trip" creates the trip immediately behind an
+  anonymous Supabase session on that browser — no email, no code. The organizer can fully view
+  their own trip right away, but Add expense, Settle up, and Invite/roster-management are
+  hidden from the trip page until they confirm an email via an inline "email → 6-digit code"
+  prompt on the trip page itself (no navigation to another screen). Confirming upgrades that
+  same session to a permanent identity and reveals all three actions, fully unlocked — nothing
+  to redo.
+- **Invitee**: opening an invite link shows the trip's public summary (totals, who-owes-who)
+  with zero auth. The moment someone tries to view the itemized expense list, or add/edit an
+  expense, that's what triggers the existing email + 6-digit-code sign-in flow — confirming
+  unlocks both viewing detail and writing in one step.
+
+A returning visitor on the same browser/device goes straight back into their trip(s); signing in
+from a new device (or after clearing storage) uses the same email + code flow and lands on a
+trips list page, since one email can be tied to multiple trips. Sign-in remembers the last email
+used on a device (local-only, with an easy "clear" option) so returning users don't have to
+retype it.
+
 Pre-production hardening still pending.
 
 ## Docs
@@ -24,7 +48,8 @@ Pre-production hardening still pending.
 ## Stack
 
 - **Frontend**: Next.js (App Router, TypeScript) + Tailwind CSS, deployed on Vercel.
-- **Backend**: Supabase — Postgres, Auth (email magic link), Storage (receipt photos, v2).
+- **Backend**: Supabase — Postgres with row-level security, Auth (anonymous sessions +
+  6-digit email OTP sign-in), Storage (receipt photos, v2).
 
 ## v1 scope
 
@@ -70,6 +95,18 @@ Apply database migrations to your Supabase project with the Supabase CLI:
 supabase link --project-ref <project-ref>
 supabase db push
 ```
+
+Two Supabase dashboard settings (not expressible as a SQL migration) are required for the
+onboarding flow to work:
+
+1. **Auth → Settings → enable Anonymous Sign-ins** — required for trip creation to start an
+   anonymous session.
+2. **Auth → Email Templates** — the "Confirm signup"/"Change Email Address" template (used when
+   linking an anonymous session to a confirmed email) should be edited to match the "Magic
+   Link"/OTP template's 6-digit-code wording, so the sign-in screen's "we sent you a code" copy
+   is accurate regardless of which flow sent it. See
+   [ADR 0006](./docs/adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md) for why these two
+   flows exist.
 
 ## Analytics
 

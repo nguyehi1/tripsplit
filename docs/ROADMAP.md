@@ -20,6 +20,34 @@ _(none yet)_
 
 ## Shipped
 
+### Simplified onboarding (simplified-onboarding)
+- Status: shipped
+- Requirements: [docs/features/simplified-onboarding/requirements.md](features/simplified-onboarding/requirements.md)
+- Replaces the mandatory email + sign-in-code screen a first-time visitor
+  hit before with a welcome + "create your first trip" action they can use
+  immediately, backed by a Supabase anonymous session (real, RLS-enforced
+  ownership, not just client-side memory) — creation and viewing their own
+  trip (summary and detail alike) are both free. On the organizer's own
+  trip, every mutating entry point (add/edit/delete expense, settle up,
+  invite/share, placeholder-member management) is hidden entirely while
+  unverified and replaced by a persistent inline email + OTP
+  confirmation on the trip page itself (no navigation to `/check-email`,
+  no draft-and-resume step needed since nothing was reachable
+  pre-verification) — this hide-and-reveal pattern is organizer-only.
+  Invitees are unchanged: public zero-auth summary view, with the
+  existing full-page attempt-then-redirect-then-resume OTP flow still
+  triggered by viewing detailed expenses or attempting to add/edit one.
+  Confirming upgrades the anonymous session to a permanent identity via
+  Supabase's anonymous-to-permanent linking rather than a separate save
+  step. Also fixes a pre-existing gap found during review: `complete_trip`
+  (Settle up) had no anonymity guard in the database at all, unlike
+  `join_trip`/placeholder RPCs already guarded by migration 0010 — closed
+  with the same SQL guard pattern plus the hide-until-verified UI
+  treatment. No unverified identity-claiming. An organizer who never
+  confirms an email has no way back in if browser memory is lost — an
+  accepted, self-evident consequence given that almost any real use
+  forces confirmation anyway.
+
 ### Server-render trip pages (ssr-trip-pages)
 - Status: shipped
 - Requirements: [docs/features/ssr-trip-pages/requirements.md](features/ssr-trip-pages/requirements.md)
@@ -38,7 +66,7 @@ _(none yet)_
 ### Remember sign-in email (remember-signin-email)
 - Status: shipped
 - Requirements: [docs/features/remember-signin-email/requirements.md](features/remember-signin-email/requirements.md)
-- Prefills the sign-in form with the last-used email on a returning device so users don't retype it every time they request a new magic link (local storage only — not an extended-login-session feature).
+- Prefills the sign-in form with the last-used email on a returning device so users don't retype it every time they request a new sign-in code (local storage only — not an extended-login-session feature).
 
 ### Edit own expense (edit-own-expense)
 - Status: shipped

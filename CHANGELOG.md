@@ -51,6 +51,36 @@ a release moves that section under a dated version heading.
   controls that don't need a client-component boundary. `Button`/
   `IconButton` are unchanged.
 
+### Added
+
+- **Simplified onboarding — create a trip with no email, no sign-in code.**
+  Tapping "Create your first trip" now starts the trip instantly; there's
+  nothing to type but the trip's own details, and the organizer can see
+  their new trip right away. Email is only asked for once, the moment the
+  organizer wants to add an expense, settle up, or invite others — and
+  confirming it happens right on the trip page itself (an email field, then
+  a 6-digit code, no navigating away and back) rather than on a separate
+  screen. Once confirmed, every action is unlocked for good.
+- **Invite links now open straight into a live trip summary — no sign-in at
+  all.** Anyone with a link immediately sees the trip's totals and who owes
+  who. Wanting to see the full itemized expense list, or to add or edit an
+  expense, is what asks for an email and a one-time code — the same
+  familiar sign-in step as before, just triggered at the moment it's
+  actually needed instead of upfront.
+- Signing in from a new device or browser (or after clearing site data) now
+  lands on a trips list instead of a single trip, since one email address
+  can now be tied to more than one trip.
+
+### Fixed
+
+- Closed three gaps where a person who had created or joined a trip but
+  never confirmed their email could still join another trip, manage
+  placeholder (name-only) members, or mark a trip as settled — actions that
+  are supposed to require a confirmed email, like every other change to a
+  trip. These were never exploited; they're closed proactively as part of
+  building out the verified-email model above, not in response to any
+  incident.
+
 ## [0.3.0] - 2026-09-15
 
 ### Added

@@ -18,8 +18,15 @@ export async function POST(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Simplified onboarding: a trip is very often created by an anonymous session with no email
+  // at all yet (this route is called right after createTrip, before any OTP verification has
+  // happened). Neither "not signed in" nor "signed in but anonymous, no email" is an error
+  // condition anymore — the caller already treats this endpoint as best-effort
+  // (`.catch(() => {})` in trip/new/page.tsx), so this is a silent no-op: the "you created a
+  // trip" email simply doesn't fire until the organizer has an email at all, which structurally
+  // can't happen before their first verification under this feature's model.
   if (!user?.email) {
-    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    return NextResponse.json({ ok: true, skipped: true });
   }
 
   // RLS scopes this select to trips the caller belongs to, so a stranger's tripId 404s here.

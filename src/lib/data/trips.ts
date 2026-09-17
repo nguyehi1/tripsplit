@@ -321,3 +321,48 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
 }
 
 export type TripView = NonNullable<Awaited<ReturnType<typeof getTripView>>>;
+
+/**
+ * The public, zero-auth summary tier (see docs/features/simplified-onboarding/architecture.md):
+ * wraps the `get_trip_summary` RPC, which returns per-member `paid_cents`/`share_cents`
+ * aggregates only — no expense line items. Shaped so `simplifyDebts` (from
+ * `src/lib/settlement.ts`) can consume the balances directly, computing `netCents = paid - share`
+ * in TS rather than porting the greedy-settle algorithm to SQL. Returns `null` for an unknown
+ * trip id (RPC returns zero rows), matching `getTripByInviteCode`'s "not found" shape.
+ *
+ * Also surfaces `inviteCode` (migration 0012, pre-push review fix): the trip's invite code is
+ * public/non-sensitive (already exposed in the reverse direction by `get_trip_by_invite_code`),
+ * and giving `TripSummaryOnly` (src/app/trip/[id]/page.tsx) access to it is what lets its "See
+ * full details" link route through the same `invite=<code>` -> `/api/join` mechanism
+ * `/join/[code]` uses, instead of leaving a bare `/trip/[id]` visitor stuck in a verify-but-never-
+ * join loop.
+ */
+export async function getTripSummary(supabase: Client, tripId: string) {
+  const { data, error } = await supabase.rpc("get_trip_summary", { _trip_id: tripId });
+  if (error) throw error;
+  const rows = data ?? [];
+  if (rows.length === 0) return null;
+
+  const balances = rows.map((r) => ({
+    memberId: r.member_id,
+    paidCents: Number(r.paid_cents),
+    shareCents: Number(r.share_cents),
+    netCents: Number(r.paid_cents) - Number(r.share_cents),
+  }));
+  const members = rows.map((r) => ({ id: r.member_id, displayName: r.display_name }));
+  const memberById = new Map(members.map((m) => [m.id, m]));
+
+  const settlements = simplifyDebts(balances).map((s) => ({
+    ...s,
+    from: memberById.get(s.fromMemberId)!,
+    to: memberById.get(s.toMemberId)!,
+  }));
+
+  const totalCents = balances.reduce((sum, b) => sum + b.paidCents, 0);
+  const avgPerPersonCents = members.length > 0 ? Math.round(totalCents / members.length) : 0;
+  const inviteCode = rows[0].invite_code;
+
+  return { members, settlements, totalCents, avgPerPersonCents, inviteCode };
+}
+
+export type TripSummary = NonNullable<Awaited<ReturnType<typeof getTripSummary>>>;

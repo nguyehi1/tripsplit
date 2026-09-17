@@ -2,9 +2,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 const getTripViewMock = vi.fn();
-const redirectMock = vi.fn((url: string) => {
-  throw new Error(`REDIRECT:${url}`);
-});
+const getTripSummaryMock = vi.fn();
+
+// The trip page's full-detail branch wraps its mutation entry points in
+// `TripVerificationProvider` (src/app/trip/[id]/verify-inline.tsx), a small client leaf that
+// calls `useRouter()` for its background `router.refresh()` — see
+// docs/features/simplified-onboarding/architecture.md's "Update: hide-and-reveal...". That hook
+// requires an app-router context that isn't mounted under a bare `renderToStaticMarkup` call, so
+// it's mocked here the same way client-side qa tests elsewhere in this repo mock it.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -14,10 +22,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/data/trips", () => ({
   getTripView: (...args: unknown[]) => getTripViewMock(...args),
-}));
-
-vi.mock("next/navigation", () => ({
-  redirect: redirectMock,
+  getTripSummary: (...args: unknown[]) => getTripSummaryMock(...args),
 }));
 
 const baseView = {
@@ -52,40 +57,79 @@ const baseView = {
   you: null,
 };
 
+const baseSummary = {
+  members: [{ id: "m1", displayName: "Alice" }],
+  settlements: [],
+  totalCents: 1000,
+  avgPerPersonCents: 1000,
+  inviteCode: "abc123",
+};
+
+function callPage(overrides: { tab?: string } = {}) {
+  return import("./page").then(({ default: TripDashboardPage }) =>
+    TripDashboardPage({
+      params: Promise.resolve({ id: "trip-1" }),
+      searchParams: Promise.resolve(overrides),
+    }),
+  );
+}
+
 describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
   it("renders real trip data directly in the HTML output — no loading placeholder (AC1)", async () => {
+    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockResolvedValueOnce(baseView);
-    const { default: TripDashboardPage } = await import("./page");
-    const el = await TripDashboardPage({ params: Promise.resolve({ id: "trip-1" }) });
+    const el = await callPage();
     const html = renderToStaticMarkup(el);
     expect(html).toContain("Lake Tahoe");
     expect(html).not.toContain("Loading your trip");
   });
 
-  it('renders "Couldn\'t load this trip" when getTripView throws (not a member / any failure) (AC4)', async () => {
-    getTripViewMock.mockRejectedValueOnce(new Error("RLS denied"));
-    const { default: TripDashboardPage } = await import("./page");
-    const el = await TripDashboardPage({ params: Promise.resolve({ id: "trip-1" }) });
+  it('renders "Couldn\'t load this trip" when getTripSummary itself fails (bad id)', async () => {
+    getTripSummaryMock.mockRejectedValueOnce(new Error("RLS denied"));
+    const el = await callPage();
     const html = renderToStaticMarkup(el);
     expect(html).toContain("Couldn&#x27;t load this trip");
     expect(html).toContain("you may not be on it");
   });
 
+  it("renders the summary-only tier when getTripSummary succeeds but getTripView fails (non-owner, unverified caller)", async () => {
+    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
+    getTripViewMock.mockRejectedValueOnce(new Error("RLS denied"));
+    const el = await callPage();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("Trip summary");
+    expect(html).toContain("See full details");
+    expect(html).not.toContain("Lake Tahoe");
+  });
+
+  // Pre-push review fix 1: the bare-`/trip/[id]` "See full details" link must carry the trip's
+  // invite code so confirming email actually joins the visitor as a member (via /api/join, the
+  // same mechanism /join/[code] uses) instead of leaving them verified but never added, looping
+  // back to this exact screen forever.
+  it('"See full details" link on the summary-only tier includes the invite code (fix for the verify-but-never-join loop)', async () => {
+    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
+    getTripViewMock.mockRejectedValueOnce(new Error("RLS denied"));
+    const el = await callPage();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("invite=abc123");
+    expect(html).toContain("/check-email?trigger=detail&amp;invite=abc123");
+  });
+
   it("renders the empty-expenses state (AC6)", async () => {
+    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockResolvedValueOnce({ ...baseView, expenses: [] });
-    const { default: TripDashboardPage } = await import("./page");
-    const el = await TripDashboardPage({ params: Promise.resolve({ id: "trip-1" }) });
+    const el = await callPage();
     const html = renderToStaticMarkup(el);
     expect(html).toContain("No expenses logged yet.");
   });
 
   it("shows the locked badge and locked bottom bar when the trip is completed", async () => {
+    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockResolvedValueOnce({
       ...baseView,
       trip: { ...baseView.trip, isCompleted: true },
     });
-    const { default: TripDashboardPage } = await import("./page");
-    const el = await TripDashboardPage({ params: Promise.resolve({ id: "trip-1" }) });
+    const el = await callPage();
     const html = renderToStaticMarkup(el);
     expect(html).toContain("Locked");
     expect(html).toContain("Trip is locked — no more expenses");
@@ -93,21 +137,12 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
   });
 
   it("shows the active Add-an-expense bottom bar (as a real link) when not completed", async () => {
+    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockResolvedValueOnce(baseView);
-    const { default: TripDashboardPage } = await import("./page");
-    const el = await TripDashboardPage({ params: Promise.resolve({ id: "trip-1" }) });
+    const el = await callPage();
     const html = renderToStaticMarkup(el);
     expect(html).toContain("Add an expense");
     expect(html).toContain('href="/trip/trip-1/add-expense"');
-  });
-
-  it("redirects to / when there is no user (defensive fallback)", async () => {
-    const { createClient } = await import("@/lib/supabase/server");
-    (createClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      auth: { getUser: vi.fn(async () => ({ data: { user: null } })) },
-    });
-    const { default: TripDashboardPage } = await import("./page");
-    await expect(TripDashboardPage({ params: Promise.resolve({ id: "trip-1" }) })).rejects.toThrow("REDIRECT:/");
   });
 
   it("never has a 'use client' directive at the top of the file (stays a Server Component)", async () => {

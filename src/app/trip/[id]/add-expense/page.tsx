@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloseIcon, LockIcon, PlusIcon } from "@/components/icons";
 import { Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { isUnverifiedOwner, requireVerifiedSession } from "@/lib/auth-gate";
 import { formatCents } from "@/lib/currency";
 import { addExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
+import { savePendingExpenseDraft, takePendingExpenseDraft } from "@/lib/pending-action";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
@@ -16,6 +18,7 @@ export default function AddExpensePage() {
   const { id } = useParams<{ id: string }>();
   const [memberCount, setMemberCount] = useState<number | null>(null);
   const [locked, setLocked] = useState<boolean | null>(null);
+  const [ownerGateBlocked, setOwnerGateBlocked] = useState(false);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(todayIso());
@@ -26,20 +29,64 @@ export default function AddExpensePage() {
     trackEvent("expense_add_start");
   }, []);
 
+  // Resume intent: if this add-expense attempt was redirected out to the OTP trigger and back
+  // (see design.md section 4 "Resuming intent"), restore whatever was typed before the redirect
+  // instead of leaving the form blank.
+  useEffect(() => {
+    const draft = takePendingExpenseDraft(id);
+    if (draft) {
+      // Restoring from sessionStorage, an external system unreadable during the initial render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAmount(draft.amount);
+      setDescription(draft.description);
+      setDate(draft.date);
+    }
+  }, [id]);
+
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
     Promise.all([
+      supabase.auth.getUser(),
       supabase.from("trip_members").select("id", { count: "exact", head: true }).eq("trip_id", id),
-      supabase.from("trips").select("completed_at").eq("id", id).single(),
-    ]).then(([membersResult, tripResult]) => {
-      if (cancelled) return;
-      setMemberCount(membersResult.count ?? 1);
-      setLocked(Boolean(tripResult.data?.completed_at));
-    });
+      supabase.from("trips").select("completed_at, created_by").eq("id", id).single(),
+    ])
+      .then(([userResult, membersResult, tripResult]) => {
+        if (cancelled) return;
+        const user = userResult.data.user;
+        // Direct-URL guard (design.md section 4.0): the trip page hides this screen's own entry
+        // point (the BottomBar's "Add an expense" button) from an unverified owner, but hiding a
+        // link doesn't stop a typed or bookmarked URL from reaching this route directly — that must
+        // itself redirect back. An invitee (verified or not) is never the trip's owner, so this
+        // never fires for their unchanged flow — see `isUnverifiedOwner`.
+        //
+        // Fail closed (pre-push review fix): if the trips query errored or came back empty (RLS
+        // denial, transient failure), `tripResult.data` is null/undefined and the ownership
+        // comparison below would otherwise silently resolve to `false` — treating an unverified
+        // owner hitting this exact failure mode as "not the owner" and letting the gate never
+        // fire. Since we can't determine ownership in that case, treat it as "could be the
+        // unverified owner" instead.
+        const isOwner = tripResult.error || !tripResult.data ? true : user?.id === tripResult.data.created_by;
+        if (isUnverifiedOwner(user, isOwner)) {
+          setOwnerGateBlocked(true);
+          router.replace(`/trip/${id}`);
+          return;
+        }
+        setMemberCount(membersResult.count ?? 1);
+        setLocked(Boolean(tripResult.data?.completed_at));
+      })
+      .catch(() => {
+        // Same fail-closed reasoning as above, for the case where the queries themselves reject
+        // (network error, etc.) rather than resolving with a postgrest error — we have no signal
+        // at all here, so redirect to be safe rather than rendering the form.
+        if (cancelled) return;
+        setOwnerGateBlocked(true);
+        router.replace(`/trip/${id}`);
+      });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const amountCents = Math.round((parseFloat(amount || "0") || 0) * 100);
@@ -54,6 +101,17 @@ export default function AddExpensePage() {
     setSubmitting(true);
     try {
       const supabase = createClient();
+
+      // The mutation gate (simplified-onboarding): adding an expense is the trigger, not
+      // viewing/filling out this screen — see docs/features/simplified-onboarding/design.md
+      // section 4. The organizer only gets here once they've already typed the whole expense.
+      if (!(await requireVerifiedSession(supabase))) {
+        savePendingExpenseDraft(id, { amount, description, date });
+        const next = encodeURIComponent(`/trip/${id}/add-expense`);
+        router.push(`/check-email?trigger=invitee-expense&next=${next}&back=${next}`);
+        return;
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -74,6 +132,16 @@ export default function AddExpensePage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (ownerGateBlocked) {
+    return (
+      <Screen>
+        <ScreenContent className="pt-14">
+          <p className="text-[15px] text-ink/70">Redirecting…</p>
+        </ScreenContent>
+      </Screen>
+    );
   }
 
   if (locked) {

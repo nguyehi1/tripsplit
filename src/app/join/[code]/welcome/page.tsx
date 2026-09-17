@@ -18,7 +18,12 @@ function ordinal(n: number) {
 
 export default function JoinWelcomePage() {
   const router = useRouter();
-  const tripId = useSearchParams().get("tripId");
+  const searchParams = useSearchParams();
+  const tripId = searchParams.get("tripId");
+  // Set by check-email's confirm() when this celebration screen was reached from the invitee
+  // detail/add-expense trigger (design.md section 6.1) rather than the original join form — lets
+  // "See the trip" land on the thing they actually asked for instead of a generic trip landing.
+  const next = searchParams.get("next");
   const [view, setView] = useState<TripView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,7 +122,7 @@ export default function JoinWelcomePage() {
         </div>
       </ScreenContent>
       <BottomBar>
-        <Button variant="primary" className="text-[16px]" onClick={() => router.push(`/trip/${tripId}`)}>
+        <Button variant="primary" className="text-[16px]" onClick={() => router.push(next || `/trip/${tripId}`)}>
           See the trip
         </Button>
       </BottomBar>

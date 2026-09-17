@@ -14,17 +14,22 @@ export function TripTabs({
   expenses,
   you,
   isCompleted,
+  defaultTab = "expenses",
 }: {
   tripId: string;
   members: TripView["members"];
   expenses: TripView["expenses"];
   you: TripView["you"];
   isCompleted: boolean;
+  /**
+   * Defaults to "expenses" to match the parent Server Component's implicit first paint — a
+   * caller passing "details" (e.g. an invitee landing here right after verifying from the
+   * "See full details" trigger, design.md section 6.1) must derive it the same way server-side
+   * so the client's first render matches, avoiding a hydration mismatch.
+   */
+  defaultTab?: "expenses" | "details";
 }) {
-  // Default must stay "expenses" to match the parent Server Component's implicit first paint —
-  // changing it here without a corresponding server-side default would cause a hydration
-  // mismatch (see design.md section 5).
-  const [tab, setTab] = useState<"expenses" | "details">("expenses");
+  const [tab, setTab] = useState<"expenses" | "details">(defaultTab);
   const maxPaidCents = Math.max(1, ...members.map((m) => m.paidCents));
 
   return (

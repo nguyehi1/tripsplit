@@ -125,6 +125,24 @@ export type Database = {
         Args: { _trip_id: string };
         Returns: boolean;
       };
+      is_verified_trip_member: {
+        Args: { _trip_id: string };
+        Returns: boolean;
+      };
+      is_owner_or_verified_member: {
+        Args: { _trip_id: string };
+        Returns: boolean;
+      };
+      get_trip_summary: {
+        Args: { _trip_id: string };
+        Returns: {
+          member_id: string;
+          display_name: string;
+          paid_cents: number;
+          share_cents: number;
+          invite_code: string;
+        }[];
+      };
     };
   };
 };
