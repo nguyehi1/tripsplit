@@ -7,7 +7,8 @@ import { getMyTrips, type MyTrip } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 
-function BalanceLabel({ netCents }: { netCents: number }) {
+function BalanceLabel({ netCents, hasExpenses }: { netCents: number; hasExpenses: boolean }) {
+  if (!hasExpenses) return <span className="text-[12.5px] text-ink/[0.72]">No expenses yet</span>;
   if (netCents === 0) return <span className="text-[12.5px] text-ink/[0.72]">Settled up</span>;
   if (netCents > 0) {
     return (
@@ -57,7 +58,7 @@ function TripRow({ trip }: { trip: MyTrip }) {
             {formatCents(trip.totalCents)}
           </span>
         </div>
-        <BalanceLabel netCents={trip.yourNetCents} />
+        <BalanceLabel netCents={trip.yourNetCents} hasExpenses={trip.totalCents > 0} />
       </div>
     </Link>
   );
@@ -81,7 +82,7 @@ export default async function TripsDashboardPage() {
   }
 
   return (
-    <Screen>
+    <Screen glow>
       <ScreenContent className="pt-0.5">
         <TopBar title="Your trips" />
         <div className="flex justify-end py-2">
