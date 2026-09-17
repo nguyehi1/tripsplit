@@ -2,9 +2,38 @@ import Link, { type LinkProps } from "next/link";
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import type { AvatarColor } from "@/lib/avatar";
 
-export function Screen({ children }: { children: ReactNode }) {
+export function Screen({
+  children,
+  glow = false,
+}: {
+  children: ReactNode;
+  /** A soft, colorful ambient gradient glow behind the screen's content — decorative only. */
+  glow?: boolean;
+}) {
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-paper text-ink">
+    <div
+      className={
+        glow
+          ? "relative isolate mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-paper text-ink"
+          : "mx-auto flex min-h-screen w-full max-w-md flex-col bg-paper text-ink"
+      }
+    >
+      {glow ? (
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div
+            className="absolute -top-32 -right-28 size-[420px] rounded-full blur-[100px]"
+            style={{ background: "oklch(0.86 0.12 84)", opacity: 0.55 }}
+          />
+          <div
+            className="absolute top-[40%] -left-32 size-[360px] rounded-full blur-[100px]"
+            style={{ background: "oklch(0.8 0.13 36)", opacity: 0.4 }}
+          />
+          <div
+            className="absolute -bottom-28 right-[-8%] size-[300px] rounded-full blur-[90px]"
+            style={{ background: "oklch(0.92 0.07 95)", opacity: 0.5 }}
+          />
+        </div>
+      ) : null}
       {children}
     </div>
   );
