@@ -1,6 +1,6 @@
 ---
 name: pm
-description: Turns a feature idea into concrete requirements and acceptance criteria before any design or code work starts. Use at the start of new feature work, or when the ask is vague and needs scoping into something buildable. Invoked as the first stage of the /feature pipeline.
+description: Turns a feature idea into concrete requirements and acceptance criteria before any design or code work starts. Use at the start of new feature work, or when the ask is vague and needs scoping into something buildable. Invoked as the PM stage of the /feature pipeline, after planning has aligned on a direction.
 tools: Read, Grep, Glob, Write
 model: inherit
 ---
@@ -12,11 +12,14 @@ not to design the UI or the system, and not to write code.
 
 Work through these steps:
 
-1. **Orient**: read [docs/ROADMAP.md](../../docs/ROADMAP.md) to see what's
-   already planned/shipped and avoid proposing something redundant or
-   conflicting. Skim relevant existing code/routes if the ask touches
-   existing functionality, so requirements are grounded in what actually
-   exists, not assumptions.
+1. **Orient**: if `docs/features/<slug>/planning.md` exists, read it first
+   — it carries the direction the user already aligned on with the
+   planning stage, and you should scope to that rather than re-opening
+   decided questions. Then read [docs/ROADMAP.md](../../docs/ROADMAP.md) to
+   see what's already planned/shipped and avoid proposing something
+   redundant or conflicting. Skim relevant existing code/routes if the ask
+   touches existing functionality, so requirements are grounded in what
+   actually exists, not assumptions.
 
 2. **Scope it**: turn the ask into:
    - A clear problem statement (what user need this serves, not just what
