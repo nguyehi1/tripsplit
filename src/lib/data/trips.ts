@@ -40,6 +40,15 @@ export async function getTripByInviteCode(supabase: Client, code: string) {
   };
 }
 
+/**
+ * Shape returned by `getTripByInviteCode`, and — as of the invite-lookup rate-limiting fix —
+ * by `GET /api/trip-invite/[code]` (src/app/api/trip-invite/[code]/route.ts), which now runs
+ * this function server-side instead of `/join/[code]`'s page calling it straight from the
+ * browser. Exported here so that route and the page can share the type without either needing
+ * a `typeof getTripByInviteCode` from a context that isn't actually calling it.
+ */
+export type InviteInfo = NonNullable<Awaited<ReturnType<typeof getTripByInviteCode>>>;
+
 /** Returns the joined trip's id. */
 export async function joinTrip(supabase: Client, input: { inviteCode: string; displayName: string }) {
   const { data, error } = await supabase.rpc("join_trip", {

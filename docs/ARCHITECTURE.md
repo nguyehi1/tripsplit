@@ -364,6 +364,22 @@ this before adding a parallel implementation.
   `getUser()` calls and RLS-backed tiered fetches instead (summary via
   `get_trip_summary`, always; detail via `getTripView`, only when
   entitled).
+- `src/lib/rate-limit.ts` — the app's one rate-limiting module, added to
+  close docs/security-review-2026-09-17.md's blocking finding (invite codes
+  are low-entropy and every consuming RPC was unthrottled). Wraps
+  `@upstash/ratelimit` + `@upstash/redis` (sliding window, keyed by
+  `x-forwarded-for`) behind a single `enforceRateLimit(request, { key,
+  limit, windowSeconds })` helper; used by `GET
+  /api/trip-invite/[code]/route.ts` (the new server-side chokepoint for the
+  invite-preview lookup, which used to call `get_trip_by_invite_code`
+  straight from the browser via `supabase.rpc(...)` and so couldn't be
+  rate-limited from this app at all) and `POST /api/join/route.ts`. This
+  makes Upstash Redis a runtime dependency: `UPSTASH_REDIS_REST_URL`/
+  `UPSTASH_REDIS_REST_TOKEN` must be set in production, or those two routes
+  fail closed with a 503 rather than running unthrottled. New endpoints
+  that accept a guessable/brute-forceable credential from an unauthenticated
+  caller should call `enforceRateLimit` too, rather than adding a parallel
+  throttling mechanism.
 
 ## ADR index
 

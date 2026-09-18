@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { joinTrip } from "@/lib/data/trips";
 import { sendTripEmail } from "@/lib/email";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
-/** Completes a trip join once the browser has an authenticated session from verifyOtp. */
+/**
+ * Completes a trip join once the browser has an authenticated session from verifyOtp.
+ * Rate-limited per docs/security-review-2026-09-17.md finding #1 — `join_trip` consumes the
+ * same low-entropy invite code as the invite-preview lookup, and was otherwise reachable as
+ * fast as an attacker's anonymous-session + OTP round trip could go.
+ */
 export async function POST(request: Request) {
+  const rateLimited = await enforceRateLimit(request, { key: "join-trip", limit: 10, windowSeconds: 60 });
+  if (rateLimited) return rateLimited;
+
   const { inviteCode, displayName } = await request.json();
   if (!inviteCode || typeof inviteCode !== "string") {
     return NextResponse.json({ error: "Missing invite code." }, { status: 400 });

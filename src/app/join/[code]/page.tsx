@@ -5,12 +5,10 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Button, Card, Divider, Kicker, LinkButton, Screen, ScreenContent } from "@/components/ui";
 import { initialsFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
-import { getTripByInviteCode, getTripSummary, type TripSummary } from "@/lib/data/trips";
+import { getTripSummary, type InviteInfo, type TripSummary } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
-
-type InviteInfo = NonNullable<Awaited<ReturnType<typeof getTripByInviteCode>>>;
 
 /**
  * Invitee entry point, redesigned per docs/features/simplified-onboarding/design.md section 5:
@@ -40,13 +38,23 @@ function JoinTripContent() {
     setLoading(true);
     setLoadError(null);
     const supabase = createClient();
-    getTripByInviteCode(supabase, code)
-      .then(async (result) => {
+    // Goes through the server-side /api/trip-invite/[code] route rather than calling
+    // `get_trip_by_invite_code` straight from the browser, so the invite-code lookup is rate-
+    // limited (docs/security-review-2026-09-17.md finding #1) — see src/lib/rate-limit.ts.
+    fetch(`/api/trip-invite/${encodeURIComponent(code)}`)
+      .then(async (res) => {
         if (cancelled) return;
-        if (!result) {
+        if (res.status === 404) {
           setLoadError("This invite link doesn't match a trip anymore.");
           return;
         }
+        if (res.status === 429 || res.status === 503) {
+          throw new Error("Too many attempts — wait a moment and try again.");
+        }
+        if (!res.ok) {
+          throw new Error("Couldn't load this trip — check your connection and try again.");
+        }
+        const result = (await res.json()) as InviteInfo;
         setInvite(result);
         const summaryResult = await getTripSummary(supabase, result.tripId);
         if (!cancelled) setSummary(summaryResult);
