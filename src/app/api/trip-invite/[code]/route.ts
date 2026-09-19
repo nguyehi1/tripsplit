@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTripByInviteCode } from "@/lib/data/trips";
-import { enforceRateLimit } from "@/lib/rate-limit";
+import { dbRateLimitResponse, enforceRateLimit, isDbRateLimitError } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -11,6 +11,11 @@ import { createClient } from "@/lib/supabase/server";
  * Next.js/Vercel's reach, so no rate limiting here could ever protect it. Routing the lookup
  * through this route instead means `enforceRateLimit` actually sits in front of every request
  * for it. See docs/security-review-2026-09-17.md finding #1.
+ *
+ * That alone doesn't stop a caller who skips this route and hits Supabase's PostgREST endpoint
+ * directly (docs/security-review-2026-09-17-followup.md finding #1) — `get_trip_by_invite_code`
+ * now also throttles itself from inside Postgres (migration 0013), so `isDbRateLimitError` below
+ * catches that path's rejection too, not just this route's own `enforceRateLimit`.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ code: string }> }) {
   const rateLimited = await enforceRateLimit(request, {
@@ -34,6 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     }
     return NextResponse.json(invite);
   } catch (e) {
+    if (isDbRateLimitError(e)) return dbRateLimitResponse();
     console.error("Failed to look up invite code", e);
     return NextResponse.json({ error: "Couldn't load this trip." }, { status: 500 });
   }

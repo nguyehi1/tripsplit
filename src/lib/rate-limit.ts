@@ -96,3 +96,20 @@ export async function enforceRateLimit(
 
   return null;
 }
+
+/**
+ * The message `throttle_rpc` raises (supabase/migrations/0013_throttle_invite_rpcs_in_postgres.sql)
+ * when `get_trip_by_invite_code`/`join_trip` are called too often — the Postgres-side throttle
+ * that closes docs/security-review-2026-09-17-followup.md finding #1 (a direct-to-Supabase caller
+ * bypasses this module entirely, so the app-level limiter above can't be the only gate on these
+ * two RPCs). Exported so route handlers can turn that specific DB error into a 429 instead of a
+ * generic 500, the same way `enforceRateLimit` does for the app-level limit.
+ */
+export function isDbRateLimitError(e: unknown): boolean {
+  return e instanceof Error && e.message.startsWith("rate limited");
+}
+
+/** Same shape as `enforceRateLimit`'s 429 — used when `isDbRateLimitError` catches a DB-side throttle. */
+export function dbRateLimitResponse(): NextResponse {
+  return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: { "Retry-After": "60" } });
+}

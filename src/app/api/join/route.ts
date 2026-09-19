@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { joinTrip } from "@/lib/data/trips";
 import { sendTripEmail } from "@/lib/email";
-import { enforceRateLimit } from "@/lib/rate-limit";
+import { dbRateLimitResponse, enforceRateLimit, isDbRateLimitError } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -9,6 +9,11 @@ import { createClient } from "@/lib/supabase/server";
  * Rate-limited per docs/security-review-2026-09-17.md finding #1 — `join_trip` consumes the
  * same low-entropy invite code as the invite-preview lookup, and was otherwise reachable as
  * fast as an attacker's anonymous-session + OTP round trip could go.
+ *
+ * That app-level limit doesn't cover a caller who skips this route and calls `join_trip`
+ * directly against Supabase with an authenticated JWT (docs/security-review-2026-09-17-followup.md
+ * finding #1) — `join_trip` now also throttles itself from inside Postgres, keyed by `auth.uid()`
+ * (migration 0013), so `isDbRateLimitError` below catches that path's rejection too.
  */
 export async function POST(request: Request) {
   const rateLimited = await enforceRateLimit(request, { key: "join-trip", limit: 10, windowSeconds: 60 });
@@ -27,6 +32,7 @@ export async function POST(request: Request) {
     await sendJoinedEmail(supabase, tripId, origin);
     return NextResponse.json({ tripId });
   } catch (e) {
+    if (isDbRateLimitError(e)) return dbRateLimitResponse();
     console.error("Failed to join trip", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Couldn't join the trip." }, { status: 500 });
   }

@@ -7,9 +7,13 @@ vi.mock("@/lib/data/trips", () => ({
   getTripByInviteCode: (...args: unknown[]) => getTripByInviteCodeMock(...args),
 }));
 
-vi.mock("@/lib/rate-limit", () => ({
-  enforceRateLimit: (...args: unknown[]) => enforceRateLimitMock(...args),
-}));
+vi.mock("@/lib/rate-limit", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/rate-limit")>("@/lib/rate-limit");
+  return {
+    ...actual,
+    enforceRateLimit: (...args: unknown[]) => enforceRateLimitMock(...args),
+  };
+});
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({}),
@@ -68,6 +72,16 @@ describe("GET /api/trip-invite/[code]", () => {
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.error).toBe("Couldn't load this trip.");
+  });
+
+  it("429s with Retry-After when the RPC's own Postgres-side throttle rejects the call (migration 0013) — the direct-to-Supabase path this app's own rate limiter can't cover", async () => {
+    getTripByInviteCodeMock.mockRejectedValue(new Error("rate limited: try again shortly"));
+    const { GET } = await importRoute();
+    const res = await GET(new Request("http://localhost/api/trip-invite/ABC12345"), paramsFor("ABC12345"));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBeTruthy();
+    const body = await res.json();
+    expect(body.error).toBe("Too many requests.");
   });
 
   it("short-circuits with the rate limiter's response before looking up the code", async () => {

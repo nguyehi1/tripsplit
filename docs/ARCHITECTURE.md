@@ -449,6 +449,19 @@ this before adding a parallel implementation.
   that accept a guessable/brute-forceable credential from an unauthenticated
   caller should call `enforceRateLimit` too, rather than adding a parallel
   throttling mechanism.
+- This app-level limiter only sits in front of this app's own `/api/*`
+  routes — it can't protect a Postgres function that's independently
+  callable with the public anon/publishable key, which is exactly what
+  `get_trip_by_invite_code`/`join_trip` are
+  (docs/security-review-2026-09-17-followup.md finding #1). Those two RPCs
+  also throttle themselves from inside Postgres
+  (`supabase/migrations/0013_throttle_invite_rpcs_in_postgres.sql`,
+  [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md)), so the
+  limit applies to a direct-to-Supabase caller too. `isDbRateLimitError`/
+  `dbRateLimitResponse` (`src/lib/rate-limit.ts`) let a route handler map
+  that DB-raised rejection to the same 429 shape `enforceRateLimit`
+  returns. A future RPC with the same guessable-credential shape should
+  get this same DB-side throttle, not just an app-level one.
 
 ## ADR index
 
@@ -463,3 +476,4 @@ List notable ones here as they're added:
 - [0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md) — Supabase anonymous auth for pre-verification trip ownership, and anonymous-to-permanent linking (`updateUser`/`email_change`) instead of `signInWithOtp` when verifying an anonymous session
 - [0007](adr/0007-css-custom-property-tokens-for-themeable-restyle.md) — CSS custom properties (extending the existing `globals.css` token set) as the mechanism for a themeable light-now/dark-later visual system, over Tailwind `dark:` variants, a JSON token pipeline, or CSS-in-JS
 - [0008](adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md) — Add-expense as an intercepted/parallel-route overlay sheet over the trip view, with the literal route kept as a hard-navigation/deep-link fallback, over a query-param/client-state overlay; also covers the pathname-driven background dim/blur/scale mechanism and the explicit `animateEntrance` flag that suppresses the sheet's own entrance animation on a cold load
+- [0009](adr/0009-throttle-invite-rpcs-inside-postgres.md) — Throttle `get_trip_by_invite_code`/`join_trip` inside the `plpgsql` functions themselves (keyed by `x-forwarded-for`/`auth.uid()`), over revoking their public grants and routing through a new service-role key, so a direct-to-Supabase caller can't bypass the app-level Upstash limiter

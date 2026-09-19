@@ -109,6 +109,22 @@ describe("POST /api/join", () => {
     expect(sendTripEmailMock).not.toHaveBeenCalled();
   });
 
+  it("429s with Retry-After when join_trip's own Postgres-side throttle rejects the call (migration 0013) — the direct-to-Supabase path this app's own rate limiter can't cover", async () => {
+    joinTripMock.mockRejectedValue(new Error("rate limited: try again shortly"));
+    const { POST } = await importRoute();
+    const res = await POST(
+      new Request("http://localhost/api/join", {
+        method: "POST",
+        body: JSON.stringify({ inviteCode: "ABC123", displayName: "Pat" }),
+      }),
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBeTruthy();
+    const body = await res.json();
+    expect(body.error).toBe("Too many requests.");
+    expect(sendTripEmailMock).not.toHaveBeenCalled();
+  });
+
   it("returns a generic message when joinTrip throws a non-Error value", async () => {
     joinTripMock.mockRejectedValue("weird string throw");
     const { POST } = await importRoute();
