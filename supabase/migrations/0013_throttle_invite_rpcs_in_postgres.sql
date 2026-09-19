@@ -43,6 +43,15 @@ alter table public.rpc_rate_limits enable row level security;
 -- Called only from inside the security-definer RPCs below, so it runs with their already-
 -- elevated privileges for the duration of that call -- it doesn't need its own grants. Raises
 -- rather than returning a boolean so a call site can't forget to check a return value.
+--
+-- Every reference to the target table's own columns in the `do update set` below is schema-
+-- and-table-qualified (`rpc_rate_limits.window_start`, not bare `window_start`) -- required,
+-- not stylistic: an upsert's `excluded` pseudo-relation has the same column names as the
+-- insert's target list, so a bare reference is genuinely ambiguous between "the row's existing
+-- value" and "the value just proposed for insertion" whenever, as here, both relations share a
+-- column name. Verified live against a throwaway Postgres instance: the unqualified version
+-- fails with `column reference "window_start" is ambiguous` on every call, not just on an
+-- actual conflict.
 create or replace function public.throttle_rpc(_bucket_key text, _limit integer, _window_seconds integer)
 returns void
 language plpgsql set search_path = public as $$
@@ -52,12 +61,12 @@ begin
   values (_bucket_key, now(), 1)
   on conflict (bucket_key) do update set
     window_start = case
-      when window_start <= now() - make_interval(secs => _window_seconds) then now()
-      else window_start
+      when rpc_rate_limits.window_start <= now() - make_interval(secs => _window_seconds) then now()
+      else rpc_rate_limits.window_start
     end,
     attempt_count = case
-      when window_start <= now() - make_interval(secs => _window_seconds) then 1
-      else attempt_count + 1
+      when rpc_rate_limits.window_start <= now() - make_interval(secs => _window_seconds) then 1
+      else rpc_rate_limits.attempt_count + 1
     end
   returning attempt_count into _count;
 
@@ -86,7 +95,10 @@ language plpgsql security definer set search_path = public as $$
 declare _ip text;
 begin
   _ip := coalesce(
-    nullif(split_part(current_setting('request.headers', true)::json ->> 'x-forwarded-for', ',', 1), ''),
+    nullif(
+      split_part(nullif(current_setting('request.headers', true), '')::json ->> 'x-forwarded-for', ',', 1),
+      ''
+    ),
     'unknown'
   );
   perform public.throttle_rpc('invite-lookup:' || _ip, 20, 60);

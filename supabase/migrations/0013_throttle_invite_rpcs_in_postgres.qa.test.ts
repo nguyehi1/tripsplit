@@ -8,6 +8,16 @@ import { join } from "node:path";
  * invite-code-rpc-hardening entry, remediation option (b)). Same constraint as migrations
  * 0010/0011/0012's tests -- no live/staging Supabase project available to this repo, so this
  * proves the migration file's shape rather than running the SQL.
+ *
+ * That blind spot is not hypothetical: the first version of this migration shipped with
+ * `throttle_rpc`'s `on conflict ... do update set` referencing `window_start`/`attempt_count`
+ * unqualified, which Postgres rejects as ambiguous (an upsert's `excluded` pseudo-relation has
+ * the same column names as the insert's target list) -- a bug this text-matching suite couldn't
+ * catch since it never executes the SQL, and one that would have made every call to either RPC
+ * fail on migration 0013's very first statement, verified live against a throwaway Postgres 10
+ * instance (`initdb`/`pg_ctl`, schema stubbing `public.trips`/`public.trip_members`/`auth.uid()`/
+ * `auth.jwt()`) before and after the fix. The tests below at least pin the specific fix in place
+ * (qualified references) so a future edit can't silently reintroduce the same ambiguity.
  */
 
 const migrationPath = join(__dirname, "0013_throttle_invite_rpcs_in_postgres.sql");
@@ -26,12 +36,33 @@ describe("migration 0013 — throttle get_trip_by_invite_code and join_trip insi
     expect(sql).toContain("raise exception 'rate limited: try again shortly';");
   });
 
+  it("qualifies every column reference inside throttle_rpc's CASE expressions (bare references are ambiguous against `excluded`, verified live) — the SET clause's own bare target column names (`window_start =`, `attempt_count =`) are unaffected, since a SET target can't be table-qualified", () => {
+    const start = sql.indexOf("on conflict (bucket_key) do update set");
+    const end = sql.indexOf("returning attempt_count into _count", start);
+    const setClause = sql.slice(start, end);
+    // every `case`...`end` block's condition/branches must reference these columns qualified
+    const caseBlocks = setClause.match(/case[\s\S]*?end/g) ?? [];
+    expect(caseBlocks.length).toBeGreaterThan(0);
+    for (const block of caseBlocks) {
+      const bareWindowStart = block.match(/(?<!rpc_rate_limits\.)\bwindow_start\b/g) ?? [];
+      const bareAttemptCount = block.match(/(?<!rpc_rate_limits\.)\battempt_count\b/g) ?? [];
+      expect(bareWindowStart).toEqual([]);
+      expect(bareAttemptCount).toEqual([]);
+    }
+    expect(setClause).toContain("rpc_rate_limits.window_start");
+    expect(setClause).toContain("rpc_rate_limits.attempt_count");
+  });
+
+  it("guards the x-forwarded-for extraction against request.headers being an empty string, not just unset", () => {
+    expect(sql).toContain("nullif(current_setting('request.headers', true), '')::json");
+  });
+
   it("get_trip_by_invite_code moves from a pure sql function to plpgsql and throttles by IP before querying", () => {
     const start = sql.indexOf("create or replace function public.get_trip_by_invite_code");
     const end = sql.indexOf("grant execute on function public.get_trip_by_invite_code", start);
     const body = sql.slice(start, end);
     expect(body).toContain("language plpgsql security definer set search_path = public");
-    expect(body).toContain("current_setting('request.headers', true)::json ->> 'x-forwarded-for'");
+    expect(body).toContain("nullif(current_setting('request.headers', true), '')::json ->> 'x-forwarded-for'");
     expect(body).toContain("perform public.throttle_rpc('invite-lookup:' || _ip, 20, 60);");
     // the throttle check must run before the query, not after
     expect(body.indexOf("perform public.throttle_rpc")).toBeLessThan(body.indexOf("return query"));

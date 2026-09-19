@@ -90,6 +90,41 @@ returns, via `isDbRateLimitError`/`dbRateLimitResponse` in
   re-verifying it live is called out below as a required follow-up, not a
   precondition for landing the code.
 
+## Post-acceptance correction (2026-09-19)
+
+The first version of this migration shipped with a genuine bug, not just a
+theoretical risk: `throttle_rpc`'s `on conflict (bucket_key) do update set`
+referenced `window_start`/`attempt_count` unqualified in its `case`
+expressions. Postgres rejects that as ambiguous — an upsert's `excluded`
+pseudo-relation shares the insert's target-list column names, so a bare
+reference to a column both `excluded` and the target row have doesn't
+resolve to either — and it fails on the *first* call, not just on an actual
+conflict. Since `throttle_rpc` is the first statement in both
+`get_trip_by_invite_code` and `join_trip`, this would have made both RPCs
+100% non-functional (a full outage of invite preview and joining a trip)
+had it been applied to a live database. The migration file's own
+"prove the SQL never actually ran" caveat (see the QA test's header
+comment) is exactly why this wasn't caught before landing: `npm test`,
+lint, typecheck, and build were all green, because nothing in that suite
+executed the SQL. Caught by a QA pass that built a throwaway local
+Postgres 10 instance (`initdb`/`pg_ctl`) and called the RPCs live, and
+independently re-verified the same way before the fix below was pushed.
+
+Fixed by table-qualifying every reference inside the `do update set`
+(`rpc_rate_limits.window_start`, `rpc_rate_limits.attempt_count`) — verified
+live: 20 calls succeed under the `limit=20` bucket, the 21st correctly
+raises `rate limited: try again shortly`, and a rejected call leaves no
+partial state (the whole statement, including `throttle_rpc`'s own
+insert/update, rolls back together). The `x-forwarded-for` extraction was
+also hardened at the same time to guard `request.headers` being the
+literal empty string (not just unset) before the `::json` cast, per a
+lower-severity finding from the same QA pass.
+
+This migration was never applied to any live Supabase project before the
+fix (no CD pipeline runs migrations automatically — see `docs/ROADMAP.md`),
+so this was corrected in place in the same file rather than as a follow-up
+migration; nothing had to be un-applied.
+
 ## Consequences
 
 - Both RPCs are now throttled the same way regardless of caller — this
