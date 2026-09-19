@@ -7,6 +7,19 @@ import { getMyTrips, type MyTrip } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * Forces this page off Next's static-generation path. Without this, Next's dynamic-rendering
+ * detection never gets a chance to run: it infers "dynamic" from a page's use of `cookies()`
+ * (inside `createClient()`), but `createClient()` throws before reaching `cookies()` whenever
+ * `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set — which crashes the
+ * build's prerender attempt instead of falling back to per-request rendering. Every other
+ * Server Component under `src/app` either takes a dynamic route param (skipping the static
+ * trial Next only attempts for param-less routes) or is a `"use client"` page with no
+ * server-side Supabase call, so `/trips` is the one page that needs this declared explicitly
+ * rather than inferred.
+ */
+export const dynamic = "force-dynamic";
+
 function BalanceLabel({ netCents, hasExpenses }: { netCents: number; hasExpenses: boolean }) {
   if (!hasExpenses) return <span className="text-[12.5px] text-ink/[0.72]">No expenses yet</span>;
   if (netCents === 0) return <span className="text-[12.5px] text-ink/[0.72]">Settled up</span>;
