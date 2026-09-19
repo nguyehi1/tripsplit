@@ -3,7 +3,7 @@
 ## Problem statement
 
 Trip costs often need to be split among people who aren't going to use
-TripSplit — someone without a smartphone, a kid, a friend who hasn't
+Splitiful — someone without a smartphone, a kid, a friend who hasn't
 gotten around to accepting the invite yet, or someone who will just never
 sign up. Today the only way to represent a person in a trip's split is a
 full `trip_members` row tied to an authenticated Supabase user, created

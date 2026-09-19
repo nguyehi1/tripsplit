@@ -96,6 +96,35 @@ describe("TripTabs — editable expense row", () => {
         isCompleted: false,
       }),
     );
-    expect(html).toContain("No expenses logged yet.");
+    expect(html).toContain("No expenses logged yet — Miso&#x27;s ready when you are.");
+  });
+
+  it("empty-expenses state (AC13/design.md section 4) also renders the actual Miso cameo image, not just the updated copy string", () => {
+    const html = renderToStaticMarkup(
+      createElement(TripTabs, {
+        tripId: "trip-1",
+        members: [you],
+        expenses: [],
+        you,
+        isCompleted: false,
+      }),
+    );
+    expect(html).toContain('src="/images/miso_01.jpg"');
+    // Whole-photo treatment — no circular crop/mask.
+    expect(html).not.toMatch(/<img src="\/images\/miso_01\.jpg"[^>]*class="[^"]*rounded-full[^"]*"/);
+  });
+
+  it("once a trip has real expenses, the whole empty-state row (and Miso with it) disappears — no lingering mascot on the common, high-frequency case", () => {
+    const html = renderToStaticMarkup(
+      createElement(TripTabs, {
+        tripId: "trip-1",
+        members: [you],
+        expenses: [makeExpense()],
+        you,
+        isCompleted: false,
+      }),
+    );
+    expect(html).not.toContain("miso_01.jpg");
+    expect(html).not.toContain("Miso");
   });
 });

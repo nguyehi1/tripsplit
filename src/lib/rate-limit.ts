@@ -44,7 +44,7 @@ function getLimiter(key: string, limit: number, windowSeconds: number) {
     redis,
     limiter: Ratelimit.slidingWindow(limit, `${windowSeconds} s`),
     analytics: false,
-    prefix: `tripsplit:ratelimit:${key}`,
+    prefix: `splitiful:ratelimit:${key}`,
   });
   limiters.set(cacheKey, limiter);
   return limiter;

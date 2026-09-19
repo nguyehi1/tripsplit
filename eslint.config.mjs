@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored/reference material under docs/ (e.g. design-exploration canvas bundles) is not
+    // shipped code and shouldn't be linted as if it were.
+    "docs/features/*/design-import/**",
   ]),
 ]);
 

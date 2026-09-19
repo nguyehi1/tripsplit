@@ -9,9 +9,51 @@
   --color-accent: oklch(0.45 0.09 80);
   --color-accent-strong: oklch(0.4 0.085 80);
   --color-accent-soft: oklch(0.95 0.04 88);
+  --color-accent-deep: oklch(0.38 0.08 80);
 
   --color-terracotta: oklch(0.42 0.09 44);
   --color-terracotta-soft: oklch(0.95 0.035 44);
+
+  /* Balance/progress colors (trip-tabs.tsx) — "up on their share" / "down" states. */
+  --color-balance-positive: oklch(0.68 0.12 85);
+  --color-balance-negative: oklch(0.7 0.1 44);
+
+  /* Placeholder-member avatar fill (TripSummaryOnly, pre-detail tier). */
+  --color-avatar-placeholder: oklch(0.87 0.08 88);
+
+  /* Screen's ambient three-orb glow (AC3) — ochre / terracotta / warm-white. */
+  --glow-blob-1: oklch(0.86 0.12 84);
+  --glow-blob-2: oklch(0.8 0.13 36);
+  --glow-blob-3: oklch(0.92 0.07 95);
+
+  --shadow-card: 0 1px 3px rgba(35, 28, 18, 0.05), 0 8px 22px rgba(35, 28, 18, 0.05);
+  --shadow-card-sm: 0 1px 3px rgba(35, 28, 18, 0.08);
+
+  /* New for this restyle (ADR 0007 point 4): floating capsule primary action elevation. */
+  --shadow-capsule: 0 14px 30px rgba(35, 28, 18, 0.22), 0 2px 8px rgba(35, 28, 18, 0.12);
+  --shadow-capsule-sm: 0 6px 18px rgba(35, 28, 18, 0.12);
+
+  --radius-card: 22px;
+  --radius-field: 18px;
+  --radius-chip: 20px;
+  --radius-tile: 14px;
+
+  /* New for this restyle: sticky/blurred nav surface, floating capsule fills, sheet backdrop,
+     dimming scrim (ADR 0007 point 4, ADR 0008 point 6). */
+  --surface-nav: color-mix(in srgb, var(--color-paper) 78%, transparent);
+  --surface-capsule: color-mix(in srgb, var(--color-ink) 86%, transparent);
+  --surface-capsule-muted: color-mix(in srgb, var(--color-ink) 8%, var(--color-paper));
+  --surface-sheet: color-mix(in srgb, var(--color-card) 90%, transparent);
+  --color-scrim: color-mix(in srgb, var(--color-ink) 22%, transparent);
+
+  /* Faint, full-bleed paw-print texture (AC3) — opt-in via Screen's `texture` prop.
+     Kept deliberately subtle per design.md §1 ("a paper grain, not a wallpaper print"):
+     sparse tiling (160px) and a light tan fill, rendered at low opacity in Screen. */
+  --texture-paw: url("/images/paw-texture.svg");
+
+  /* Add-expense sheet spring-up + trip-view dim/blur/scale motion (ADR 0008 point 6). */
+  --ease-spring: cubic-bezier(0.22, 0.9, 0.28, 1);
+  --duration-sheet: 0.6s;
 }
 
 @theme inline {
@@ -22,8 +64,21 @@
   --color-accent: var(--color-accent);
   --color-accent-strong: var(--color-accent-strong);
   --color-accent-soft: var(--color-accent-soft);
+  --color-accent-deep: var(--color-accent-deep);
   --color-terracotta: var(--color-terracotta);
   --color-terracotta-soft: var(--color-terracotta-soft);
+  --color-balance-positive: var(--color-balance-positive);
+  --color-balance-negative: var(--color-balance-negative);
+  --color-avatar-placeholder: var(--color-avatar-placeholder);
+  --shadow-card: var(--shadow-card);
+  --shadow-card-sm: var(--shadow-card-sm);
+  --shadow-capsule: var(--shadow-capsule);
+  --shadow-capsule-sm: var(--shadow-capsule-sm);
+  --radius-card: var(--radius-card);
+  --radius-field: var(--radius-field);
+  --radius-chip: var(--radius-chip);
+  --radius-tile: var(--radius-tile);
+  --ease-spring: var(--ease-spring);
   --font-display: var(--font-display);
   --font-sans: var(--font-body);
 }
@@ -47,6 +102,22 @@ body {
     text-transform: uppercase;
     font-weight: 600;
     color: color-mix(in srgb, var(--color-ink) 70%, transparent);
+  }
+  /* Floating capsule primary action's entrance (design.md section 1 — "springs up on first
+     paint"). Pure CSS, no animation library (ADR 0008 point 6). */
+  .animate-capsule-in {
+    animation: capsule-in var(--duration-sheet) var(--ease-spring) both;
+  }
+}
+
+@keyframes capsule-in {
+  from {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 

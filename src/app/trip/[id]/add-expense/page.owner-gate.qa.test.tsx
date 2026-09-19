@@ -14,12 +14,18 @@ import { createRoot, type Root } from "react-dom/client";
  * Not a security test (RLS + migration 0010/0011 already block the mutation regardless) — this
  * only proves the specified redirect-on-direct-hit behavior, and that it does NOT fire for an
  * invitee, verified or not.
+ *
+ * Rewritten for ux-revamp (ADR 0008): `add-expense/page.tsx` stopped being a plain client
+ * component once it needed to render the full (async, Server-Component-shaped)
+ * dashboard-plus-sheet output for the hard-nav-fallback case (AC8), so it can no longer be
+ * synchronously `root.render()`'d the way this test used to. Every assertion below is unchanged
+ * from before — only the target moved to `AddExpenseSheetContent`, the relocated client
+ * component both the intercepted sheet and the hard-nav fallback now share (ADR 0008 point 5).
  */
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
-  useParams: () => ({ id: "trip-1" }),
   useRouter: () => ({ push: pushMock, back: vi.fn(), replace: replaceMock }),
 }));
 
@@ -68,13 +74,13 @@ const organizerId = "owner-1";
 const otherUserId = "invitee-1";
 const tripRow = { completed_at: null, created_by: organizerId };
 
-async function renderAddExpense() {
-  const { default: AddExpensePage } = await import("./page");
+async function renderAddExpenseSheetContent() {
+  const { AddExpenseSheetContent } = await import("../add-expense-sheet-content");
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root: Root = createRoot(container);
   await act(async () => {
-    root.render(<AddExpensePage />);
+    root.render(<AddExpenseSheetContent tripId="trip-1" />);
   });
   return { container, root };
 }
@@ -100,10 +106,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-describe("add-expense/page.tsx — direct-URL owner gate (design.md 4.0)", () => {
+describe("AddExpenseSheetContent — direct-URL owner gate (design.md 4.0)", () => {
   it("unverified owner hitting the URL directly is redirected back to /trip/[id], form never renders", async () => {
     getUserMock.mockResolvedValue({ data: { user: { id: organizerId, is_anonymous: true } } });
-    const { container, root } = await renderAddExpense();
+    const { container, root } = await renderAddExpenseSheetContent();
     await act(async () => {
       await flushMicrotasks();
     });
@@ -117,7 +123,7 @@ describe("add-expense/page.tsx — direct-URL owner gate (design.md 4.0)", () =>
 
   it("verified owner is not redirected — the form renders normally", async () => {
     getUserMock.mockResolvedValue({ data: { user: { id: organizerId, is_anonymous: false } } });
-    const { container, root } = await renderAddExpense();
+    const { container, root } = await renderAddExpenseSheetContent();
     await act(async () => {
       await flushMicrotasks();
     });
@@ -130,7 +136,7 @@ describe("add-expense/page.tsx — direct-URL owner gate (design.md 4.0)", () =>
 
   it("unverified invitee (not the owner) is not redirected — their existing gate-at-submit flow is unchanged", async () => {
     getUserMock.mockResolvedValue({ data: { user: { id: otherUserId, is_anonymous: true } } });
-    const { container, root } = await renderAddExpense();
+    const { container, root } = await renderAddExpenseSheetContent();
     await act(async () => {
       await flushMicrotasks();
     });
@@ -148,7 +154,7 @@ describe("add-expense/page.tsx — direct-URL owner gate (design.md 4.0)", () =>
     it("unverified session, trips query returns a postgrest error: fails closed, redirected", async () => {
       supabaseMock = createSupabaseMock({ mode: "error" });
       getUserMock.mockResolvedValue({ data: { user: { id: organizerId, is_anonymous: true } } });
-      const { container, root } = await renderAddExpense();
+      const { container, root } = await renderAddExpenseSheetContent();
       await act(async () => {
         await flushMicrotasks();
       });
@@ -162,7 +168,7 @@ describe("add-expense/page.tsx — direct-URL owner gate (design.md 4.0)", () =>
     it("unverified session, trips query rejects outright (network error): fails closed via .catch, redirected", async () => {
       supabaseMock = createSupabaseMock({ mode: "reject" });
       getUserMock.mockResolvedValue({ data: { user: { id: organizerId, is_anonymous: true } } });
-      const { container, root } = await renderAddExpense();
+      const { container, root } = await renderAddExpenseSheetContent();
       await act(async () => {
         await flushMicrotasks();
       });
@@ -176,7 +182,7 @@ describe("add-expense/page.tsx — direct-URL owner gate (design.md 4.0)", () =>
     it("verified session, trips query errors: NOT redirected — the ambiguity only matters for an unverified session", async () => {
       supabaseMock = createSupabaseMock({ mode: "error" });
       getUserMock.mockResolvedValue({ data: { user: { id: organizerId, is_anonymous: false } } });
-      const { container, root } = await renderAddExpense();
+      const { container, root } = await renderAddExpenseSheetContent();
       await act(async () => {
         await flushMicrotasks();
       });

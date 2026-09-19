@@ -9,12 +9,6 @@ import { clearRememberedEmail, getRememberedEmail, setRememberedEmail } from "@/
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
-function extractInviteCode(input: string) {
-  const trimmed = input.trim();
-  const match = trimmed.match(/\/join\/([^/?#\s]+)/);
-  return match ? match[1] : trimmed;
-}
-
 /**
  * The "no browser memory" returning-visitor sign-in form (design.md section 8) — the same
  * email + code pattern this app has always used, just no longer the default content at `/`.
@@ -145,21 +139,40 @@ function WelcomeContent() {
 
   return (
     <>
-      <div
-        className="flex size-[42px] items-center justify-center rounded-[14px] text-[17px] font-bold text-white"
-        style={{ background: "var(--color-accent)" }}
-      >
-        ts
+      {/* Miso art (AC13) — `miso_01.jpg` (design.md section 6.1, "asset swap"), the full
+       *  uncropped photo, no circular mask. Tilted snapshot-on-paper frame + a separate,
+       *  tilted speech-bubble card with the canvas's own flavor line (design.md section 2). */}
+      <div className="flex items-end gap-3">
+        <div
+          className="rounded-card bg-white p-1.5 shadow-card"
+          style={{ transform: "rotate(-3.5deg)" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- no next/image config for
+             public/images/* yet (architecture.md); a plain <img> is fine for this pass. */}
+          <img
+            src="/images/miso_01.jpg"
+            alt="Miso, Splitiful's mascot dog, wearing glasses at a desk with a laptop"
+            width={96}
+            height={96}
+            className="block size-24"
+          />
+        </div>
+        <div
+          className="rounded-[18px] rounded-bl-[4px] bg-white px-4 py-2.5 shadow-card-sm"
+          style={{ transform: "rotate(2.5deg)" }}
+        >
+          <span className="text-[13.5px] font-medium text-ink/80">Divide by 6?</span>
+        </div>
       </div>
       <div className="h-7" />
-      <h1 className="text-display text-[42px]">
-        Trips are fun.
+      <h1 className="text-display text-[40px] leading-[1.02]">
+        You have fun.
         <br />
-        The math isn&apos;t.
+        Miso does the math.
       </h1>
       <div className="h-3.5" />
       <p className="max-w-[290px] text-[15px] leading-[1.5] text-ink/[0.73]">
-        Add what you spend. We&apos;ll work out who owes who — no account needed to start.
+        Add what you spend. Miso works out who owes who — no account needed to start.
       </p>
       <div className="h-7" />
 
@@ -172,10 +185,7 @@ function WelcomeContent() {
         variant="ghost"
         className="h-[52px] text-[15px]"
         style={{ color: "var(--color-accent-strong)" }}
-        onClick={() => {
-          const input = window.prompt("Paste your invite link or code");
-          if (input) router.push(`/join/${extractInviteCode(input)}`);
-        }}
+        onClick={() => router.push("/join")}
       >
         I have an invite link
       </Button>
@@ -191,11 +201,11 @@ function WelcomeContent() {
 
       <div className="h-6" />
       <div className="flex gap-2.5">
-        <div className="flex-1 rounded-[20px] p-4 pb-3.5" style={{ background: "oklch(0.95 0.04 88)" }}>
+        <div className="flex-1 rounded-chip p-4 pb-3.5" style={{ background: "var(--color-accent-soft)" }}>
           <div className="text-display text-[30px]">∞</div>
           <div className="mt-1.5 text-[12.5px] leading-[1.35] text-ink/[0.73]">expenses a day</div>
         </div>
-        <div className="flex-1 rounded-[20px] p-4 pb-3.5" style={{ background: "oklch(0.95 0.035 44)" }}>
+        <div className="flex-1 rounded-chip p-4 pb-3.5" style={{ background: "var(--color-terracotta-soft)" }}>
           <div className="text-display text-[30px]">0</div>
           <div className="mt-1.5 text-[12.5px] leading-[1.35] text-ink/[0.73]">accounts to join</div>
         </div>

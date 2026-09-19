@@ -43,6 +43,43 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
     expect(html).not.toContain("Loading your trips");
   });
 
+  it("groups trips into Ongoing and Completed sections", async () => {
+    getMyTripsMock.mockResolvedValueOnce([
+      {
+        id: "trip-1",
+        name: "Lake Tahoe",
+        location: "Tahoe",
+        startsOn: "2026-03-05",
+        endsOn: "2026-03-09",
+        isCompleted: false,
+        createdAt: "2026-01-01",
+        members: [],
+        totalCents: 1000,
+        yourNetCents: 0,
+      },
+      {
+        id: "trip-2",
+        name: "Big Sur",
+        location: "Big Sur",
+        startsOn: "2026-01-05",
+        endsOn: "2026-01-09",
+        isCompleted: true,
+        createdAt: "2025-12-01",
+        members: [],
+        totalCents: 2000,
+        yourNetCents: 0,
+      },
+    ]);
+    const { default: TripsDashboardPage } = await import("./page");
+    const el = await TripsDashboardPage();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("Ongoing");
+    expect(html).toContain("Completed");
+    expect(html.indexOf("Ongoing")).toBeLessThan(html.indexOf("Lake Tahoe"));
+    expect(html.indexOf("Completed")).toBeLessThan(html.indexOf("Big Sur"));
+    expect(html.indexOf("Lake Tahoe")).toBeLessThan(html.indexOf("Big Sur"));
+  });
+
   it("renders the empty state with a Start-a-trip CTA (AC6)", async () => {
     getMyTripsMock.mockResolvedValueOnce([]);
     const { default: TripsDashboardPage } = await import("./page");

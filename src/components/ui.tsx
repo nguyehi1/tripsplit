@@ -5,15 +5,20 @@ import type { AvatarColor } from "@/lib/avatar";
 export function Screen({
   children,
   glow = false,
+  texture = false,
 }: {
   children: ReactNode;
   /** A soft, colorful ambient gradient glow behind the screen's content — decorative only. */
   glow?: boolean;
+  /** A faint, full-bleed paw-print texture (AC3) sitting above the glow, behind content —
+   *  decorative only, opt-in so screens outside this feature's scope don't pick it up. */
+  texture?: boolean;
 }) {
+  const decorated = glow || texture;
   return (
     <div
       className={
-        glow
+        decorated
           ? "relative isolate mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-paper text-ink"
           : "mx-auto flex min-h-screen w-full max-w-md flex-col bg-paper text-ink"
       }
@@ -22,17 +27,29 @@ export function Screen({
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
           <div
             className="absolute -top-32 -right-28 size-[420px] rounded-full blur-[100px]"
-            style={{ background: "oklch(0.86 0.12 84)", opacity: 0.55 }}
+            style={{ background: "var(--glow-blob-1)", opacity: 0.55 }}
           />
           <div
             className="absolute top-[40%] -left-32 size-[360px] rounded-full blur-[100px]"
-            style={{ background: "oklch(0.8 0.13 36)", opacity: 0.4 }}
+            style={{ background: "var(--glow-blob-2)", opacity: 0.4 }}
           />
           <div
             className="absolute -bottom-28 right-[-8%] size-[300px] rounded-full blur-[90px]"
-            style={{ background: "oklch(0.92 0.07 95)", opacity: 0.5 }}
+            style={{ background: "var(--glow-blob-3)", opacity: 0.5 }}
           />
         </div>
+      ) : null}
+      {texture ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{
+            backgroundImage: "var(--texture-paw)",
+            backgroundRepeat: "repeat",
+            backgroundSize: "160px 160px",
+            opacity: 0.14,
+          }}
+        />
       ) : null}
       {children}
     </div>
@@ -60,14 +77,41 @@ export function BottomBar({ children }: { children: ReactNode }) {
 export function TopBar({
   title,
   leading,
+  trailing,
+  titleClassName = "text-[16px] font-semibold",
+  sticky = false,
 }: {
-  title: string;
+  title: ReactNode;
   leading?: ReactNode;
+  /** Opt-in right-hand icon group (e.g. the trip view's action icons) — omitted entirely (not
+   *  even an empty wrapper) when unused, so every existing single-title consumer's markup is
+   *  byte-for-byte unchanged. */
+  trailing?: ReactNode;
+  titleClassName?: string;
+  /** Sticky, blurred, translucent-paper nav (AC3/AC5/AC6) — content scrolls under it. Opt-in so
+   *  screens outside this feature's scope keep today's plain, non-sticky header. */
+  sticky?: boolean;
 }) {
+  const stickyClass = sticky
+    ? "sticky top-0 z-20 -mx-5 px-5 py-3 backdrop-blur-xl [background:var(--surface-nav)] [backdrop-filter:blur(24px)_saturate(1.6)]"
+    : "px-1 pb-1 pt-5";
+
+  if (trailing) {
+    return (
+      <div className={`flex items-center justify-between gap-3 ${stickyClass}`}>
+        <div className="flex items-center gap-3">
+          {leading}
+          <span className={titleClassName}>{title}</span>
+        </div>
+        <div className="flex items-center gap-2">{trailing}</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-3 px-1 pb-1 pt-5">
+    <div className={`flex items-center gap-3 ${stickyClass}`}>
       {leading}
-      <span className="text-[16px] font-semibold">{title}</span>
+      <span className={titleClassName}>{title}</span>
     </div>
   );
 }
@@ -77,10 +121,7 @@ export function IconButton({
   variant = "card",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "card" | "plain" }) {
-  const base =
-    variant === "card"
-      ? "bg-white text-ink shadow-[0_1px_3px_rgba(35,28,18,0.08)]"
-      : "bg-transparent text-ink";
+  const base = variant === "card" ? "bg-white text-ink shadow-card-sm" : "bg-transparent text-ink";
   return (
     <button
       type="button"
@@ -96,10 +137,7 @@ export function IconLinkButton({
   ...props
 }: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps> &
   LinkProps & { variant?: "card" | "plain" }) {
-  const base =
-    variant === "card"
-      ? "bg-white text-ink shadow-[0_1px_3px_rgba(35,28,18,0.08)]"
-      : "bg-transparent text-ink";
+  const base = variant === "card" ? "bg-white text-ink shadow-card-sm" : "bg-transparent text-ink";
   return (
     <Link
       className={`flex size-9 flex-none cursor-pointer items-center justify-center rounded-full ${base} ${className}`}
@@ -108,7 +146,22 @@ export function IconLinkButton({
   );
 }
 
-type ButtonVariant = "primary" | "accent" | "soft" | "muted" | "ghost";
+type ButtonVariant = "primary" | "accent" | "soft" | "muted" | "ghost" | "capsule" | "capsuleMuted";
+
+/** Shared by `Button` and `LinkButton` — `capsule`/`capsuleMuted` are the floating primary-action
+ *  material (design.md section 1): dark ink-translucent fill, blur, elevated shadow, springs up
+ *  on first paint. Opt-in, additive variants — every existing `primary`/`accent`/etc. call site
+ *  outside this feature's four screens is unaffected. */
+const buttonVariantClasses: Record<ButtonVariant, string> = {
+  primary: "bg-ink text-white",
+  accent: "bg-accent text-white",
+  soft: "bg-ink/[0.06] text-ink",
+  muted: "bg-ink/[0.07] text-ink/70 cursor-default",
+  ghost: "bg-transparent text-ink/70",
+  capsule: "text-white backdrop-blur-xl [background:var(--surface-capsule)] [box-shadow:var(--shadow-capsule)] animate-capsule-in",
+  capsuleMuted:
+    "text-ink/70 backdrop-blur-xl [background:var(--surface-capsule-muted)] [box-shadow:var(--shadow-capsule-sm)] cursor-default animate-capsule-in",
+};
 
 export function Button({
   variant = "primary",
@@ -116,13 +169,7 @@ export function Button({
   block = true,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; block?: boolean }) {
-  const variants: Record<ButtonVariant, string> = {
-    primary: "bg-ink text-white",
-    accent: "bg-accent text-white",
-    soft: "bg-ink/[0.06] text-ink",
-    muted: "bg-ink/[0.07] text-ink/70 cursor-default",
-    ghost: "bg-transparent text-ink/70",
-  };
+  const variants = buttonVariantClasses;
   return (
     <button
       type="button"
@@ -141,13 +188,7 @@ export function LinkButton({
   ...props
 }: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps> &
   LinkProps & { variant?: ButtonVariant; block?: boolean }) {
-  const variants: Record<ButtonVariant, string> = {
-    primary: "bg-ink text-white",
-    accent: "bg-accent text-white",
-    soft: "bg-ink/[0.06] text-ink",
-    muted: "bg-ink/[0.07] text-ink/70 cursor-default",
-    ghost: "bg-transparent text-ink/70",
-  };
+  const variants = buttonVariantClasses;
   return (
     <Link
       className={`flex h-14 cursor-pointer items-center justify-center gap-2 rounded-full font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -165,13 +206,7 @@ export function Card({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <div
-      className={`rounded-[22px] bg-white shadow-[0_1px_3px_rgba(35,28,18,0.05),0_8px_22px_rgba(35,28,18,0.05)] ${className}`}
-    >
-      {children}
-    </div>
-  );
+  return <div className={`rounded-card bg-white shadow-card ${className}`}>{children}</div>;
 }
 
 export function Divider({ className = "" }: { className?: string }) {

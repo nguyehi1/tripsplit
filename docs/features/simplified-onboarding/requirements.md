@@ -2,7 +2,7 @@
 
 ## Problem statement
 
-Today, every visitor to TripSplit hits the same first screen
+Today, every visitor to Splitiful hits the same first screen
 (`src/app/page.tsx`): a "Trips are fun. The math isn't." landing page whose
 only action is entering an email address and requesting a sign-in code
 (Supabase `signInWithOtp` magic link). There is no way to reach trip

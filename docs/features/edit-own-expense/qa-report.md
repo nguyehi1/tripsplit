@@ -26,7 +26,7 @@
      anything that needed it. This is a test-infra fix, not an application change.
 3. **Live RLS verification against a real Postgres instance** (not just reading the SQL): spun up
    a throwaway local PostgreSQL 10 cluster, stubbed the minimal Supabase-platform scaffolding
-   TripSplit's migrations assume (an `auth.users` table + `auth.uid()` backed by a settable GUC,
+   Splitiful's migrations assume (an `auth.users` table + `auth.uid()` backed by a settable GUC,
    a minimal `storage` schema, the `anon`/`authenticated`/`service_role` roles, and the default
    table grants Supabase's project template normally provides), then applied
    `0001_init.sql` → `0002` → `0003` → `0005` → `0006` unmodified (see note on `0004` below) and
@@ -73,7 +73,7 @@
    path — there is no code path from "cancel" to a mutation, so this holds by construction, same
    as add-expense's existing close behavior.
 5. **Editing someone else's expense is rejected server-side (RLS), not just hidden in the UI** —
-   **Pass, verified live.** Seeded a real Postgres instance running TripSplit's actual `0001`→`0006`
+   **Pass, verified live.** Seeded a real Postgres instance running Splitiful's actual `0001`→`0006`
    migrations with two users (Alice paid, Bob didn't) on the same open trip. As `authenticated`
    impersonating Bob (`app.current_uid` = Bob's id), `UPDATE public.expenses SET amount = 999.00
    WHERE id = <Alice's expense>` returned **`UPDATE 0`** — the row was silently excluded by the

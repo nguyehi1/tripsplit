@@ -129,7 +129,7 @@ No regressions found.
 - Store → read round-trip.
 - Store → store-again (overwrite) → read returns newest value only.
 - Store → clear → read returns `""` again.
-- Key namespacing (`tripsplit:last-signin-email`) doesn't leak/collide with
+- Key namespacing (`splitiful:last-signin-email`) doesn't leak/collide with
   other hypothetical keys.
 - Only the raw email string is persisted, nothing else.
 - Three distinct "storage throws" shapes (property-access throw,

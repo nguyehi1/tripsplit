@@ -20,7 +20,7 @@ GDPR/CCPA apply to this user base today, is a display name alone
 ### 1. No privacy policy or terms of service anywhere in the app
 Grepping `src/app/`, `public/`, and the layout/metadata turns up no
 `/privacy`, `/terms`, or equivalent page, and no link to one anywhere in
-the UI. `docs/ANALYTICS.md` even says outright: *"TripSplit's privacy
+the UI. `docs/ANALYTICS.md` even says outright: *"Splitiful's privacy
 policy should mention..."* — i.e., it's written as something that should
 exist, and doesn't.
 
@@ -127,7 +127,7 @@ vendor-contract question, not a code question).
 yet). There's no history/audit table — an edit or delete is silent and
 irreversible from the other members' perspective. For a small
 friends-group splitting a bar tab, this is a fine, low-stakes product
-choice. It becomes a real dispute-resolution problem if TripSplit is ever
+choice. It becomes a real dispute-resolution problem if Splitiful is ever
 used for larger sums or less-trusting groups (e.g. `docs/v2-vision.md`'s
 explicitly-rejected-for-now payment-rail integration would raise the
 stakes considerably if it's ever revisited). Not a blocking issue given

@@ -46,7 +46,20 @@ export function TripTabs({
 
       {tab === "expenses" ? (
         expenses.length === 0 ? (
-          <p className="px-1 text-[13px] text-ink/60">No expenses logged yet.</p>
+          <div className="flex items-center gap-2.5 px-1">
+            {/* Miso cameo (AC13) — empty-state only (design.md section 4). Once a trip has real
+             *  expenses this whole row (and Miso with it) disappears. */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- no next/image config for
+               public/images/* yet (architecture.md); a plain <img> is fine for this pass. */}
+            <img
+              src="/images/miso_01.jpg"
+              alt=""
+              width={24}
+              height={24}
+              className="block size-6 flex-none shadow-card-sm"
+            />
+            <p className="text-[13px] text-ink/60">No expenses logged yet — Miso&apos;s ready when you are.</p>
+          </div>
         ) : (
           <Card className="px-4 py-1">
             {expenses.map((expense, i) => {
@@ -104,7 +117,7 @@ export function TripTabs({
                 </div>
                 <div
                   className="text-display text-[24px]"
-                  style={{ color: member.netCents >= 0 ? "oklch(0.38 0.08 80)" : "inherit" }}
+                  style={{ color: member.netCents >= 0 ? "var(--color-accent-deep)" : "inherit" }}
                 >
                   {formatCents(member.paidCents)}
                 </div>
@@ -112,12 +125,17 @@ export function TripTabs({
               <div className="h-2.5" />
               <ProgressBar
                 percent={(member.paidCents / maxPaidCents) * 100}
-                color={member.netCents >= 0 ? "oklch(0.68 0.12 85)" : "oklch(0.7 0.1 44)"}
+                color={member.netCents >= 0 ? "var(--color-balance-positive)" : "var(--color-balance-negative)"}
               />
               <div className="h-2" />
               <span
                 className="text-[12px] font-semibold"
-                style={{ color: member.netCents >= 0 ? "oklch(0.38 0.08 80)" : "rgba(35,28,18,0.73)" }}
+                style={{
+                  color:
+                    member.netCents >= 0
+                      ? "var(--color-accent-deep)"
+                      : "color-mix(in srgb, var(--color-ink) 73%, transparent)",
+                }}
               >
                 {member.netCents >= 0
                   ? `Up ${formatCents(member.netCents)} on their share`

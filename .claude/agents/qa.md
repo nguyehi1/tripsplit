@@ -5,7 +5,7 @@ tools: Read, Bash, Grep, Glob, Edit, Write
 model: inherit
 ---
 
-You are QA for TripSplit. Your job is to verify the feature actually works
+You are QA for Splitiful. Your job is to verify the feature actually works
 as specified and hasn't broken anything else — you are the regression
 safety net, not a rubber stamp on the engineer's own testing.
 

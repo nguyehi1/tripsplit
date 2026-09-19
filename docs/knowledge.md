@@ -2,11 +2,11 @@
 
 A learning companion for the
 [system-design-primer](https://github.com/donnemartin/system-design-primer)
-course, taught using **this repo (TripSplit)** as the running example.
+course, taught using **this repo (Splitiful)** as the running example.
 
 **Who this is for:** you don't need a programming background to read this.
 Every technical term is defined the first time it shows up. Each section
-goes **high-level summary → diagram → TripSplit example → deep dive**, so
+goes **high-level summary → diagram → Splitiful example → deep dive**, so
 you can stop as soon as you have enough, or keep going for the full
 picture.
 
@@ -20,7 +20,7 @@ open Preview, or view this file on GitHub.
 ## Contents
 
 0. [Foundations — words you need before anything else](#0-foundations--words-you-need-before-anything-else)
-1. [The big picture — TripSplit end to end](#1-the-big-picture--tripsplit-end-to-end)
+1. [The big picture — Splitiful end to end](#1-the-big-picture--splitiful-end-to-end)
 2. [Functional and non-functional requirements](#2-functional-and-non-functional-requirements)
 3. [Single server](#3-single-server)
 4. [DNS and CDN](#4-dns-and-cdn)
@@ -41,7 +41,7 @@ open Preview, or view this file on GitHub.
 Skip this section once these feel obvious.
 
 - **Client** — the thing making a request. Usually a web browser (Chrome,
-  Safari) that a person is using. In TripSplit, "the client" means the app
+  Safari) that a person is using. In Splitiful, "the client" means the app
   running in your browser tab.
 - **Server** — a computer (or, more often today, a program running
   somewhere in the cloud) that waits for requests and responds to them. It
@@ -58,11 +58,11 @@ Skip this section once these feel obvious.
   allowed to order and what you'll get back.
 - **Database** — a program specialized in storing data durably (it
   survives restarts) and letting you query it ("find all expenses for trip
-  #42"). TripSplit's database is **Postgres**, a specific well-known
+  #42"). Splitiful's database is **Postgres**, a specific well-known
   database engine, hosted for us by a service called **Supabase**.
 - **Frontend vs. backend** — frontend is the part that runs in the user's
   browser and draws the screen. Backend is the part that runs on a server,
-  holds the real data, and enforces the rules. TripSplit blurs this line
+  holds the real data, and enforces the rules. Splitiful blurs this line
   more than most apps — more on that in [§6](#6-application-layer-monolith-modular-monolith-and-microservices).
 - **Latency** — how long a request takes. Lower is better. Most of system
   design is techniques for keeping latency low as more people use the
@@ -74,10 +74,10 @@ Skip this section once these feel obvious.
 
 ---
 
-## 1. The big picture — TripSplit end to end
+## 1. The big picture — Splitiful end to end
 
 Before zooming into each topic, here's the whole system in one diagram —
-every request TripSplit handles flows through some subset of these boxes.
+every request Splitiful handles flows through some subset of these boxes.
 
 ```mermaid
 flowchart LR
@@ -132,7 +132,7 @@ menu item gets delivered.
 
 This matters because **almost every architectural choice in this whole
 document is really an answer to an NFR**, not a feature request. Nobody
-asked TripSplit to "have Row-Level Security" as a feature — RLS exists to
+asked Splitiful to "have Row-Level Security" as a feature — RLS exists to
 satisfy the *security* NFR. Nobody asked for "a reverse proxy" as a
 feature — it exists to satisfy part of that same NFR with a better user
 experience. Reading the rest of this document with that lens — "which
@@ -150,7 +150,7 @@ flowchart LR
     NFR --> D["Scalability"] --> S12["→ §12 Scaling roadmap"]
 ```
 
-### TripSplit's functional requirements
+### Splitiful's functional requirements
 Pulled directly from what actually exists under `src/app/`, i.e. what a
 user can actually go do today. Every one of these is a "yes/no, does the
 feature exist and work" question — that's the tell that it's functional,
@@ -179,21 +179,21 @@ flowchart LR
     F13[Trip confirmation email] --> EMAIL[["Email service<br/>(Gmail SMTP)"]]
 ```
 
-**The honest caveat:** TripSplit doesn't literally have four separate
+**The honest caveat:** Splitiful doesn't literally have four separate
 services — "Trip," "Expense," and "Feedback" here are the same Postgres
 database, just different tables with their own RLS rules. Only
 **Authentication** (Supabase Auth) and **Email** (Gmail SMTP) are
 genuinely separate systems. Drawn this way on purpose, though: it's the
-same shape a microservices version of TripSplit would take if those
+same shape a microservices version of Splitiful would take if those
 boxes ever *did* become real, independent services — see [§6](#6-application-layer-monolith-modular-monolith-and-microservices)
 for why that split isn't worth making today.
 
-### TripSplit's non-functional requirements
+### Splitiful's non-functional requirements
 These are rarely written down as a checklist anywhere (they aren't
 explicitly listed in this repo's docs either) — usually they're implicit
 in the design choices already made. Making them explicit here:
 
-| NFR | What it actually asks | TripSplit's current answer | Covered in |
+| NFR | What it actually asks | Splitiful's current answer | Covered in |
 |---|---|---|---|
 | **Availability** | Can users reach the app when they try to? | Inherits whatever uptime Vercel + Supabase provide; no extra redundancy is built on top of that in this repo | [§5](#5-load-balancer-and-reverse-proxy), [§7](#7-database-relational-replication-sharding) |
 | **Consistency** | Does everyone see the same, latest data? | Strong/immediate — there's exactly one Postgres instance and no replicas, so there's no lag to reason about (yet) | [§7](#7-database-relational-replication-sharding) |
@@ -207,9 +207,9 @@ in the design choices already made. Making them explicit here:
 ### Deep dive — NFRs trade off against each other, they don't stack for free
 This is the part that makes NFRs harder to reason about than FRs: you
 can't usually improve one for free — most of the time you're trading it
-against another one. TripSplit's **Consistency** row is a good live
+against another one. Splitiful's **Consistency** row is a good live
 example: it's "strong" today only because there's a single database
-instance. The moment TripSplit added a read replica to help with
+instance. The moment Splitiful added a read replica to help with
 **Scalability** (the hypothetical move flagged in
 [§12](#12-scaling-roadmap-current--future) at ~10K users), it would be
 trading a little bit of that consistency away — a replica can lag the
@@ -232,7 +232,7 @@ arbitrary. Most of the time, it wasn't.
 The simplest possible system design: one computer runs everything — the
 part that talks to users and the part that stores data. No copies, no
 splitting work across machines. This is where every system starts, and
-it's where TripSplit still is today, just built on managed cloud
+it's where Splitiful still is today, just built on managed cloud
 platforms instead of one physical box.
 
 ```mermaid
@@ -241,8 +241,8 @@ flowchart LR
     S -->|response| U
 ```
 
-### TripSplit example
-TripSplit doesn't literally run on one box, but it's the same *shape*: one
+### Splitiful example
+Splitiful doesn't literally run on one box, but it's the same *shape*: one
 tier of application code (the Next.js app on
 [Vercel](https://vercel.com)) talking to one tier of storage (one Postgres
 database on [Supabase](https://supabase.com)). There's no second copy of
@@ -254,7 +254,7 @@ The primer's whole narrative is: start here, then add pieces (more
 servers, a cache, a database copy, a queue) **only when a specific problem
 shows up** — too many users for one server, the database is now the
 bottleneck, one slow feature is blocking fast ones, etc. Every section
-below is "the next piece you'd add, and the problem it solves." TripSplit
+below is "the next piece you'd add, and the problem it solves." Splitiful
 hasn't needed most of them yet — and that not needing them is itself a
 correct design decision at its current size, not a gap. Adding a piece
 before you need it costs you complexity for nothing in return.
@@ -265,7 +265,7 @@ before you need it costs you complexity for nothing in return.
 
 ### High-level summary
 - **DNS (Domain Name System)** — the internet's phone book. You type a
-  name like `tripsplit.app`; DNS looks up the actual server address
+  name like `splitiful.app`; DNS looks up the actual server address
   (an "IP address," a number like `76.76.21.21`) that name points to.
   Without it, you'd have to memorize numbers instead of names.
 - **CDN (Content Delivery Network)** — a network of servers spread around
@@ -275,13 +275,13 @@ before you need it costs you complexity for nothing in return.
 
 ```mermaid
 flowchart LR
-    U["Browser in, say, Singapore"] -->|"1. 'where is tripsplit.app?'"| DNS["DNS"]
+    U["Browser in, say, Singapore"] -->|"1. 'where is splitiful.app?'"| DNS["DNS"]
     DNS -->|"2. 'that address'"| U
     U -->|"3. request static files"| CDN["Nearest CDN edge node<br/>(e.g. Singapore, not the US)"]
     CDN -->|"4. cached files, fast"| U
 ```
 
-### TripSplit example
+### Splitiful example
 Both are handled entirely by Vercel — there's no DNS or CDN configuration
 anywhere in this repo. Vercel's platform resolves the domain and serves
 static assets (the compiled JavaScript, images, fonts) from edge
@@ -289,7 +289,7 @@ locations automatically. This is a case where the *right* engineering
 decision was to use a platform that solves it, rather than build it.
 
 ### Deep dive
-Nothing in this repo to go deeper on — this is infrastructure TripSplit
+Nothing in this repo to go deeper on — this is infrastructure Splitiful
 consumes, not code it owns. Worth knowing it exists so that when you read
 "the app feels slow for users overseas," you know CDN/DNS is a possible
 culprit to rule out, separate from anything in `src/`.
@@ -326,7 +326,7 @@ sequenceDiagram
     end
 ```
 
-### TripSplit example — this one's real code, not a platform feature
+### Splitiful example — this one's real code, not a platform feature
 [`src/proxy.ts`](../src/proxy.ts) is a genuine reverse proxy running on
 every request (except static files — see the `matcher` at the bottom of
 the file). What it does, in order:
@@ -374,26 +374,26 @@ doc and §5 both point at the same file for different reasons.
 
 ```mermaid
 flowchart TB
-    subgraph Monolith["Monolith (TripSplit)"]
+    subgraph Monolith["Monolith (Splitiful)"]
         direction LR
         M["One Next.js app:<br/>pages, trip logic, expense logic, auth UI — all together"]
     end
 
-    subgraph Micro["Microservices (not TripSplit)"]
+    subgraph Micro["Microservices (not Splitiful)"]
         direction LR
         S1["Trips service"] <-->|network calls| S2["Expenses service"]
         S2 <-->|network calls| S3["Users service"]
     end
 ```
 
-### TripSplit example
-TripSplit is a monolith, and deliberately so — see
+### Splitiful example
+Splitiful is a monolith, and deliberately so — see
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#L15-L24). But there's a more
 interesting wrinkle than "monolith vs. microservices": **most of
-TripSplit's app layer is skipped entirely.**
+Splitiful's app layer is skipped entirely.**
 
 In a typical monolith, the browser talks to your server code, and *your
-server code* talks to the database. TripSplit mostly doesn't do that —
+server code* talks to the database. Splitiful mostly doesn't do that —
 client components (code running in the browser) call the Supabase client
 library **directly**, which talks straight to the database, skipping a
 custom backend layer for most operations:
@@ -404,7 +404,7 @@ flowchart LR
         direction LR
         B1[Browser] --> S1["Your server code<br/>(checks permissions)"] --> D1[(Database)]
     end
-    subgraph TripSplitPattern["TripSplit's pattern"]
+    subgraph SplitifulPattern["Splitiful's pattern"]
         direction LR
         B2[Browser] -->|"direct .insert() / .update() / RPC call"| D2[("Postgres, protected by<br/>Row-Level Security")]
     end
@@ -433,7 +433,7 @@ time. That's covered fully in [§11](#11-security) — it's the load-bearing
 idea that makes this whole pattern hold together, so treat this section
 and that one as two halves of the same story.
 
-### Comparing the three, side by side — in TripSplit's terms
+### Comparing the three, side by side — in Splitiful's terms
 
 "Modular monolith" is the middle option the primer doesn't spend much
 time on: same single deployment as a monolith, but the *code* is
@@ -443,21 +443,21 @@ between them.
 
 | | **Monolith** | **Modular monolith** | **Microservices** |
 |---|---|---|---|
-| **Deployment** | Single unit — the one Vercel deployment TripSplit has today | Single unit — still one Vercel deployment; modules ship together even though the code is separated | Multiple, independent units — e.g. a separate "trips service" and a separate "email service," each deployed on its own schedule |
+| **Deployment** | Single unit — the one Vercel deployment Splitiful has today | Single unit — still one Vercel deployment; modules ship together even though the code is separated | Multiple, independent units — e.g. a separate "trips service" and a separate "email service," each deployed on its own schedule |
 | **Codebase** | Single, large codebase — today's `src/` tree, where most things are reachable from most things | Single codebase, but split into enforced modules — e.g. a `trips/` module, an `expenses/` module, an `auth/` module, each only exposing a defined interface | Multiple smaller codebases, one per service, often each with its own repo |
 | **Coupling** | Tightly coupled — nothing stops a new page from bypassing [`src/lib/data/trips.ts`](../src/lib/data/trips.ts) and querying Supabase directly | Loosely coupled modules, but tightly deployed — the trips module and expenses module would only talk through defined functions, but a change to either still ships in the same deploy | Very loosely coupled — trips and expenses would be separate processes talking only over the network; either can change independently as long as the network contract holds |
 | **Scalability** | Scale the entire app — more Vercel/Supabase capacity for everything at once, even if only expense-adding is actually hot | Scale the entire app — modularity here is a code-organization idea, it doesn't change what gets deployed or scaled | Scale individual services — e.g. the email-sending piece could get its own capacity/queue, independent of the trip-viewing piece |
 | **Operational complexity** | Low — one thing to deploy, one thing to monitor | Low to medium — still one deploy, but you now maintain the discipline of the boundaries themselves (lint rules, documented interfaces) as an ongoing cost | High — multiple deployments, services finding each other, network failures to handle, debugging across services instead of one |
-| **Team dynamics** | One team, or teams with heavy coordination — realistically "one team" for TripSplit today | Teams can own a module, but releases stay coupled — starts to matter once more than one person is regularly touching the codebase | Small, autonomous teams can own and deploy a service independently — needs enough people that "one team per service" is realistic |
+| **Team dynamics** | One team, or teams with heavy coordination — realistically "one team" for Splitiful today | Teams can own a module, but releases stay coupled — starts to matter once more than one person is regularly touching the codebase | Small, autonomous teams can own and deploy a service independently — needs enough people that "one team per service" is realistic |
 | **Technology stack** | Single, unified stack — TypeScript/Next.js/Postgres everywhere | Same single unified stack — modularity is organizational, not technological | Polyglot possible — e.g. an email/notification worker could run on a different stack than the main app, since it deploys separately |
 
-**Where TripSplit actually sits:** the **Monolith** column, with a hint of
+**Where Splitiful actually sits:** the **Monolith** column, with a hint of
 the **Codebase** row from Modular Monolith already present *informally* —
 [`src/lib/data/trips.ts`](../src/lib/data/trips.ts) and
 [`src/lib/validation/expense.ts`](../src/lib/validation/expense.ts) are
 documented as the single entry points for their concerns. But look at the
 **Coupling** row: those boundaries aren't enforced by anything, so
-TripSplit doesn't get to claim the Modular Monolith column yet — it's a
+Splitiful doesn't get to claim the Modular Monolith column yet — it's a
 monolith with good habits, not a modular monolith.
 
 The two moves in this table are triggered by different things, which is
@@ -466,15 +466,15 @@ the main reason not to conflate them:
 - **Monolith → Modular monolith** is a **codebase/team** trigger, not a
   traffic one — it starts to earn its cost once more contributors are
   regularly touching the code and features start colliding, per the
-  recommendation already in this doc's discussion above. TripSplit isn't
+  recommendation already in this doc's discussion above. Splitiful isn't
   there yet.
 - **Modular monolith → Microservices** is a **scalability/team-dynamics**
   trigger specifically — one piece needing to scale or deploy
-  independently of the rest. The one concrete TripSplit candidate for
+  independently of the rest. The one concrete Splitiful candidate for
   this, if it ever came up, is exactly the one flagged in the
   [§12 scaling roadmap](#12-scaling-roadmap-current--future)'s §6 row at
   ~100K+ users: extracting email/notifications into their own service.
-  Nothing else in TripSplit has a real independent-scaling need today.
+  Nothing else in Splitiful has a real independent-scaling need today.
 
 ---
 
@@ -484,7 +484,7 @@ the main reason not to conflate them:
 - **Relational database (RDBMS)** — stores data in tables with rows and
   columns, like a very disciplined spreadsheet, where tables can reference
   each other (a `trip_members` row points at *which* `trip` it belongs
-  to). Postgres, the database TripSplit uses, is relational.
+  to). Postgres, the database Splitiful uses, is relational.
 - **Replication** — keeping one or more *copies* of the database in sync,
   usually so reads can be spread across copies (more capacity) and so a
   copy survives if the main one fails.
@@ -493,8 +493,8 @@ the main reason not to conflate them:
   database, N–Z on another), because a single database eventually can't
   hold or serve it all.
 
-### TripSplit example — the actual schema
-TripSplit's schema (defined in
+### Splitiful example — the actual schema
+Splitiful's schema (defined in
 [`supabase/migrations/`](../supabase/migrations), one file per change,
 applied in order) has four tables:
 
@@ -528,7 +528,7 @@ erDiagram
 ```
 
 A few things worth noticing as a beginner, because they're common
-real-world relational-database decisions, not TripSplit quirks:
+real-world relational-database decisions, not Splitiful quirks:
 
 - Splitting an expense between trip members isn't stored anywhere — every
   screen that needs "how much does each person owe" **computes it on the
@@ -536,7 +536,7 @@ real-world relational-database decisions, not TripSplit quirks:
   [`src/lib/settlement.ts`](../src/lib/settlement.ts). The tradeoff: less
   data to keep in sync (if you edit an expense's amount, there's no
   separate "splits" table to update to match), at the cost of recomputing
-  it every time it's needed. For TripSplit's scale, that recompute is
+  it every time it's needed. For Splitiful's scale, that recompute is
   essentially free, so it's a good trade.
 - Money is stored as `numeric(10,2)` (dollars with cents) in the database,
   but converted to whole-number cents at the boundary in
@@ -544,9 +544,9 @@ real-world relational-database decisions, not TripSplit quirks:
   (integers) avoids the rounding errors you can get from doing arithmetic
   directly on fractional dollar amounts.
 
-**Replication and sharding don't exist in TripSplit today** — one
+**Replication and sharding don't exist in Splitiful today** — one
 Postgres instance, no copies, no splitting. That's correct for its scale.
-If TripSplit grew a lot, here's what each would look like:
+If Splitiful grew a lot, here's what each would look like:
 
 ```mermaid
 flowchart TB
@@ -579,7 +579,7 @@ flowchart TB
   `trip_id`, any query that needs to look *across* trips (e.g., a global
   admin report) becomes much harder, because the data isn't all in one
   place anymore. You only take this step once one database provably can't
-  keep up — which is nowhere close to true for TripSplit today.
+  keep up — which is nowhere close to true for Splitiful today.
 
 ---
 
@@ -603,8 +603,8 @@ flowchart LR
     App -->|"2. save result in cache for next time"| Cache
 ```
 
-### TripSplit example
-There's **no server-side cache** anywhere in TripSplit — no Redis, no
+### Splitiful example
+There's **no server-side cache** anywhere in Splitiful — no Redis, no
 in-memory cache, nothing between the app and the database. The one
 cache-*adjacent* thing is client-side, and it's narrow on purpose:
 [`src/lib/remembered-email.ts`](../src/lib/remembered-email.ts) uses the
@@ -618,7 +618,7 @@ devices, and every read/write is wrapped so the feature just quietly
 degrades (not breaks) if storage is blocked (e.g. private browsing mode).
 
 ### Deep dive
-Why doesn't TripSplit have a real cache? Because it doesn't have a
+Why doesn't Splitiful have a real cache? Because it doesn't have a
 performance problem a cache would fix — its data changes about as often
 as it's read (someone adds an expense, then everyone on the trip wants
 the *current* balance, not a slightly-stale one), and the dataset per
@@ -647,7 +647,7 @@ sequenceDiagram
     participant R as Gmail SMTP (email service)
 
     rect rgb(255, 245, 235)
-    note over U,R: TripSplit today — synchronous
+    note over U,R: Splitiful today — synchronous
     U->>A: create trip
     A->>R: send confirmation email
     R-->>A: (waits for Gmail SMTP to respond)
@@ -673,7 +673,7 @@ sequenceDiagram
     end
 ```
 
-### TripSplit example
+### Splitiful example
 [`src/app/api/trip-email/route.ts`](../src/app/api/trip-email/route.ts)
 is exactly the synchronous version: it calls `sendTripEmail(...)`
 directly and waits for Gmail SMTP's response before replying to the browser
@@ -683,11 +683,11 @@ Gmail SMTP fails, it returns an error (`502`) to the user's browser
 trip itself was already created successfully.
 
 ### Deep dive
-There's no queue anywhere in TripSplit — no background workers, nothing
+There's no queue anywhere in Splitiful — no background workers, nothing
 "eventually consistent." That's a reasonable choice right now: email
 volume is low, Gmail SMTP is normally fast, and the failure mode (user sees
 "email failed" even though their trip was created fine) is mild. If
-TripSplit sent much higher volumes of email, or added something
+Splitiful sent much higher volumes of email, or added something
 genuinely slow (e.g., generating a PDF trip summary), a queue is the
 primer's standard fix: it decouples "the thing the user is waiting for"
 from "the thing that's slow," and adds resilience — if the email service
@@ -711,10 +711,10 @@ requests and responses. Three common styles:
   actually runs on a server somewhere else.
 - **GraphQL** — the client describes exactly which fields it wants back,
   in one request, instead of the server deciding the shape of every
-  response ahead of time. Not used anywhere in TripSplit.
+  response ahead of time. Not used anywhere in Splitiful.
 
-### TripSplit example
-TripSplit actually mixes the first two, chosen per situation:
+### Splitiful example
+Splitiful actually mixes the first two, chosen per situation:
 
 ```mermaid
 flowchart TB
@@ -765,8 +765,8 @@ Two of the primer's core security ideas, both very visible in this repo:
   multiple independent checks, so that if one is bypassed or has a bug,
   others still hold.
 
-### TripSplit example — Row-Level Security (RLS)
-This is TripSplit's central security mechanism, and it's a great concrete
+### Splitiful example — Row-Level Security (RLS)
+This is Splitiful's central security mechanism, and it's a great concrete
 example of "the database enforces its own rules" rather than trusting
 application code to remember to check permissions every time.
 
@@ -788,7 +788,7 @@ flowchart TB
     end
 ```
 
-TripSplit's actual policies on the `expenses` table (from
+Splitiful's actual policies on the `expenses` table (from
 [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#L67-L83), defined in the
 migrations):
 
@@ -814,7 +814,7 @@ Two more concrete mechanisms worth knowing:
 
 ### Deep dive — why this matters more than it might seem
 Go back to [§5](#5-load-balancer-and-reverse-proxy) and
-[§6](#6-application-layer-monolith-modular-monolith-and-microservices): TripSplit's browser
+[§6](#6-application-layer-monolith-modular-monolith-and-microservices): Splitiful's browser
 code talks **directly** to the database for most operations, with no
 custom backend in between checking "is this allowed?" That pattern is
 only safe *because* RLS exists — the database refuses disallowed
@@ -831,10 +831,10 @@ would still be protected by RLS underneath it.
 
 Section 1's diagram showed all 9 areas at once for *today*. This section
 does the opposite cut: same 9 areas across the top, but now tracked
-**down through time** as TripSplit hypothetically grows, so you can see
+**down through time** as Splitiful hypothetically grows, so you can see
 which stage would actually force which upgrade.
 
-**A caveat before the table:** TripSplit has no real traffic today, so
+**A caveat before the table:** Splitiful has no real traffic today, so
 the user counts below are illustrative milestones for reasoning about
 *order of magnitude*, not predictions or targets. The honest headline
 finding — and this is itself a system-design lesson — is that **most
@@ -885,7 +885,7 @@ worth watching — 🔧 recommended upgrade at this stage.
   doesn't change; the rigor applied to it does.
 - **§6 Application layer and §10 Communication are the two "maybe never"
   columns.** The monolith and the direct-client/RLS pattern can plausibly
-  hold all the way to large scale for an app shaped like TripSplit — the
+  hold all the way to large scale for an app shaped like Splitiful — the
   triggers to extract a service or add a formal API layer are more about
   *product* changes (a mobile app, third-party integrations) than raw
   user count.

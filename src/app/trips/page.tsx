@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LockIcon, PlusIcon } from "@/components/icons";
-import { AvatarStack, Card, IconLinkButton, LinkButton, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { AvatarStack, Card, IconLinkButton, Kicker, LinkButton, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
 import { getMyTrips, type MyTrip } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
@@ -81,6 +81,9 @@ export default async function TripsDashboardPage() {
     error = "Couldn't load your trips.";
   }
 
+  const ongoingTrips = trips?.filter((trip) => !trip.isCompleted) ?? [];
+  const completedTrips = trips?.filter((trip) => trip.isCompleted) ?? [];
+
   return (
     <Screen glow>
       <ScreenContent className="pt-0.5">
@@ -103,11 +106,31 @@ export default async function TripsDashboardPage() {
             </LinkButton>
           </div>
         ) : (
-          <Card className="divide-y divide-ink/[0.07] p-0">
-            {trips.map((trip) => (
-              <TripRow key={trip.id} trip={trip} />
-            ))}
-          </Card>
+          <>
+            {ongoingTrips.length > 0 ? (
+              <>
+                <Kicker className="px-1">Ongoing</Kicker>
+                <div className="h-2" />
+                <Card className="divide-y divide-ink/[0.07] p-0">
+                  {ongoingTrips.map((trip) => (
+                    <TripRow key={trip.id} trip={trip} />
+                  ))}
+                </Card>
+              </>
+            ) : null}
+            {completedTrips.length > 0 ? (
+              <>
+                {ongoingTrips.length > 0 ? <div className="h-5" /> : null}
+                <Kicker className="px-1">Completed</Kicker>
+                <div className="h-2" />
+                <Card className="divide-y divide-ink/[0.07] p-0">
+                  {completedTrips.map((trip) => (
+                    <TripRow key={trip.id} trip={trip} />
+                  ))}
+                </Card>
+              </>
+            ) : null}
+          </>
         )}
       </ScreenContent>
     </Screen>

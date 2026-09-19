@@ -36,9 +36,11 @@ export default async function HomePage({
     // through to the welcome screen below — same as no session at all (design.md section 7).
   }
 
+  const showSignIn = signin === "1";
+
   return (
-    <Screen glow>
-      <HomeScreen showSignIn={signin === "1"} />
+    <Screen glow texture={!showSignIn}>
+      <HomeScreen showSignIn={showSignIn} />
     </Screen>
   );
 }

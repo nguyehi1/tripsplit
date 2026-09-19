@@ -5,7 +5,7 @@ Date: 2026-09-12
 
 ## Context
 
-As TripSplit grows past a single-contributor, single-sitting codebase, past
+As Splitiful grows past a single-contributor, single-sitting codebase, past
 design decisions (why Supabase RLS over app-layer auth checks, why a given
 API contract shape, why a migration was structured a certain way) need to
 survive being forgotten or silently re-litigated. A single `ARCHITECTURE.md`

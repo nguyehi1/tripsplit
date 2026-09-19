@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ChevronLeftIcon, LockIcon, MessageSquareIcon, PlusIcon } from "@/components/icons";
 import {
   AvatarStack,
@@ -10,6 +11,7 @@ import {
   LinkButton,
   Screen,
   ScreenContent,
+  TopBar,
 } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
 import { getTripSummary, getTripView, type TripSummary, type TripView } from "@/lib/data/trips";
@@ -38,7 +40,7 @@ import { InlineVerifyWidget, TripVerificationProvider, VerifiedActionIcons, Veri
 function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) {
   const { members, settlements, totalCents, avgPerPersonCents, inviteCode } = summary;
   return (
-    <Screen>
+    <Screen glow texture>
       <ScreenContent className="pt-0.5">
         <div className="flex items-center gap-2 py-3">
           <span className="text-[12.5px] font-semibold text-ink/[0.72]">Trip summary</span>
@@ -49,7 +51,7 @@ function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) 
               members={members.map((m) => ({
                 id: m.id,
                 initials: m.displayName.slice(0, 2).toUpperCase(),
-                avatar: { bg: "oklch(0.87 0.08 88)", fg: "#231c12" },
+                avatar: { bg: "var(--color-avatar-placeholder)", fg: "var(--color-ink)" },
               }))}
             />
             <span className="ml-2.5 text-[12.5px] text-ink/[0.72]">
@@ -89,7 +91,7 @@ function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) 
           ) : null}
         </Card>
         <div className="h-4" />
-        <div className="rounded-[20px] p-4" style={{ background: "oklch(0.95 0.04 88)" }}>
+        <div className="rounded-chip p-4" style={{ background: "var(--color-accent-soft)" }}>
           <div className="text-[15px] font-semibold">Want the full expense list?</div>
           <div className="mt-1.5 text-[13px] leading-[1.45] text-ink/[0.72]">
             See exactly what was spent and add your own — just confirm your email.
@@ -109,15 +111,20 @@ function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) 
   );
 }
 
-export default async function TripDashboardPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
-}) {
-  const { id } = await params;
-  const { tab } = await searchParams;
+/**
+ * The trip dashboard's actual render logic (ADR 0008 point 4) — extracted from the default
+ * export below so `add-expense/page.tsx` (the hard-nav/deep-link fallback for the add-expense
+ * sheet, AC8) can reuse the exact same tiered-fetch/hide-and-reveal behavior with its `sheet`
+ * slot populated, instead of duplicating this Server Component's logic. `sheet` is rendered
+ * alongside every branch's output (not just the full-detail one) so a direct hit on
+ * `/trip/[id]/add-expense` still shows a working, non-blank trip view under the sheet even for a
+ * summary-only or not-found caller (AC8) — `AddExpenseSheetContent` does its own independent
+ * client-side gating regardless of which tier the caller could see.
+ */
+export async function renderTripDashboard(
+  id: string,
+  { tab, sheet = null }: { tab?: string; sheet?: ReactNode } = {},
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -135,11 +142,14 @@ export default async function TripDashboardPage({
 
   if (!summary) {
     return (
-      <Screen>
-        <ScreenContent className="pt-14">
-          <p className="text-[15px] text-ink/70">Couldn&apos;t load this trip — you may not be on it.</p>
-        </ScreenContent>
-      </Screen>
+      <>
+        <Screen glow texture>
+          <ScreenContent className="pt-14">
+            <p className="text-[15px] text-ink/70">Couldn&apos;t load this trip — you may not be on it.</p>
+          </ScreenContent>
+        </Screen>
+        {sheet}
+      </>
     );
   }
 
@@ -157,7 +167,12 @@ export default async function TripDashboardPage({
   }
 
   if (!view) {
-    return <TripSummaryOnly id={id} summary={summary} />;
+    return (
+      <>
+        <TripSummaryOnly id={id} summary={summary} />
+        {sheet}
+      </>
+    );
   }
 
   const { trip, members, expenses, totalCents, avgPerPersonCents, you } = view;
@@ -171,31 +186,35 @@ export default async function TripDashboardPage({
 
   return (
     <TripVerificationProvider initialIsVerified={isVerified}>
-      <Screen>
+      <Screen glow texture>
         <ScreenContent className="pt-0.5">
-          <div className="flex items-center justify-between py-3">
-            <div className="flex items-center gap-2">
+          <TopBar
+            sticky
+            titleClassName="text-[12.5px] font-semibold text-ink/[0.72]"
+            title="Your trip"
+            leading={
               <IconLinkButton title="All trips" className="text-ink/[0.73]" href="/trips">
                 <ChevronLeftIcon size={18} strokeWidth={2.3} />
               </IconLinkButton>
-              <span className="text-[12.5px] font-semibold text-ink/[0.72]">Your trip</span>
-            </div>
-            <div className="flex gap-2">
-              <IconLinkButton title="New trip" className="text-ink/[0.73]" href="/trip/new">
-                <PlusIcon size={19} strokeWidth={2.4} />
-              </IconLinkButton>
-              <VerifiedActionIcons tripId={id} />
-              <IconLinkButton title="Send feedback" className="text-ink/[0.73]" href={`/trip/${id}/feedback`}>
-                <MessageSquareIcon size={19} strokeWidth={2.2} />
-              </IconLinkButton>
-            </div>
-          </div>
+            }
+            trailing={
+              <>
+                <IconLinkButton title="New trip" className="text-ink/[0.73]" href="/trip/new">
+                  <PlusIcon size={19} strokeWidth={2.4} />
+                </IconLinkButton>
+                <VerifiedActionIcons tripId={id} />
+                <IconLinkButton title="Send feedback" className="text-ink/[0.73]" href={`/trip/${id}/feedback`}>
+                  <MessageSquareIcon size={19} strokeWidth={2.2} />
+                </IconLinkButton>
+              </>
+            }
+          />
 
           <Card className="p-[18px]">
             <div className="flex items-center gap-2">
               <span
                 className="rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
-                style={{ background: "oklch(0.95 0.04 88)", color: "oklch(0.38 0.08 80)" }}
+                style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}
               >
                 Trip
               </span>
@@ -273,12 +292,12 @@ export default async function TripDashboardPage({
         <BottomBar>
           <VerifiedBottomBarContent>
             {trip.isCompleted ? (
-              <Button variant="muted" className="h-[54px] text-[15.5px]">
+              <Button variant="capsuleMuted" className="h-[54px] text-[15.5px]">
                 <LockIcon size={17} strokeWidth={2.4} />
                 Trip is locked — no more expenses
               </Button>
             ) : (
-              <LinkButton href={`/trip/${id}/add-expense`} variant="primary" className="h-[54px] text-[15.5px]">
+              <LinkButton href={`/trip/${id}/add-expense`} variant="capsule" className="h-[54px] text-[15.5px]">
                 <PlusIcon size={19} strokeWidth={2.6} />
                 Add an expense
               </LinkButton>
@@ -286,6 +305,19 @@ export default async function TripDashboardPage({
           </VerifiedBottomBarContent>
         </BottomBar>
       </Screen>
+      {sheet}
     </TripVerificationProvider>
   );
+}
+
+export default async function TripDashboardPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { id } = await params;
+  const { tab } = await searchParams;
+  return renderTripDashboard(id, { tab });
 }

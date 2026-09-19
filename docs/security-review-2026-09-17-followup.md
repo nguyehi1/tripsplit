@@ -166,7 +166,7 @@ rate limiter structurally cannot cover a publicly-callable Postgres RPC.
   side-channel beyond what already existed.
 - One line for the compliance side, not mine to size: this fix introduces a
   new place unauthenticated callers' IP addresses are persisted (Upstash
-  Redis, as rate-limit keys prefixed `tripsplit:ratelimit:*`, per
+  Redis, as rate-limit keys prefixed `splitiful:ratelimit:*`, per
   `src/lib/rate-limit.ts:47`) — a new third-party data processor and a new
   category of stored PII (IP address) that didn't exist before this diff,
   worth a retention/DPA check.

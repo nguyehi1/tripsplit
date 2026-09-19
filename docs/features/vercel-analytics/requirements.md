@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-TripSplit has Vercel Analytics installed and the component is included in the root layout, but analytics capabilities are only partially enabled. We currently collect Web Vitals (performance metrics) but lack visibility into key product flows (trip creation, expense management, member invites, settlement). This leaves product and business questions unanswered: Which user flows are most common? Where do users drop off? How does the app perform across different regions and devices?
+Splitiful has Vercel Analytics installed and the component is included in the root layout, but analytics capabilities are only partially enabled. We currently collect Web Vitals (performance metrics) but lack visibility into key product flows (trip creation, expense management, member invites, settlement). This leaves product and business questions unanswered: Which user flows are most common? Where do users drop off? How does the app perform across different regions and devices?
 
 ## Acceptance Criteria
 

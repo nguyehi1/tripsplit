@@ -1,4 +1,4 @@
--- TripSplit v1 schema: trips, membership, expenses, feedback.
+-- Splitiful v1 schema: trips, membership, expenses, feedback.
 -- See ~/.claude/plans/gentle-tumbling-floyd.md for the locked product/auth decisions this
 -- schema implements. `location`/`starts_on`/`ends_on`/`completed_at` on `trips` and the whole
 -- `feedback` table are additions beyond that plan, added to match the mobile screens already

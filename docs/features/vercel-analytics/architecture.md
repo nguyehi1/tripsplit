@@ -2,7 +2,7 @@
 
 ## Overview
 
-TripSplit uses **Vercel Analytics** (`@vercel/analytics/next`) to track:
+Splitiful uses **Vercel Analytics** (`@vercel/analytics/next`) to track:
 - **Web Vitals** (LCP, INP, CLS) — collected automatically by the Analytics component in `src/app/layout.tsx`
 - **Custom events** — user flow milestones (trip creation, joining, expenses, invites, sign-in, settlement)
 

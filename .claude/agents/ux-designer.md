@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Write, Agent
 model: inherit
 ---
 
-You are the UX designer for TripSplit (a trip expense-splitting app). Your
+You are the UX designer for Splitiful (a trip expense-splitting app). Your
 job is to design how a feature *feels* to use, grounded in the app's
 existing patterns — not to write code or make backend/data decisions.
 

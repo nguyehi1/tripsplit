@@ -6,7 +6,7 @@ Pure client-side, additive change to `src/app/page.tsx` (`SignInContent`).
 No new tables, no new API routes, no RLS changes, no server involvement.
 Searched the codebase (`localStorage` grep, `src/lib/**`) and there is no
 existing "remember on this device" or client-storage helper anywhere in
-TripSplit today — this is genuinely new ground, not a parallel
+Splitiful today — this is genuinely new ground, not a parallel
 implementation of something that already exists.
 
 ## Design
@@ -21,7 +21,7 @@ explicitly scoped to Supabase trip/expense data access) because this has no
 relationship to that module's concerns.
 
 ```ts
-const KEY = "tripsplit:last-signin-email";
+const KEY = "splitiful:last-signin-email";
 
 export function getRememberedEmail(): string {
   try {
@@ -55,7 +55,7 @@ storage is disabled by policy, so a bare `.getItem`/`.setItem` call would
 surface an error to the user in exactly the environment AC7 says must
 degrade silently.
 
-Namespaced key (`tripsplit:last-signin-email`) to avoid any collision with
+Namespaced key (`splitiful:last-signin-email`) to avoid any collision with
 other localStorage consumers that might be added later (analytics, feature
 flags, etc.) sharing the same origin.
 

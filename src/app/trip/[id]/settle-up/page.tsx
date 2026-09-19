@@ -17,7 +17,6 @@ export default function SettleUpPage() {
   const [view, setView] = useState<TripView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
-  const [paid, setPaid] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     trackEvent("settlement_view");
@@ -227,27 +226,6 @@ export default function SettleUpPage() {
                   <div className="text-display text-[22px]" style={{ color: "oklch(0.4 0.08 80)" }}>
                     {formatCents(s.amountCents)}
                   </div>
-                </div>
-                <div className="h-3" />
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink/60">
-                    {paid.has(i) ? "Paid" : "Not paid yet"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPaid((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(i)) next.delete(i);
-                        else next.add(i);
-                        return next;
-                      })
-                    }
-                    className="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-full border-2 border-ink px-3.5 text-[12px] font-bold uppercase tracking-[0.08em]"
-                  >
-                    {paid.has(i) ? <CheckIcon size={13} strokeWidth={3} /> : null}
-                    {paid.has(i) ? "Paid" : "Mark paid"}
-                  </button>
                 </div>
               </div>
             ))}

@@ -77,7 +77,7 @@ export function VerifiedActionIcons({ tripId }: { tripId: string }) {
       </IconLinkButton>
       <IconLinkButton
         title="Settle up"
-        style={{ background: "oklch(0.95 0.04 88)", color: "oklch(0.36 0.08 80)" }}
+        style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}
         href={`/trip/${tripId}/settle-up`}
       >
         <ArrowsLeftRightIcon size={19} strokeWidth={2.2} />
@@ -103,7 +103,7 @@ function formatCountdown(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-const CTA_BACKGROUND = "oklch(0.95 0.04 88)";
+const CTA_BACKGROUND = "var(--color-accent-soft)";
 
 /**
  * The persistent inline verification CTA (design.md sections 4.1/4.2). Renders in place of the

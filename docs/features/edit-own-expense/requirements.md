@@ -2,7 +2,7 @@
 
 ## Problem statement
 
-Every balance in TripSplit — the trip dashboard, settle-up plan, and the
+Every balance in Splitiful — the trip dashboard, settle-up plan, and the
 "My Trips" summary — is computed live from the `expenses` table. Today a
 member can log an expense (amount + description) but has no way to fix it
 afterward: a typo'd amount or wrong description stays wrong for the whole

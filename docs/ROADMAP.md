@@ -75,6 +75,43 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
 
 ## Planned
 
+### UX Revamp (ux-revamp)
+- Status: in progress — implemented, QA/security/compliance passed, pending final PR review
+- Requirements: [docs/features/ux-revamp/requirements.md](features/ux-revamp/requirements.md)
+- Restyles the existing browser app's highest-traffic path — welcome,
+  create-a-trip, the trip main view, and add-expense — to the "warm paper"
+  visual treatment (lit paper ground, ochre/terracotta glow, blurred nav,
+  floating capsule primary action, spring-up sheet for add-expense, Miso
+  the mascot) imported from a design exploration
+  (`docs/features/ux-revamp/design-import/`). Presentation-layer restyle of
+  the existing Next.js/Supabase app on the ADR 0005 SSR pattern — not a
+  mobile-specific build, native wrapper, or PWA. Ships as the app's light
+  theme, built on themeable tokens from the start so the design's "dark
+  glass" counterpart is a future token swap rather than a rebuild.
+  Add-expense's page-to-overlay-sheet conversion is flagged as real
+  routing/history/deep-link architecture work for the architect stage, not
+  a cosmetic change. Defers Details, Settle-up, and ~11 other canvas
+  screens (sign-back-in, pre-confirmation state, edit-expense, invite-link
+  opening, roster, feedback, all-trips states, loading/error patterns) to
+  later slices. Carries forward four open questions for user confirmation
+  (with working defaults chosen so the doc is buildable as written): whether
+  the invite-code RPC-grant fix above needs to sequence before this work
+  (default: no, independent), this feature's priority relative to the rest
+  of the open roadmap (default: proceeds now, in parallel), whether
+  placeholder/lower-resolution Miso art is acceptable for the first slice
+  given the unresolved mascot-art asset pipeline gap (default: yes, swap in
+  final art as a fast-follow), and the target browser support matrix
+  (default: unchanged from today).
+- **Follow-up needed before any real launch/marketing push for Miso**
+  (user decision, 2026-09-18, not a blocker for this slice): compliance
+  flagged that Miso's art is AI-generated and now a permanent brand
+  element, raising (a) whether any target jurisdiction's AI-generated-
+  content disclosure rules apply, and (b) copyright/trademark
+  protectability of AI-generated art plus the generating tool's ToS for
+  commercial/brand use. User chose to proceed now and revisit this before
+  investing further in Miso as a brand identity — see
+  [docs/features/ux-revamp/compliance-report.md](features/ux-revamp/compliance-report.md) §2.
+
 ### Vercel Analytics – Full Enable and Custom Event Tracking (vercel-analytics)
 - Status: planned
 - Requirements: [docs/features/vercel-analytics/requirements.md](features/vercel-analytics/requirements.md)

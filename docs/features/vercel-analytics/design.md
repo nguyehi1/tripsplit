@@ -2,7 +2,7 @@
 
 ## Overview
 
-TripSplit uses Vercel Analytics to track user behavior and app performance. This document describes how custom events are integrated into the product flow and how they maintain privacy and consistency throughout the user experience.
+Splitiful uses Vercel Analytics to track user behavior and app performance. This document describes how custom events are integrated into the product flow and how they maintain privacy and consistency throughout the user experience.
 
 ## Guiding Principles
 

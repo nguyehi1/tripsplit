@@ -12,6 +12,33 @@ a release moves that section under a dated version heading.
 
 ### Added
 
+- **"Warm paper" visual restyle of the welcome, create-a-trip, trip view, and
+  add-expense screens**, plus a new mascot, Miso. Lit paper background with
+  an ochre/terracotta ambient glow, a blurred sticky nav bar with content
+  scrolling under it, primary actions rendered as a floating capsule instead
+  of a full-width bar, and a faint paw-print texture — all driven by named
+  CSS custom properties in `src/app/globals.css` (color, shadow, radius) so
+  a future dark theme is a token-value swap rather than a component rewrite
+  (see [ADR 0007](docs/adr/0007-css-custom-property-tokens-for-themeable-restyle.md)).
+  Miso appears on the welcome screen using placeholder (cropped, AI-generated
+  stopgap) art; final-resolution art is a tracked fast-follow, and the
+  disclosure/IP status of AI-generated mascot art has a documented, tracked
+  open follow-up before any real launch/marketing push (see
+  `docs/ROADMAP.md`). No behavior, data, or copy change to welcome/
+  create-a-trip/trip-view beyond appearance; form fields, validation, submit
+  behavior, and existing hide-until-verified organizer gating are unchanged.
+- **Add-expense converted from a standalone page to an overlay sheet** that
+  springs up over a dimmed, blurred trip view, matching the new visual
+  language's interaction pattern. `/trip/[id]/add-expense` remains a fully
+  working, independently loadable/shareable URL — a direct hit, bookmark, or
+  page refresh still opens the trip with the sheet already showing, not a
+  blank or broken state — and the browser back button closes the sheet back
+  to the plain trip view when it was opened via in-app navigation. Built on
+  Next.js intercepting + parallel routes (see
+  [ADR 0008](docs/adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md));
+  no change to add-expense's fields, validation, submit behavior, or owner
+  gating — only the container changed. No Supabase schema, RLS, or API
+  contract changes.
 - **Vercel Analytics integration**: The app now tracks Web Vitals (performance metrics: LCP, INP, CLS)
   and 14 custom events across key user flows — trip creation/joining, expense logging/editing, member
   invites, sign-in, and settlement. Events are privacy-first (no PII, email, or IDs), automatic via

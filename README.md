@@ -1,4 +1,4 @@
-# TripSplit
+# Splitiful
 
 Split trip/event expenses with a friend group. Create a trip in seconds — no account or email
 required — add expenses as you go, and see who owes who. Anyone with an invite link can see a
@@ -34,6 +34,18 @@ from a new device (or after clearing storage) uses the same email + code flow an
 trips list page, since one email can be tied to multiple trips. Sign-in remembers the last email
 used on a device (local-only, with an easy "clear" option) so returning users don't have to
 retype it.
+
+**Visual design**: the welcome, create-a-trip, trip view, and add-expense screens use a "warm
+paper" theme — lit paper background with an ochre/terracotta ambient glow, a blurred sticky nav,
+floating capsule primary actions, a faint paw-print texture, and a mascot named Miso (currently
+placeholder art on the welcome screen; final-resolution art is a tracked fast-follow, see
+[docs/ROADMAP.md](./docs/ROADMAP.md)). Colors, shadows, and radii are all named CSS custom
+properties in `src/app/globals.css` so a future dark theme is a token swap, not a rebuild — see
+[ADR 0007](./docs/adr/0007-css-custom-property-tokens-for-themeable-restyle.md). Add-expense opens
+as a spring-up overlay sheet over the (dimmed) trip view rather than a separate page, but its URL
+(`/trip/[id]/add-expense`) still works as a direct link or on refresh, and the browser back button
+closes it — see [ADR 0008](./docs/adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md).
+Full spec: [docs/features/ux-revamp/design.md](./docs/features/ux-revamp/design.md).
 
 Pre-production hardening still pending.
 
@@ -110,7 +122,7 @@ onboarding flow to work:
 
 ## Analytics
 
-TripSplit uses **Vercel Analytics** to measure performance and understand user behavior. The app automatically tracks:
+Splitiful uses **Vercel Analytics** to measure performance and understand user behavior. The app automatically tracks:
 
 - **Web Vitals** — page performance metrics (Largest Contentful Paint, Interaction to Next Paint, Cumulative Layout Shift)
 - **Custom events** — 14 key user actions (trip creation, expense logging, member invites, sign-in, settlement)

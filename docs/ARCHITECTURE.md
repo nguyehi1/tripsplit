@@ -8,7 +8,7 @@ reconstruct it from this file's edit history.
 
 ## System overview
 
-TripSplit is a Next.js 16 (App Router) app with Supabase for auth, database,
+Splitiful is a Next.js 16 (App Router) app with Supabase for auth, database,
 and row-level security, and Gmail SMTP (via `nodemailer`) for transactional
 email. Deployed on Vercel.
 
@@ -49,6 +49,51 @@ UI) since that's a check `proxy.ts` structurally cannot make. **As of the
 simplified-onboarding feature this is no longer true for `/trip/*`** — see
 the "Auth model" note directly below; `/trips` alone still matches the
 description above unchanged.
+
+**Modal-that's-also-a-route pattern (parallel + intercepting routes)**: as of
+the ux-revamp feature, `src/app/trip/[id]/` has the app's first
+`layout.tsx` and first parallel route (`@sheet`), used to render add-expense
+as an overlay sheet over the trip view while keeping
+`/trip/[id]/add-expense` independently loadable/shareable and closable via
+the browser back button. `@sheet/(.)add-expense/page.tsx` intercepts
+in-app, client-side navigation to that URL (so the trip view underneath is
+never re-fetched or remounted — it's the real reason this mechanism, not a
+query-param/client-state overlay, was chosen); `add-expense/page.tsx` itself
+remains the literal route, now rendering the full trip dashboard with the
+sheet already open, as the hard-navigation/deep-link/refresh fallback (Next
+only intercepts soft, client-side navigation). `@sheet/default.tsx`,
+`@sheet/page.tsx`, and `@sheet/[...catchAll]/page.tsx` all return `null` so
+the sheet never gets left "stuck" open when navigating elsewhere under
+`/trip/[id]/*`. `layout.tsx` also routes `children` through a new
+`"use client"` leaf, `trip-sheet-chrome.tsx`, which derives whether the
+sheet is open from `usePathname()` (true for both the intercepted and the
+hard-nav-fallback case, since intercepting a route still updates the real
+pathname) and applies/transitions the trip view's dim/blur/scale
+accordingly — this is what keeps the background's "receding" motion
+synced with the sheet's own spring-up, and, since a value already in place
+at first paint never CSS-transitions, is also what makes a cold load
+(direct hit or refresh) render already dimmed with no replayed entrance
+animation, with no separate flag needed for that half of the motion. See
+[ADR 0008](adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md)
+and `docs/features/ux-revamp/architecture.md` for the full design, the
+rejected simpler alternative, and why this is reserved for the
+page-vs-overlay case rather than adopted as a new default over ADR 0005's
+plain Server Component + `<Link>` pattern.
+
+**Design tokens / theming**: as of the ux-revamp feature, all color,
+shadow, and radius values used by a restyled screen are expected to be named
+CSS custom properties declared in `src/app/globals.css`'s `:root` block
+(mirrored into the adjacent `@theme inline` block for Tailwind utility-class
+access), not hardcoded per-component literals — so that a future dark theme
+is a token-value swap (a new `[data-theme="dark"]` block in that one file)
+rather than a component-by-component rebuild. Exactly one theme ("warm
+paper") is resolved today; no toggle, `[data-theme]` attribute, or
+`prefers-color-scheme` handling exists yet — see
+[ADR 0007](adr/0007-css-custom-property-tokens-for-themeable-restyle.md) for
+the full decision and the discipline this places on future component code
+(reference `var(--token)` / a token-backed utility class, never a raw
+hex/oklch/rgba literal, for anything that should participate in a future
+theme swap).
 
 **Auth model — anonymous sessions + a three-tier verification boundary**: as
 of the simplified-onboarding feature, not every session is a permanent,
@@ -276,7 +321,12 @@ this before adding a parallel implementation.
   feature they're called from a Server Component (`src/app/trip/[id]/page.tsx`,
   `src/app/trips/page.tsx`) as well as several remaining client components
   (`settle-up`, `invite`, `join/[code]/welcome`), with no signature change
-  needed for either caller type.
+  needed for either caller type. As of the ux-revamp feature,
+  `src/app/trip/[id]/page.tsx`'s body is factored into a shared, exported
+  render function so `src/app/trip/[id]/add-expense/page.tsx` (the
+  hard-navigation fallback for the add-expense sheet) can reuse the same
+  tiered fetch/render without a second implementation — see
+  [ADR 0008](adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md).
 - Amount/description validation for an expense (positive amount, non-empty
   description) lives in `src/lib/validation/expense.ts`
   (`isValidExpenseInput`), shared by `src/app/trip/[id]/add-expense/page.tsx`
@@ -333,7 +383,7 @@ this before adding a parallel implementation.
   [ADR 0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md).
 - `src/lib/remembered-email.ts` — the one client-`localStorage` helper in
   the app (`getRememberedEmail`/`setRememberedEmail`/`clearRememberedEmail`,
-  namespaced key `tripsplit:last-signin-email`), used to prefill the
+  namespaced key `splitiful:last-signin-email`), used to prefill the
   last-used email on the same device. As of simplified-onboarding, this is
   read from three places instead of one: `src/app/home-screen.tsx`'s
   no-browser-memory sign-in form (`/?signin=1`, the direct descendant of
@@ -353,7 +403,26 @@ this before adding a parallel implementation.
   cross the Server → Client boundary) rather than a client-side operation (a
   function, which can't). Use `Button`/`IconButton` when the action needs to
   run code before/instead of navigating (from inside a Client Component);
-  use `LinkButton`/`IconLinkButton` when it's just a styled link.
+  use `LinkButton`/`IconLinkButton` when it's just a styled link — as of the
+  ux-revamp feature, this is also the primitive the relocated add-expense
+  sheet's close (X) affordance standardizes on (see ADR 0008), replacing
+  that screen's previous mix of `router.back()`/`router.push()` handlers.
+  As of the ux-revamp feature, these primitives (and `Screen`'s existing
+  ambient `glow` prop) are also the intended home for the new warm-paper
+  visual behaviors (sticky/blurred nav, floating capsule action, paw-print
+  texture) — added as new, off-by-default opt-in props/variants, not
+  changes to existing defaults, since ~20 route files across the app share
+  these components and most of them are outside any given restyle pass's
+  scope. See `docs/features/ux-revamp/architecture.md`'s "Shared-component
+  blast radius" section.
+- `src/app/globals.css` — as of the ux-revamp feature, this is also the
+  app's one design-token source (`:root` custom properties, mirrored into
+  the adjacent `@theme inline` block) — see the "Design tokens / theming"
+  note in System overview above and
+  [ADR 0007](adr/0007-css-custom-property-tokens-for-themeable-restyle.md).
+  New color/shadow/radius values a screen needs should extend this file's
+  token set rather than introducing a local literal, so a future theme
+  (dark mode) stays a value swap in one place.
 - `src/proxy.ts` — the server-side session-existence gate. As of
   simplified-onboarding, it gates **only** `/trips` (session required,
   redirecting to `/?next=...` when absent, unchanged from before) —
@@ -392,3 +461,5 @@ List notable ones here as they're added:
 - [0004](adr/0004-placeholder-member-nullable-user-id-and-identity-key.md) — Nullable `user_id` for placeholder members, and keying member identity off `trip_members.id`
 - [0005](adr/0005-ssr-page-conversion-pattern.md) — Pattern for converting a client-fetched page to a Server Component (Server Component + `"use client"` leaves + `Link`-based navigation), and why the residual server-side `getUser()` round trip is an accepted tradeoff
 - [0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md) — Supabase anonymous auth for pre-verification trip ownership, and anonymous-to-permanent linking (`updateUser`/`email_change`) instead of `signInWithOtp` when verifying an anonymous session
+- [0007](adr/0007-css-custom-property-tokens-for-themeable-restyle.md) — CSS custom properties (extending the existing `globals.css` token set) as the mechanism for a themeable light-now/dark-later visual system, over Tailwind `dark:` variants, a JSON token pipeline, or CSS-in-JS
+- [0008](adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md) — Add-expense as an intercepted/parallel-route overlay sheet over the trip view, with the literal route kept as a hard-navigation/deep-link fallback, over a query-param/client-state overlay; also covers the pathname-driven background dim/blur/scale mechanism and the explicit `animateEntrance` flag that suppresses the sheet's own entrance animation on a cold load

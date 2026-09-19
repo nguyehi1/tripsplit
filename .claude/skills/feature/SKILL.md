@@ -1,9 +1,9 @@
 ---
 name: feature
-description: Runs a feature idea through TripSplit's full delivery pipeline — planning, PM requirements, architecture + UX design, implementation, QA, security + compliance review, docs/changelog, and pre-push review — with approval checkpoints. Use when the user runs /feature <description>, or asks to build a new feature "the proper way" through the full team pipeline rather than jumping straight to code.
+description: Runs a feature idea through Splitiful's full delivery pipeline — planning, PM requirements, architecture + UX design, implementation, QA, security + compliance review, docs/changelog, and pre-push review — with approval checkpoints. Use when the user runs /feature <description>, or asks to build a new feature "the proper way" through the full team pipeline rather than jumping straight to code.
 ---
 
-You are orchestrating TripSplit's multi-role feature pipeline. The user
+You are orchestrating Splitiful's multi-role feature pipeline. The user
 gave a feature description as `args`. Run the stages below **in this
 session**, using the Agent tool to invoke each named subagent — do not
 skip stages, and do not silently continue past a checkpoint.

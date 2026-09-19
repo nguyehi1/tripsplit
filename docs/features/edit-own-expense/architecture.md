@@ -6,7 +6,7 @@ narrowing the `expenses` UPDATE RLS policy.
 
 ## Orientation / existing patterns reused
 
-- **Mutation pattern**: TripSplit's existing mutations (`createTrip`,
+- **Mutation pattern**: Splitiful's existing mutations (`createTrip`,
   `joinTrip`, `addExpense` — all in `src/lib/data/trips.ts`) go straight from
   a client component through the Supabase **browser** client
   (`src/lib/supabase/client.ts`), with authorization enforced entirely by
@@ -198,7 +198,7 @@ Consequences:
   hitting Supabase's auto-generated PostgREST API directly with a valid
   trip-member JWT (e.g. via `curl` or a script) and expecting to update any
   teammate's expense. That's not a documented or product-sanctioned
-  integration surface for TripSplit — the requirements doc itself frames
+  integration surface for Splitiful — the requirements doc itself frames
   today's breadth as an unused, deliberate-but-generic default ("small
   trusted group" call), not a promised capability. No compatibility
   guarantee is owed to that caller.

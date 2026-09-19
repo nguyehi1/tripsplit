@@ -2,7 +2,7 @@
 
 ## Problem statement
 
-TripSplit's sign-in flow (`src/app/page.tsx`) uses Supabase magic links: every
+Splitiful's sign-in flow (`src/app/page.tsx`) uses Supabase magic links: every
 visit, the user must type their email from scratch to request a new sign-in
 link. Magic links expire and aren't always used immediately (email delays,
 switching devices, coming back days later), so returning users on the same

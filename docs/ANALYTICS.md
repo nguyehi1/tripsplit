@@ -1,12 +1,12 @@
-# TripSplit Analytics Reference Guide
+# Splitiful Analytics Reference Guide
 
-TripSplit uses **Vercel Analytics** to measure app performance and track user behavior. This guide explains what data is collected, how to access it, and how it informs product decisions.
+Splitiful uses **Vercel Analytics** to measure app performance and track user behavior. This guide explains what data is collected, how to access it, and how it informs product decisions.
 
 ---
 
 ## Event Catalog
 
-All events listed below are custom events tracked by TripSplit. Vercel Analytics automatically adds timestamp, route, and session ID to each event; we do not send personally identifiable information (PII) in any event.
+All events listed below are custom events tracked by Splitiful. Vercel Analytics automatically adds timestamp, route, and session ID to each event; we do not send personally identifiable information (PII) in any event.
 
 ### Trip Management
 
@@ -54,7 +54,7 @@ All events listed below are custom events tracked by TripSplit. Vercel Analytics
 ### Step 1: Access Vercel Analytics
 
 1. Go to [https://vercel.com/dashboard](https://vercel.com/dashboard)
-2. Select the TripSplit project
+2. Select the Splitiful project
 3. Navigate to **Analytics** tab (in the top navigation or sidebar)
 
 ### Step 2: View Web Vitals
@@ -118,7 +118,7 @@ To measure a conversion funnel (e.g., "how many people who start creating a trip
 ### Who Has Access
 
 - **Vercel**: Stores analytics data in Vercel's infrastructure (included with Vercel deployment)
-- **TripSplit team**: Can view aggregated metrics via Vercel project dashboard (requires Vercel project access)
+- **Splitiful team**: Can view aggregated metrics via Vercel project dashboard (requires Vercel project access)
 - **Third parties**: Analytics data is NOT shared with other services (Vercel Analytics is first-party only)
 
 ### Data Retention
@@ -132,13 +132,13 @@ To measure a conversion funnel (e.g., "how many people who start creating a trip
 Users cannot opt out of analytics collection at the app level (no in-app toggle). However:
 
 - Users can **disable analytics at the browser level** (e.g., via privacy extensions or browser settings that block tracking)
-- The **TripSplit team can disable analytics collection** by removing the `<Analytics />` component from `src/app/layout.tsx` or disabling it in Vercel project settings
+- The **Splitiful team can disable analytics collection** by removing the `<Analytics />` component from `src/app/layout.tsx` or disabling it in Vercel project settings
 
 If privacy regulations (GDPR, CCPA, etc.) require an explicit opt-in or opt-out mechanism, a future feature can add a cookie banner or analytics consent flow.
 
 ### Privacy Policy
 
-TripSplit's privacy policy should mention:
+Splitiful's privacy policy should mention:
 
 > "We use Vercel Analytics to understand how the app is used and to improve performance. Vercel Analytics collects anonymized event data (e.g., when you create a trip, add an expense) but does not collect personally identifiable information such as your email or expense amounts. Data is retained for 30+ days and is not shared with third parties."
 

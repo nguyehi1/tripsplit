@@ -9,12 +9,7 @@ one thing v2 is *for*."
 
 ## The thesis
 
-TripSplit is not trying to become Splitwise, and it is not trying to become an accounting tool.
-Splitwise's whole category — itemized splits, multi-currency, spending analytics, payment-rail
-integrations, receipt OCR pipelines — is scope built for people who want to *manage* group
-finances. That's a different job than the one TripSplit is for.
-
-The job here is small and specific: **during the trip, make it effortless to jot down who paid
+Splitiful's vision is to make it effortless to jot down who paid
 for what — and at the end, produce one number per person that everyone trusts without having to
 think about it.** That's it. Two moments, both fast, both simple:
 
@@ -23,7 +18,7 @@ think about it.** That's it. Two moments, both fast, both simple:
 
 Every feature request should be tested against this: does it make either of those two moments
 *faster or clearer*, or does it add a decision, a setting, a screen, or a concept the user now
-has to hold in their head? If it's the latter, it's accounting-tool creep, not TripSplit.
+has to hold in their head? If it's the latter, it's accounting-tool creep, not Splitiful.
 
 ## What changed from the last draft
 
@@ -76,7 +71,7 @@ Re-reading docs/ROADMAP.md and the README's deferred list against this thesis:
 - **Multi-currency.** Real gap for cross-border trips, but converting currencies correctly (rates,
   rounding, display) is exactly the kind of "now you have to think about it" complexity this
   vision avoids. Can wait indefinitely without hurting the core pitch.
-- **Spending analytics/charts, AI categorization, social feed.** All of these make TripSplit more
+- **Spending analytics/charts, AI categorization, social feed.** All of these make Splitiful more
   like Splitwise or Venmo. None of them make logging an expense faster or the final split
   clearer — they're the accounting-tool and social-app instincts this vision explicitly rejects.
 

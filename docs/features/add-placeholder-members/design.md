@@ -58,7 +58,7 @@ Placeholders                                   2/20        ← organizer sees "/
 │ Dad (placeholder)                      ✏️  ✕ │   ← ✏️ ✕ organizer-only
 │ Placeholder                                  │
 │ Remove this once Dad joins for real —        │
-│ TripSplit won't do it automatically.         │
+│ Splitiful won't do it automatically.         │
 └─────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────┐
 │ Jordan (placeholder)                   ✏️  ✕ │
@@ -201,7 +201,7 @@ fix both happen: the roster screen, next to the placeholder itself, every time t
 
 Static microcopy under every placeholder row (organizer view only — see §1):
 
-> **Remove this once {name} joins for real — TripSplit won't do it automatically.**
+> **Remove this once {name} joins for real — Splitiful won't do it automatically.**
 
 Deliberately **not**:
 - A toast/snackbar (seen once, then gone — exactly the failure mode being designed against).
