@@ -39,7 +39,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     }
     return NextResponse.json(invite);
   } catch (e) {
-    if (isDbRateLimitError(e)) return dbRateLimitResponse();
+    // 60 must match the `_window_seconds` argument in migration 0013's
+    // `perform public.throttle_rpc('invite-lookup:' || _ip, 20, 60);`.
+    if (isDbRateLimitError(e)) return dbRateLimitResponse(60);
     console.error("Failed to look up invite code", e);
     return NextResponse.json({ error: "Couldn't load this trip." }, { status: 500 });
   }

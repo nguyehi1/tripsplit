@@ -109,7 +109,17 @@ export function isDbRateLimitError(e: unknown): boolean {
   return e instanceof Error && e.message.startsWith("rate limited");
 }
 
-/** Same shape as `enforceRateLimit`'s 429 — used when `isDbRateLimitError` catches a DB-side throttle. */
-export function dbRateLimitResponse(): NextResponse {
-  return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: { "Retry-After": "60" } });
+/**
+ * Same shape as `enforceRateLimit`'s 429 — used when `isDbRateLimitError` catches a DB-side
+ * throttle. `windowSeconds` isn't discoverable from the caught error (Postgres doesn't return
+ * `throttle_rpc`'s `_window_seconds` argument, only its raised message), so each call site must
+ * pass the same window it knows the corresponding `perform public.throttle_rpc(...)` call in
+ * migration 0013 uses — there's no single source of truth linking the two, so a window change on
+ * either side must be mirrored on the other by hand.
+ */
+export function dbRateLimitResponse(windowSeconds: number): NextResponse {
+  return NextResponse.json(
+    { error: "Too many requests." },
+    { status: 429, headers: { "Retry-After": String(windowSeconds) } },
+  );
 }

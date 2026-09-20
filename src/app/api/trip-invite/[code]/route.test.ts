@@ -79,7 +79,8 @@ describe("GET /api/trip-invite/[code]", () => {
     const { GET } = await importRoute();
     const res = await GET(new Request("http://localhost/api/trip-invite/ABC12345"), paramsFor("ABC12345"));
     expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBeTruthy();
+    // 60 matches migration 0013's throttle_rpc window for this bucket ("invite-lookup", 20/60s).
+    expect(res.headers.get("Retry-After")).toBe("60");
     const body = await res.json();
     expect(body.error).toBe("Too many requests.");
   });

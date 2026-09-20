@@ -9,14 +9,16 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * Forces this page off Next's static-generation path. Without this, Next's dynamic-rendering
- * detection never gets a chance to run: it infers "dynamic" from a page's use of `cookies()`
- * (inside `createClient()`), but `createClient()` throws before reaching `cookies()` whenever
- * `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set — which crashes the
- * build's prerender attempt instead of falling back to per-request rendering. Every other
- * Server Component under `src/app` either takes a dynamic route param (skipping the static
- * trial Next only attempts for param-less routes) or is a `"use client"` page with no
- * server-side Supabase call, so `/trips` is the one page that needs this declared explicitly
- * rather than inferred.
+ * detection never gets a chance to run: it infers "dynamic" from a page's use of a dynamic API
+ * (e.g. `cookies()`, inside `createClient()`), but `createClient()` throws before reaching
+ * `cookies()` whenever `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set —
+ * which crashes the build's prerender attempt instead of falling back to per-request rendering.
+ * `/trips` is the one param-less Server Component this can happen to: every other param-less
+ * Server Component under `src/app` either accesses a different dynamic API *before* any
+ * Supabase call that could throw (`src/app/page.tsx` awaits `searchParams` first, which alone
+ * is enough to opt it into dynamic rendering) or is a `"use client"` page with no server-side
+ * Supabase call at all — so only here does an early, pre-`cookies()` throw actually hide the
+ * dynamic-rendering signal from Next.
  */
 export const dynamic = "force-dynamic";
 

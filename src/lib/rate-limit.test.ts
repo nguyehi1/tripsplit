@@ -165,3 +165,26 @@ describe("enforceRateLimit (credentials unavailable)", () => {
     expect(result).toBeNull();
   });
 });
+
+describe("isDbRateLimitError / dbRateLimitResponse", () => {
+  it("recognizes the exact message throttle_rpc raises (migration 0013), and only messages starting with it", async () => {
+    const { isDbRateLimitError } = await import("./rate-limit");
+    expect(isDbRateLimitError(new Error("rate limited: try again shortly"))).toBe(true);
+    expect(isDbRateLimitError(new Error("rate limited"))).toBe(true);
+    expect(isDbRateLimitError(new Error("invalid invite code"))).toBe(false);
+    expect(isDbRateLimitError(new Error("column reference \"window_start\" is ambiguous"))).toBe(false);
+    expect(isDbRateLimitError("rate limited: try again shortly")).toBe(false);
+    expect(isDbRateLimitError(null)).toBe(false);
+  });
+
+  it("echoes the caller-supplied window as Retry-After, since that value isn't recoverable from the caught error", async () => {
+    const { dbRateLimitResponse } = await import("./rate-limit");
+    const res = dbRateLimitResponse(60);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("60");
+    expect(await res.json()).toEqual({ error: "Too many requests." });
+
+    const other = dbRateLimitResponse(10);
+    expect(other.headers.get("Retry-After")).toBe("10");
+  });
+});

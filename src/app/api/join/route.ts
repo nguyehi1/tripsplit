@@ -32,7 +32,9 @@ export async function POST(request: Request) {
     await sendJoinedEmail(supabase, tripId, origin);
     return NextResponse.json({ tripId });
   } catch (e) {
-    if (isDbRateLimitError(e)) return dbRateLimitResponse();
+    // 60 must match the `_window_seconds` argument in migration 0013's
+    // `perform public.throttle_rpc('join-trip:' || auth.uid()::text, 10, 60);`.
+    if (isDbRateLimitError(e)) return dbRateLimitResponse(60);
     console.error("Failed to join trip", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Couldn't join the trip." }, { status: 500 });
   }

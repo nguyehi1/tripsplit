@@ -119,7 +119,8 @@ describe("POST /api/join", () => {
       }),
     );
     expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBeTruthy();
+    // 60 matches migration 0013's throttle_rpc window for this bucket ("join-trip", 10/60s).
+    expect(res.headers.get("Retry-After")).toBe("60");
     const body = await res.json();
     expect(body.error).toBe("Too many requests.");
     expect(sendTripEmailMock).not.toHaveBeenCalled();
