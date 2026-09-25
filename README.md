@@ -13,6 +13,21 @@ add-expense, edit-own-expense, and feedback. The trip organizer can also add nam
 equal split still accounts for everyone on the trip; the organizer can rename or remove them
 later.
 
+The organizer can also remove a real (non-placeholder) member from the trip's roster, and any
+non-organizer member can leave a trip themselves, from the roster screen
+(`/trip/[id]/invite`) — both require an explicit confirm step that discloses the removed/left
+member could still rejoin by reusing the same invite link (there's no invite-code rotation in
+this pass). Both hard-delete the `trip_members` row and are blocked once the trip is completed;
+past expenses stay in the ledger untouched and attributed to the removed/left member, but
+remaining members' computed shares recompute live across the smaller member count, the same way
+they already do when someone joins mid-trip. The removed/left member sees an explicit in-app
+"you're no longer on this trip" state the next time they visit — not an email — unless they
+never logged an expense on that trip before being removed, in which case they see the existing
+generic "trip not found" view instead (a disclosed, accepted gap — see
+[ADR 0012](./docs/adr/0012-post-removal-detection-and-ghost-payer-rendering.md)). The organizer
+can't remove or leave a trip via this flow. Full spec:
+[docs/features/remove-member-access/requirements.md](./docs/features/remove-member-access/requirements.md).
+
 **Onboarding** is a two-track model (see
 [docs/features/simplified-onboarding/requirements.md](./docs/features/simplified-onboarding/requirements.md)
 for the full spec):
@@ -80,6 +95,10 @@ Pre-production hardening still pending.
   at any time (up to 20 per trip); there's no auto-claim/merge, so once the real person joins
   for real, the organizer must manually remove the stale placeholder or that person is
   double-counted. Add/rename/remove are all locked once the trip is completed.
+- The organizer can remove a real member from the roster, and any non-organizer member can leave
+  a trip themselves; both are locked once the trip is completed and neither rotates the invite
+  code (removal/leaving is disclosed as reversible by reusing the same link, not true access
+  revocation). See the "Status" section above for the full behavior.
 - Two views: Summary (settle-up transactions) and Details (per-person paid/share table).
 - Displays amounts owed; no payment integration yet.
 

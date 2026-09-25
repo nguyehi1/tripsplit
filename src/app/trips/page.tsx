@@ -5,6 +5,7 @@ import { AvatarStack, Card, IconLinkButton, Kicker, LinkButton, Screen, ScreenCo
 import { formatCents } from "@/lib/currency";
 import { getMyTrips, type MyTrip } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
+import { timeAsync } from "@/lib/perf/timing";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -79,11 +80,25 @@ function TripRow({ trip }: { trip: MyTrip }) {
   );
 }
 
-export default async function TripsDashboardPage() {
+export default async function TripsDashboardPage({
+  searchParams = Promise.resolve({}),
+}: {
+  searchParams?: Promise<{ left?: string }>;
+} = {}) {
+  const { left } = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+
+  // Tier 1 fix (performance-scaling architecture.md's "/trips — two tiers"): this page's own
+  // `getUser()` call and the `trips` select don't depend on each other — `currentUserId` is only
+  // consumed below to compute each trip's `yourNetCents`, not to filter the `trips` query itself
+  // — so kick both off concurrently instead of waiting for `getUser()` before ever starting the
+  // `trips` fetch. The fetched rows are passed into `getMyTrips` so it skips its own (otherwise
+  // redundant) `trips` select. `proxy.ts`'s own separate `getUser()` call ahead of this page (ADR
+  // 0005) is unchanged — see ADR 0011 for that contingent, not-done-here follow-up.
+  const [{ data: { user } }, tripsRowsResult] = await Promise.all([
+    supabase.auth.getUser(),
+    timeAsync("my-trips", "trips", () => supabase.from("trips").select("*").order("created_at", { ascending: false })),
+  ]);
   // Defensive fallback only — src/proxy.ts already redirects unauthenticated visitors before
   // this page renders; this isn't a duplicate of that gate (see ADR 0005).
   if (!user) redirect("/");
@@ -91,7 +106,8 @@ export default async function TripsDashboardPage() {
   let trips: MyTrip[] | null = null;
   let error: string | null = null;
   try {
-    trips = await getMyTrips(supabase, user.id);
+    if (tripsRowsResult.error) throw tripsRowsResult.error;
+    trips = await getMyTrips(supabase, user.id, tripsRowsResult.data ?? []);
   } catch {
     error = "Couldn't load your trips.";
   }
@@ -108,6 +124,14 @@ export default async function TripsDashboardPage() {
             <PlusIcon size={19} strokeWidth={2.4} />
           </IconLinkButton>
         </div>
+        {left ? (
+          <>
+            <div className="rounded-chip px-4 py-3 text-[13.5px] font-medium" style={{ background: "var(--color-accent-soft)" }}>
+              You left {left}.
+            </div>
+            <div className="h-3" />
+          </>
+        ) : null}
         <div className="h-2" />
 
         {error ? (

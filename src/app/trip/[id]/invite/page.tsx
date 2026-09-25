@@ -9,7 +9,9 @@ import { displayNameFor } from "@/lib/avatar";
 import {
   addPlaceholderMember,
   getTripView,
+  leaveTrip,
   removePlaceholderMember,
+  removeTripMember,
   renamePlaceholderMember,
   type TripView,
 } from "@/lib/data/trips";
@@ -39,6 +41,16 @@ export default function TripInvitePage() {
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [removeSubmitting, setRemoveSubmitting] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+
+  // Organizer-removes-a-real-member / self-leave (remove-member-access) — a parallel confirm
+  // state machine to the placeholder one above, same shape (confirmRemoveId ->
+  // startRemove/cancelRemove/handleRemoveConfirm). Which action a given row's confirm state means
+  // ("remove" vs "leave") is derived from context at render/submit time (organizer confirming
+  // someone else's row vs. a member confirming their own), not stored separately — a row can only
+  // ever offer one of the two actions.
+  const [confirmMemberId, setConfirmMemberId] = useState<string | null>(null);
+  const [memberActionSubmitting, setMemberActionSubmitting] = useState(false);
+  const [memberActionError, setMemberActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,6 +209,43 @@ export default function TripInvitePage() {
     }
   }
 
+  function startMemberAction(memberId: string) {
+    setRenamingId(null);
+    setConfirmRemoveId(null);
+    setConfirmMemberId(memberId);
+    setMemberActionError(null);
+  }
+
+  function cancelMemberAction() {
+    setConfirmMemberId(null);
+    setMemberActionError(null);
+  }
+
+  async function handleMemberActionConfirm(memberId: string) {
+    const isSelf = memberId === view?.you?.id;
+    setMemberActionSubmitting(true);
+    setMemberActionError(null);
+    try {
+      const supabase = createClient();
+      if (isSelf) {
+        await leaveTrip(supabase, id);
+        // The actor just lost their own access to this screen — full navigation to /trips
+        // (design.md section 3 step 4), carrying the trip name for that screen's one-line
+        // confirmation banner.
+        router.push(`/trips?left=${encodeURIComponent(view?.trip.name ?? "")}`);
+        return;
+      }
+      await removeTripMember(supabase, memberId);
+      setConfirmMemberId(null);
+      await refresh();
+    } catch (e) {
+      const fallback = isSelf ? "Couldn't leave the trip — try again." : "Couldn't remove them — try again.";
+      setMemberActionError(e instanceof Error ? e.message : fallback);
+    } finally {
+      setMemberActionSubmitting(false);
+    }
+  }
+
   if (error) {
     return (
       <Screen>
@@ -269,20 +318,118 @@ export default function TripInvitePage() {
           <Kicker>{realMembers.length === 1 ? "Just you" : `${realMembers.length} people`}</Kicker>
         </div>
         <div className="h-2" />
-        {realMembers.map((member) => (
-          <div key={member.id} className="mb-2.5">
-            <Card className="flex items-center gap-[11px] p-[14px_18px]">
-              <Avatar initials={member.initials} color={member.avatar} />
-              <div className="flex-1">
-                <div className="text-[15px] font-semibold">{member.displayName}</div>
-                <div className="mt-px text-[12px] text-ink/[0.72]">
-                  {member.isOrganizer ? "Organizer" : "Member"}
-                  {member.id === view.you?.id ? " · you" : ""}
-                </div>
-              </div>
-            </Card>
-          </div>
-        ))}
+        {realMembers.map((member) => {
+          const canRemove = isOrganizer && !member.isOrganizer && !locked;
+          const canLeave = !isOrganizer && member.id === view.you?.id && !locked;
+          return (
+            <div key={member.id} className="mb-2.5">
+              <Card className="p-[14px_18px]">
+                {confirmMemberId === member.id ? (
+                  canLeave ? (
+                    <div>
+                      <p className="text-[14px] font-semibold">Leave {view.trip.name}?</p>
+                      <p className="mt-1 text-[13px] leading-[1.45] text-ink/[0.73]">
+                        You&apos;ll lose access to this trip&apos;s expenses and roster. Your past
+                        expenses stay in the trip exactly as they are. If you change your mind,
+                        you can rejoin using the same invite link.
+                      </p>
+                      {memberActionError ? (
+                        <p className="mt-1.5 text-[12.5px] text-terracotta">{memberActionError}</p>
+                      ) : null}
+                      <div className="mt-2.5 flex gap-2">
+                        <Button
+                          variant="soft"
+                          block={false}
+                          className="h-[38px] flex-1 text-[13px]"
+                          onClick={cancelMemberAction}
+                          disabled={memberActionSubmitting}
+                        >
+                          Stay
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          block={false}
+                          className="h-[38px] flex-1 text-[13px]"
+                          style={{ color: "var(--color-terracotta)" }}
+                          onClick={() => handleMemberActionConfirm(member.id)}
+                          disabled={memberActionSubmitting}
+                        >
+                          {memberActionSubmitting ? "Leaving…" : "Leave trip"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-[14px] font-semibold">
+                        Remove {member.displayName} from this trip?
+                      </p>
+                      <p className="mt-1 text-[13px] leading-[1.45] text-ink/[0.73]">
+                        They&apos;ll lose access to this trip&apos;s expenses and roster. Everyone
+                        else&apos;s split will update to cover the total without them. If they
+                        still have the invite link, they can rejoin the same way they joined —
+                        removing them doesn&apos;t cancel the link.
+                      </p>
+                      {memberActionError ? (
+                        <p className="mt-1.5 text-[12.5px] text-terracotta">{memberActionError}</p>
+                      ) : null}
+                      <div className="mt-2.5 flex gap-2">
+                        <Button
+                          variant="soft"
+                          block={false}
+                          className="h-[38px] flex-1 text-[13px]"
+                          onClick={cancelMemberAction}
+                          disabled={memberActionSubmitting}
+                        >
+                          Keep them
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          block={false}
+                          className="h-[38px] flex-1 text-[13px]"
+                          style={{ color: "var(--color-terracotta)" }}
+                          onClick={() => handleMemberActionConfirm(member.id)}
+                          disabled={memberActionSubmitting}
+                        >
+                          {memberActionSubmitting ? "Removing…" : "Remove"}
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex items-center gap-[11px]">
+                    <Avatar initials={member.initials} color={member.avatar} />
+                    <div className="flex-1">
+                      <div className="text-[15px] font-semibold">{member.displayName}</div>
+                      <div className="mt-px text-[12px] text-ink/[0.72]">
+                        {member.isOrganizer ? "Organizer" : "Member"}
+                        {member.id === view.you?.id ? " · you" : ""}
+                      </div>
+                    </div>
+                    {canRemove ? (
+                      <button
+                        type="button"
+                        title="Remove"
+                        onClick={() => startMemberAction(member.id)}
+                        className="flex size-9 flex-none cursor-pointer items-center justify-center rounded-full text-ink/60"
+                      >
+                        <CloseIcon size={15} strokeWidth={2.2} />
+                      </button>
+                    ) : null}
+                    {canLeave ? (
+                      <button
+                        type="button"
+                        onClick={() => startMemberAction(member.id)}
+                        className="flex-none cursor-pointer text-[13px] font-semibold text-ink/60"
+                      >
+                        Leave trip
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </Card>
+            </div>
+          );
+        })}
         {realMembers.length === 1 ? (
           <div className="flex items-center gap-[11px] rounded-[22px] border-[1.5px] border-dashed border-ink/20 px-[18px] py-3.5">
             <span className="flex size-9 flex-none items-center justify-center rounded-full bg-ink/[0.06] text-ink/[0.68]">

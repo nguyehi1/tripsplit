@@ -117,6 +117,18 @@ export type Database = {
         Args: { _member_id: string };
         Returns: undefined;
       };
+      remove_trip_member: {
+        Args: { _member_id: string };
+        Returns: undefined;
+      };
+      leave_trip: {
+        Args: { _trip_id: string };
+        Returns: undefined;
+      };
+      was_removed_from_trip: {
+        Args: { _trip_id: string };
+        Returns: boolean;
+      };
       is_trip_member: {
         Args: { _trip_id: string };
         Returns: boolean;

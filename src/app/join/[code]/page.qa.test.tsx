@@ -11,6 +11,12 @@ import { createRoot, type Root } from "react-dom/client";
  * /join/[code] now fetches from the server-side, rate-limited /api/trip-invite/[code] route
  * instead of calling `get_trip_by_invite_code` straight from the browser via supabase.rpc.
  * Covers the loading/success/error/retry states driven by `loadError`/`reloadKey`.
+ *
+ * Updated for performance-scaling architecture.md's "Invite/join preview" fix: the route now
+ * returns the trip's summary alongside the invite info in the same response (additive `summary`
+ * field), so the page makes one `fetch` instead of one `fetch` plus a separate, direct-to-Supabase
+ * `getTripSummary` RPC call — the `invite`/`summary` fixtures below are combined into each mocked
+ * `fetch` response instead of being wired up as two separate mocks.
  */
 
 const useParamsMock = vi.fn(() => ({ code: "abc12345" }));
@@ -20,19 +26,6 @@ vi.mock("next/navigation", () => ({
   useParams: () => useParamsMock(),
   useSearchParams: () => useSearchParamsMock(),
 }));
-
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({}),
-}));
-
-const getTripSummaryMock = vi.fn();
-vi.mock("@/lib/data/trips", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/data/trips")>("@/lib/data/trips");
-  return {
-    ...actual,
-    getTripSummary: (...args: unknown[]) => getTripSummaryMock(...args),
-  };
-});
 
 const invite = {
   tripId: "trip-1",
@@ -51,6 +44,8 @@ const summary = {
   avgPerPersonCents: 12300,
   inviteCode: "abc12345",
 };
+
+const inviteWithSummary = { ...invite, summary };
 
 /**
  * Pure microtask flush (no `setTimeout`) so every tick stays inside `act()`'s tracked update
@@ -97,7 +92,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   useParamsMock.mockReturnValue({ code: "abc12345" });
   useSearchParamsMock.mockReturnValue(new URLSearchParams());
-  getTripSummaryMock.mockResolvedValue(summary);
 });
 
 afterEach(() => {
@@ -114,23 +108,24 @@ describe("/join/[code] page — fetches via /api/trip-invite/[code] instead of c
     expect(container.textContent).toContain("Loading trip…");
 
     await act(async () => {
-      resolveFetch({ status: 200, ok: true, json: async () => invite });
+      resolveFetch({ status: 200, ok: true, json: async () => inviteWithSummary });
       await flushMicrotasks();
     });
 
     root.unmount();
   });
 
-  it("renders the trip summary on success, hitting /api/trip-invite/<code> (not Supabase directly)", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => invite });
+  it("renders the trip summary on success from the single /api/trip-invite/<code> response (performance-scaling: no separate direct-to-Supabase getTripSummary call)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => inviteWithSummary });
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { container, root } = await renderJoinPage();
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith("/api/trip-invite/abc12345");
     expect(container.textContent).toContain("Ski Trip");
     expect(container.textContent).toContain("Pat invited you");
-    expect(getTripSummaryMock).toHaveBeenCalledWith(expect.anything(), "trip-1");
+    expect(container.textContent).toContain("$123.00");
 
     root.unmount();
   });
@@ -176,7 +171,7 @@ describe("/join/[code] page — fetches via /api/trip-invite/[code] instead of c
     const fetchMock = vi
       .fn()
       .mockRejectedValueOnce(new Error("network down"))
-      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => invite });
+      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => inviteWithSummary });
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { container, root } = await renderJoinPage();
@@ -210,7 +205,7 @@ describe("/join/[code] page — fetches via /api/trip-invite/[code] instead of c
 
   it("shows the join-failure banner when redirected back with ?error=join, alongside the loaded summary", async () => {
     useSearchParamsMock.mockReturnValue(new URLSearchParams({ error: "join" }));
-    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => invite });
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => inviteWithSummary });
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const { container, root } = await renderJoinPage();

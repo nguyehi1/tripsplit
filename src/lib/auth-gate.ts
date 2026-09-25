@@ -10,8 +10,21 @@ type Client = SupabaseClient<Database>;
  * exists for every caller from the moment a trip is created or an invite is opened (anonymous or
  * permanent) — what this checks is whether it's been upgraded past the anonymous, pre-verification
  * tier, i.e. whether the organizer/invitee has completed the email/OTP step at least once.
+ *
+ * `prefetchedUser` (performance-scaling architecture.md's "Add/edit-expense" fix (1)) is an
+ * optional already-fetched user object — when supplied, this skips its own `getUser()` call
+ * entirely and checks `prefetchedUser.is_anonymous` directly, so a caller that already needs the
+ * user object for another reason (e.g. `add-expense-sheet-content.tsx` needing `user.id` for
+ * `paidBy`) doesn't also pay for a second, identical round trip. Omitted (every other call site
+ * today), behavior is byte-for-byte unchanged: this fetches the user itself, same as before.
  */
-export async function requireVerifiedSession(supabase: Client): Promise<boolean> {
+export async function requireVerifiedSession(
+  supabase: Client,
+  prefetchedUser?: { is_anonymous?: boolean | null } | null,
+): Promise<boolean> {
+  if (prefetchedUser !== undefined) {
+    return prefetchedUser != null && prefetchedUser.is_anonymous !== true;
+  }
   const {
     data: { user },
   } = await supabase.auth.getUser();

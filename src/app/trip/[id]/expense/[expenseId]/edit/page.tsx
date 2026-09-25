@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CheckIcon, CloseIcon, LockIcon } from "@/components/icons";
 import { Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { DelayedLoadingLine } from "@/components/delayed-loading-line";
 import { requireVerifiedSession } from "@/lib/auth-gate";
 import { formatCents } from "@/lib/currency";
 import { updateExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
 import { savePendingExpenseDraft, takePendingExpenseDraft } from "@/lib/pending-action";
+import { reportClientTiming, timeClient } from "@/lib/perf/timing";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
@@ -33,10 +35,14 @@ export default function EditExpensePage() {
     let cancelled = false;
     const supabase = createClient();
     Promise.all([
-      supabase.auth.getUser(),
-      supabase.from("expenses").select("*").eq("id", expenseId).single(),
-      supabase.from("trip_members").select("id", { count: "exact", head: true }).eq("trip_id", id),
-      supabase.from("trips").select("completed_at").eq("id", id).single(),
+      timeClient("edit-expense", "gating.getUser", () => supabase.auth.getUser()),
+      timeClient("edit-expense", "gating.expense", () =>
+        supabase.from("expenses").select("*").eq("id", expenseId).single(),
+      ),
+      timeClient("edit-expense", "gating.trip_members", () =>
+        supabase.from("trip_members").select("id", { count: "exact", head: true }).eq("trip_id", id),
+      ),
+      timeClient("edit-expense", "gating.trips", () => supabase.from("trips").select("completed_at").eq("id", id).single()),
     ]).then(([userResult, expenseResult, membersResult, tripResult]) => {
       if (cancelled) return;
       const user = userResult.data.user;
@@ -69,6 +75,9 @@ export default function EditExpensePage() {
     }
     setError(null);
     setSubmitting(true);
+    // Click-to-navigate span (performance-scaling ADR 0010): the client-perceived total for this
+    // submit, from click to the point the app hands off to the trip page's own render.
+    const navigateSpanStart = performance.now();
     try {
       const supabase = createClient();
 
@@ -81,14 +90,17 @@ export default function EditExpensePage() {
         return;
       }
 
-      await updateExpense(supabase, {
-        expenseId,
-        amountCents,
-        description: description.trim(),
-        date,
-      });
+      await timeClient("edit-expense", "updateExpense", () =>
+        updateExpense(supabase, {
+          expenseId,
+          amountCents,
+          description: description.trim(),
+          date,
+        }),
+      );
 
       trackEvent("expense_edit_complete");
+      reportClientTiming("edit-expense", "clickToNavigate", performance.now() - navigateSpanStart);
       router.push(`/trip/${id}`);
     } catch (e) {
       // PGRST116 ("0 rows") is how PostgREST reports an update that RLS silently excluded — the
@@ -151,6 +163,7 @@ export default function EditExpensePage() {
       <Screen>
         <ScreenContent className="pt-14">
           <p className="text-[15px] text-ink/70">Loading expense…</p>
+          <DelayedLoadingLine />
         </ScreenContent>
       </Screen>
     );

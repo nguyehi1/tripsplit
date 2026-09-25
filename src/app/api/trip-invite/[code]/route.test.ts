@@ -1,10 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const getTripByInviteCodeMock = vi.fn();
+const getTripSummaryMock = vi.fn();
 const enforceRateLimitMock = vi.fn();
 
 vi.mock("@/lib/data/trips", () => ({
   getTripByInviteCode: (...args: unknown[]) => getTripByInviteCodeMock(...args),
+  getTripSummary: (...args: unknown[]) => getTripSummaryMock(...args),
 }));
 
 vi.mock("@/lib/rate-limit", async () => {
@@ -31,9 +33,37 @@ describe("GET /api/trip-invite/[code]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     enforceRateLimitMock.mockResolvedValue(null);
+    getTripSummaryMock.mockResolvedValue(null);
   });
 
-  it("returns the invite info for a valid code", async () => {
+  it("returns the invite info plus the trip's summary for a valid code (performance-scaling: merged into one round trip)", async () => {
+    const invite = {
+      tripId: "trip-123",
+      name: "Ski Trip",
+      location: "Aspen",
+      startsOn: "2026-01-01",
+      endsOn: "2026-01-05",
+      isCompleted: false,
+      organizerName: "Pat",
+    };
+    const summary = {
+      members: [{ id: "m1", displayName: "Pat" }],
+      settlements: [],
+      totalCents: 12300,
+      avgPerPersonCents: 12300,
+      inviteCode: "ABC12345",
+    };
+    getTripByInviteCodeMock.mockResolvedValue(invite);
+    getTripSummaryMock.mockResolvedValue(summary);
+    const { GET } = await importRoute();
+    const res = await GET(new Request("http://localhost/api/trip-invite/ABC12345"), paramsFor("ABC12345"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ...invite, summary });
+    expect(getTripByInviteCodeMock).toHaveBeenCalledWith(expect.anything(), "ABC12345");
+    expect(getTripSummaryMock).toHaveBeenCalledWith(expect.anything(), "trip-123");
+  });
+
+  it("returns a null summary when the trip has one but getTripSummary itself resolves null (e.g. RPC returns zero rows)", async () => {
     const invite = {
       tripId: "trip-123",
       name: "Ski Trip",
@@ -44,11 +74,18 @@ describe("GET /api/trip-invite/[code]", () => {
       organizerName: "Pat",
     };
     getTripByInviteCodeMock.mockResolvedValue(invite);
+    getTripSummaryMock.mockResolvedValue(null);
     const { GET } = await importRoute();
     const res = await GET(new Request("http://localhost/api/trip-invite/ABC12345"), paramsFor("ABC12345"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invite);
-    expect(getTripByInviteCodeMock).toHaveBeenCalledWith(expect.anything(), "ABC12345");
+    expect(await res.json()).toEqual({ ...invite, summary: null });
+  });
+
+  it("never calls getTripSummary when the invite code doesn't resolve to a trip (404, no tripId to look a summary up for)", async () => {
+    getTripByInviteCodeMock.mockResolvedValue(null);
+    const { GET } = await importRoute();
+    await GET(new Request("http://localhost/api/trip-invite/doesnotexist"), paramsFor("doesnotexist"));
+    expect(getTripSummaryMock).not.toHaveBeenCalled();
   });
 
   it("404s when the invite code doesn't match any trip", async () => {

@@ -32,7 +32,8 @@ open Preview, or view this file on GitHub.
 10. [Communication: REST vs. RPC vs. GraphQL](#10-communication-rest-vs-rpc-vs-graphql)
 11. [Security](#11-security)
 12. [Scaling roadmap: current → future](#12-scaling-roadmap-current--future)
-13. [Glossary](#13-glossary)
+13. [Containers: Vercel's model vs. Docker, and when to switch](#13-containers-vercels-model-vs-docker-and-when-to-switch)
+14. [Glossary](#14-glossary)
 
 ---
 
@@ -90,8 +91,9 @@ flowchart LR
 
     V["Vercel edge network<br/>(DNS + CDN + load balancing)"] --> P
     APP -->|2. read/write data| SB
-    APP -->|3. rare: server secret needed| API["src/app/api/*<br/>(the few API routes)"]
-    API --> GMAIL["Gmail SMTP<br/>(email delivery)"]
+    APP -->|3. rare: server secret or rate-limit chokepoint needed| API["src/app/api/*<br/>(the few API routes)"]
+    API --> RESEND["Resend<br/>(email delivery)"]
+    API --> UPSTASH["Upstash Redis<br/>(app-level rate-limit counters)"]
 
     subgraph Supabase["Supabase (managed backend)"]
         direction TB
@@ -106,9 +108,13 @@ flowchart LR
 
 **Read it like this:** your browser never talks to the database directly —
 it talks to Vercel, which either serves a page or forwards the request
-into Supabase (for almost all reads/writes) or into a small API route (for
-the rare case that needs a secret, like sending email through Gmail SMTP).
-Every later section is a deep dive into one arrow or box in this picture.
+into Supabase (for almost all reads/writes) or into a small API route. That
+API route exists for one of two reasons: it needs a secret the browser must
+never see (sending email through Resend), or it needs to act as a
+rate-limit chokepoint in front of a guessable-credential RPC (the
+invite-code lookup and join routes, backed by Upstash Redis — see
+[§11](#11-security)). Every later section is a deep dive into one arrow or
+box in this picture.
 
 ---
 
@@ -176,13 +182,13 @@ flowchart LR
 
     F11[Leave feedback] --> FEED[["Feedback service<br/>(Postgres + RLS)"]]
 
-    F13[Trip confirmation email] --> EMAIL[["Email service<br/>(Gmail SMTP)"]]
+    F13[Trip confirmation email] --> EMAIL[["Email service<br/>(Resend)"]]
 ```
 
 **The honest caveat:** Splitiful doesn't literally have four separate
 services — "Trip," "Expense," and "Feedback" here are the same Postgres
 database, just different tables with their own RLS rules. Only
-**Authentication** (Supabase Auth) and **Email** (Gmail SMTP) are
+**Authentication** (Supabase Auth) and **Email** (Resend) are
 genuinely separate systems. Drawn this way on purpose, though: it's the
 same shape a microservices version of Splitiful would take if those
 boxes ever *did* become real, independent services — see [§6](#6-application-layer-monolith-modular-monolith-and-microservices)
@@ -197,9 +203,9 @@ in the design choices already made. Making them explicit here:
 |---|---|---|---|
 | **Availability** | Can users reach the app when they try to? | Inherits whatever uptime Vercel + Supabase provide; no extra redundancy is built on top of that in this repo | [§5](#5-load-balancer-and-reverse-proxy), [§7](#7-database-relational-replication-sharding) |
 | **Consistency** | Does everyone see the same, latest data? | Strong/immediate — there's exactly one Postgres instance and no replicas, so there's no lag to reason about (yet) | [§7](#7-database-relational-replication-sharding) |
-| **Latency** | How fast does the app respond? | Not measured or documented anywhere in this repo; assumed fine today given a small dataset, serverless hosting, and Vercel's CDN | [§4](#4-dns-and-cdn), [§8](#8-caching) |
+| **Latency** | How fast does the app respond? | No permanent measurement anywhere in this repo, but the performance-scaling feature added *interim* per-call timing instrumentation (`src/lib/perf/timing.ts`) that logs p50/p95-computable durations for the slowest surfaces — temporary and log-based, not a real APM, see [ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md) | [§4](#4-dns-and-cdn), [§8](#8-caching), [§12](#12-scaling-roadmap-current--future) |
 | **Scalability** | How much growth can it absorb before something needs to change? | See the full breakdown | [§12](#12-scaling-roadmap-current--future) |
-| **Security** | Can only the right people see/change the right data? | Row-Level Security is the actual enforcement boundary; sign-in is a one-time passcode; sensitive actions go through least-privilege `security definer` functions | [§11](#11-security) |
+| **Security** | Can only the right people see/change the right data? | Row-Level Security is the actual enforcement boundary; sign-in is a one-time passcode; sensitive actions go through least-privilege `security definer` functions; the two guessable-invite-code RPCs are additionally rate-limited at both the app layer (Upstash Redis) and inside Postgres itself, so a caller can't bypass the limit by skipping the app entirely | [§11](#11-security) |
 | **Durability** | Does data survive a crash or restart? | Yes — Postgres persists to disk on Supabase's managed side. Backup/disaster-recovery policy isn't something this repo configures or documents — it's inherited from the platform | [§7](#7-database-relational-replication-sharding) |
 | **Cost** | What does running it cost? | Usage-based, serverless pricing on both Vercel and Supabase — no dedicated always-on server sitting idle | *(a platform choice, outside this repo's code)* |
 | **Maintainability** | How safely can it be changed later? | Small monolith, one typed data-access module ([`src/lib/data/trips.ts`](../src/lib/data/trips.ts)), sequential migrations, and ADRs recording *why* key decisions were made | [§6](#6-application-layer-monolith-modular-monolith-and-microservices) |
@@ -331,14 +337,25 @@ sequenceDiagram
 every request (except static files — see the `matcher` at the bottom of
 the file). What it does, in order:
 
-1. Reads the visitor's session cookie and asks Supabase "is this a signed-in
-   user?" ([lines 36–38](../src/proxy.ts#L36-L38)).
-2. If the page being requested is one that requires sign-in (`/trips`,
-   `/trip/new`, `/trip/*` — see `PROTECTED_PATTERNS`,
-   [lines 5–7](../src/proxy.ts#L5-L7)) and the user *isn't* signed in, it
-   redirects them to the sign-in screen instead of ever running that
-   page's code ([lines 40–44](../src/proxy.ts#L40-L44)).
-3. Otherwise, it lets the request continue through.
+1. Checks whether the requested path even needs a session at all (see
+   `SESSION_REQUIRED_PATTERNS`, [line 14](../src/proxy.ts#L14)) — if not, it
+   skips the whole auth check and lets the request through immediately
+   ([lines 20–27](../src/proxy.ts#L20-L27)), specifically so pages that
+   don't need it aren't slowed down by an extra network round trip.
+2. If the path *does* require a session, it asks Supabase "is this a
+   signed-in user?" ([lines 51–53](../src/proxy.ts#L51-L53)).
+3. If there's no signed-in user, it redirects to the sign-in flow instead
+   of ever running that page's code ([lines 55–59](../src/proxy.ts#L55-L59)).
+   Otherwise, it lets the request continue through.
+
+**As of the simplified-onboarding feature, only `/trips` requires a
+session** (`SESSION_REQUIRED_PATTERNS = [/^\/trips/]`) — `/trip/new` and
+`/trip/[id]*` deliberately don't: a trip can be created by, or a trip page
+viewed by, a fully anonymous visitor (an anonymous Supabase session created
+client-side, or no session at all for a summary-only invite preview). This
+is a narrower gate than it used to be — worth knowing if you're reading
+older discussion of this file that mentions a `PROTECTED_PATTERNS` list
+covering more routes.
 
 The **load balancer** half doesn't exist as code in this repo — Vercel's
 platform spins up app instances on demand and spreads traffic across them
@@ -346,16 +363,30 @@ invisibly. There's no config file for it because there's nothing to
 configure; it's part of what you're paying the platform for.
 
 ### Deep dive — the important nuance
-Read the comment on [line 5 of proxy.ts](../src/proxy.ts#L5): it calls the
-proxy's check **"optimistic"** and says *the real enforcement is Postgres
-Row-Level Security*. This is a deliberate, load-bearing design decision:
-the proxy is a **convenience redirect** (so a signed-out user gets a
-sign-in screen instead of a broken page), not a **security boundary**. If
-someone bypassed the proxy entirely, they still couldn't read or write
-data they shouldn't — because the database itself refuses it, regardless
-of what the proxy did or didn't check. That's the "defense in depth"
-principle from the primer's security section, and it's why §11 of this
-doc and §5 both point at the same file for different reasons.
+Read the comment on [lines 5–7 of proxy.ts](../src/proxy.ts#L5-L7): it
+calls the proxy's check **"optimistic"** and says *the real enforcement is
+Postgres Row-Level Security*. This is a deliberate, load-bearing design
+decision: the proxy is a **convenience redirect** (so a signed-out user
+gets a sign-in screen instead of a broken page), not a **security
+boundary**. If someone bypassed the proxy entirely, they still couldn't
+read or write data they shouldn't — because the database itself refuses
+it, regardless of what the proxy did or didn't check. That's the "defense
+in depth" principle from the primer's security section, and it's why §11
+of this doc and §5 both point at the same file for different reasons.
+
+**A proposed, not-yet-executed evolution of this file:** `/trips` still
+pays *two* sequential Supabase-Auth-server round trips per request — one
+inside this proxy check, one again inside the page itself (it needs the
+user id for `getMyTrips`, and doesn't trust the proxy to have guaranteed a
+session for reasons the primer would call "the proxy check is optimistic,
+not authoritative"). [ADR 0011](adr/0011-forward-verified-user-id-header-for-trips-page.md)
+proposes having the proxy forward its own verified user id to the page via
+a trusted request header, explicitly overwriting any client-supplied value
+of the same name — but it's gated behind real latency data from the
+performance-scaling feature showing the extra round trip is actually
+costly enough to justify introducing a new trust boundary. It's a good
+concrete example of *why* NFR trade-offs get written down (§2) rather than
+just made silently: this one isn't built yet, on purpose.
 
 ---
 
@@ -417,12 +448,18 @@ read or write in the whole app funnels through its typed functions
 those functions call the database directly rather than calling a custom
 backend.
 
-A real backend route (`src/app/api/`) only shows up when something needs
+A real backend route (`src/app/api/`) shows up for two reasons. The first is
 a **secret the browser must never see** — e.g.
 [`src/app/api/trip-email/route.ts`](../src/app/api/trip-email/route.ts)
-needs the Gmail account's app password, which can't be shipped to a browser (the
+needs the Resend API key, which can't be shipped to a browser (the
 browser is fully open to anyone using developer tools — anything sent to
-it is effectively public).
+it is effectively public). The second, added later, is narrower but just
+as real: a **rate-limit chokepoint** in front of an RPC that's guessable
+or low-entropy — see [`src/app/api/trip-invite/[code]/route.ts`](../src/app/api/trip-invite/[code]/route.ts)
+and [`src/app/api/join/route.ts`](../src/app/api/join/route.ts), covered in
+[§11](#11-security). Neither of those two routes needs a secret; they exist
+purely so a rate limiter (which only runs inside Vercel/Next.js, not
+inside Supabase) actually sits in the request's path.
 
 ### Deep dive
 Why is "skip the backend, trust the database's own permission system"
@@ -544,6 +581,16 @@ real-world relational-database decisions, not Splitiful quirks:
   (integers) avoids the rounding errors you can get from doing arithmetic
   directly on fractional dollar amounts.
 
+**A fifth table exists but isn't in the diagram above on purpose:**
+`rpc_rate_limits` (added in `supabase/migrations/0013_throttle_invite_rpcs_in_postgres.sql`)
+holds no trip data — it's pure infrastructure, a bucket-counter table backing
+the Postgres-side rate limiter covered in [§11](#11-security). It has Row-Level
+Security turned on with **zero policies** and no `anon`/`authenticated`
+grants at all, so it's unreachable through Supabase's public API even by
+mistake — only the `security definer` functions that call it internally
+can touch it. A clean, small example of "least privilege" applied to a
+table, not just to a feature.
+
 **Replication and sharding don't exist in Splitiful today** — one
 Postgres instance, no copies, no splitting. That's correct for its scale.
 If Splitiful grew a lot, here's what each would look like:
@@ -604,9 +651,18 @@ flowchart LR
 ```
 
 ### Splitiful example
-There's **no server-side cache** anywhere in Splitiful — no Redis, no
-in-memory cache, nothing between the app and the database. The one
-cache-*adjacent* thing is client-side, and it's narrow on purpose:
+There's **no server-side cache for application data** anywhere in
+Splitiful — nothing between the app and the database that stores a copy of
+trip/expense data to avoid re-querying it. Redis *does* exist in the stack
+now ([Upstash](https://upstash.com), via [`src/lib/rate-limit.ts`](../src/lib/rate-limit.ts))
+but it's not a cache in this sense — it only stores rate-limit counters
+(see [§11](#11-security)), never a copy of real data, and nothing reads
+from it hoping to avoid a slow query. Worth flagging because "Redis is in
+the stack" and "Splitiful has a cache" sound like the same fact and
+aren't — a rate limiter and a cache solve different problems even though
+they're often built on the same kind of fast key/value store. The one
+cache-*adjacent* thing that actually serves data is client-side, and it's
+narrow on purpose:
 [`src/lib/remembered-email.ts`](../src/lib/remembered-email.ts) uses the
 browser's own storage (`localStorage` — a small key/value store built
 into every browser, private to that one device) to remember the
@@ -644,13 +700,13 @@ away, while a separate worker processes the queue in the background.
 sequenceDiagram
     participant U as Browser
     participant A as App
-    participant R as Gmail SMTP (email service)
+    participant R as Resend (email service)
 
     rect rgb(255, 245, 235)
     note over U,R: Splitiful today — synchronous
     U->>A: create trip
     A->>R: send confirmation email
-    R-->>A: (waits for Gmail SMTP to respond)
+    R-->>A: (waits for Resend to respond)
     A-->>U: "trip created" (only after email step finishes)
     end
 ```
@@ -661,7 +717,7 @@ sequenceDiagram
     participant A as App
     participant Q as Queue
     participant W as Background worker
-    participant R as Gmail SMTP
+    participant R as Resend
 
     rect rgb(235, 245, 255)
     note over U,R: Hypothetical — asynchronous
@@ -676,23 +732,35 @@ sequenceDiagram
 ### Splitiful example
 [`src/app/api/trip-email/route.ts`](../src/app/api/trip-email/route.ts)
 is exactly the synchronous version: it calls `sendTripEmail(...)`
-directly and waits for Gmail SMTP's response before replying to the browser
-([lines 31–41](../src/app/api/trip-email/route.ts#L31-L41)) — and if
-Gmail SMTP fails, it returns an error (`502`) to the user's browser
-([line 40](../src/app/api/trip-email/route.ts#L40)), even though the
+directly and waits for Resend's response before replying to the browser
+([lines 38–44](../src/app/api/trip-email/route.ts#L38-L44)) — and if
+Resend fails, it returns an error (`502`) to the user's browser
+([line 47](../src/app/api/trip-email/route.ts#L47)), even though the
 trip itself was already created successfully.
 
+**A narrow, non-queue exception worth distinguishing:** the
+performance-scaling feature's client-side timing beacon
+(`reportClientTiming` in [`src/lib/perf/timing.ts`](../src/lib/perf/timing.ts),
+posting to `/api/perf-log`) *is* fire-and-forget — the browser doesn't wait
+for its response before moving on, using `fetch(..., { keepalive: true })`
+wrapped in a `try`/`catch` that swallows any failure silently. That's
+genuinely asynchronous in the "don't make me wait" sense, but it's **not**
+a queue: there's no retry, no durability, no worker picking it back up if
+it fails. It's a fire-and-forget log write, not a task guaranteed to
+eventually complete — a useful contrast for telling "asynchronous" and
+"queued/reliable" apart, since it's easy to conflate the two.
+
 ### Deep dive
-There's no queue anywhere in Splitiful — no background workers, nothing
-"eventually consistent." That's a reasonable choice right now: email
-volume is low, Gmail SMTP is normally fast, and the failure mode (user sees
-"email failed" even though their trip was created fine) is mild. If
-Splitiful sent much higher volumes of email, or added something
-genuinely slow (e.g., generating a PDF trip summary), a queue is the
-primer's standard fix: it decouples "the thing the user is waiting for"
-from "the thing that's slow," and adds resilience — if the email service
-is briefly down, the task just waits in the queue and retries instead of
-failing the user's request outright.
+There's no real queue anywhere in Splitiful — no background workers,
+nothing "eventually consistent" for durable work. That's a reasonable
+choice right now: email volume is low, Resend is normally fast, and the
+failure mode (user sees "email failed" even though their trip was created
+fine) is mild. If Splitiful sent much higher volumes of email, or added
+something genuinely slow (e.g., generating a PDF trip summary), a queue is
+the primer's standard fix: it decouples "the thing the user is waiting
+for" from "the thing that's slow," and adds resilience — if the email
+service is briefly down, the task just waits in the queue and retries
+instead of failing the user's request outright.
 
 ---
 
@@ -751,6 +819,15 @@ row" — `join_trip` needs to check the invite code is valid *and* create
 the membership row *and* not let a client fabricate membership by
 guessing a trip's ID. Wrapping that in a single trusted function is safer
 than trying to express all of it as a permission rule on a plain insert.
+
+One more RPC worth knowing about, even though nothing calls it directly
+from the browser: `public.throttle_rpc(_bucket_key, _limit, _window_seconds)`
+(`supabase/migrations/0013_throttle_invite_rpcs_in_postgres.sql`) is a
+shared helper that `get_trip_by_invite_code` and `join_trip` both call as
+their *first* statement, before doing any real work — it's the Postgres-side
+half of the rate limiting covered in [§11](#11-security). Same "wrap it in
+a trusted function" idea as `complete_trip`, just reused for throttling
+instead of a business action.
 
 ---
 
@@ -825,6 +902,84 @@ that, not a substitute for it — which is exactly the "defense in depth"
 idea: even if the proxy check were removed entirely, the actual data
 would still be protected by RLS underneath it.
 
+### Splitiful example — Rate limiting (a second layer, not a replacement for RLS)
+RLS answers "is this person allowed to see/change this row at all?" It
+deliberately doesn't answer a different question: "is this person allowed
+to try 10,000 times a second?" A security review
+([`docs/security-review-2026-09-17.md`](security-review-2026-09-17.md))
+found exactly that gap: Splitiful's invite codes are only 8 hex characters
+(~32 bits of randomness, generated by `md5(random())`), and the two RPCs
+that consume one — `get_trip_by_invite_code` (preview a trip from its
+invite link) and `join_trip` (actually join it) — had no throttle at all.
+Low-entropy codes plus an unlimited number of guesses is a real
+brute-force path, even though RLS itself was working exactly as designed
+the whole time.
+
+The fix that shipped has **two independent layers**, because the two
+layers close two different holes:
+
+```mermaid
+flowchart TB
+    B1["Browser, via this app's UI"] --> R1["Next.js route<br/>(/api/trip-invite/[code], /api/join)"]
+    R1 -->|"1. app-level check"| UP{"Upstash Redis<br/>sliding-window limiter"}
+    UP -->|ok| RPC
+    B2["Any script, calling Supabase's<br/>PostgREST endpoint directly<br/>(skips this app entirely)"] --> RPC
+
+    subgraph PG["Postgres"]
+        RPC["get_trip_by_invite_code / join_trip"] -->|"2. DB-level check, first statement"| THR{"throttle_rpc()<br/>checks rpc_rate_limits table"}
+        THR -->|ok| WORK["Do the real lookup/join"]
+        THR -->|over limit| REJECT["raise exception<br/>('rate limited...')"]
+    end
+```
+
+- **Layer 1 — app-level, in `src/app/api/`**: [`src/lib/rate-limit.ts`](../src/lib/rate-limit.ts)'s
+  `enforceRateLimit` checks a per-IP sliding-window counter stored in
+  Upstash Redis before either route does any real work, returning a `429`
+  with a `Retry-After` header if the caller's over the limit. Deliberately
+  **fails closed**: if the Redis credentials aren't configured in
+  production, requests are rejected (`503`) rather than silently let
+  through unthrottled.
+- **Layer 2 — DB-level, inside Postgres itself**: layer 1 only protects
+  requests that go through *this app's* Next.js routes. Supabase's
+  database is also reachable directly over its own public API (PostgREST)
+  with the public anon key — completely bypassing Vercel, and therefore
+  bypassing Upstash too. So both RPCs also call `throttle_rpc()`
+  ([§10](#10-communication-rest-vs-rpc-vs-graphql)) as their first
+  statement, which checks and increments a counter in the
+  `rpc_rate_limits` table ([§7](#7-database-relational-replication-sharding))
+  and raises an exception once a bucket's count is exceeded within its
+  window — a check no caller can route around, because every path to
+  these two RPCs passes through the RPC itself.
+
+This is the same "defense in depth" idea as `proxy.ts` vs. RLS, just one
+layer further out: even if a caller discovers and skips the app-level
+limiter entirely (exactly what the direct-to-Supabase path does), the
+database-level throttle still holds — see
+[ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md) for the full
+reasoning, including why a *different* fix (revoking the RPCs' public
+grants entirely) was rejected specifically for `join_trip`, since that RPC
+genuinely needs the caller's own verified identity (`auth.uid()`) to know
+who's joining.
+
+### Deep dive — a real lesson about testing DB code
+ADR 0009 also records a genuinely useful cautionary tale, not just a
+success story. The first version of the `throttle_rpc` migration shipped
+with an ambiguous-column-reference bug in its upsert (`on conflict ... do
+update set` referenced a column name that both the inserted row and the
+existing row share, which Postgres refuses to resolve on its own) — and
+because it was the *first* statement in both RPCs, this would have broken
+`get_trip_by_invite_code` and `join_trip` **100% of the time**, not just on
+an edge case. `npm test`, lint, typecheck, and the build were all green
+throughout, because none of that suite ever actually executed the SQL
+against a real Postgres instance. It was only caught by a QA pass that
+spun up a real local Postgres and called the RPCs live. The lesson
+generalizes past this one bug: **a green test suite proves your
+application code behaves correctly given the database's responses — it
+proves nothing about SQL that suite never actually ran.** Anything living
+inside a migration (a function body, a trigger, a constraint) needs to be
+exercised against a real database at least once, not just type-checked and
+unit-tested around.
+
 ---
 
 ## 12. Scaling roadmap: current → future
@@ -855,9 +1010,9 @@ worth watching — 🔧 recommended upgrade at this stage.
 | **§6 App layer** | ✅ Monolith; most ops skip a backend via direct-client + RLS | ✅ No change | 👀 Still fine as a monolith; start noting which paths would be first to extract | 🔧 Consider extracting independent heavy workloads (e.g. email/notifications) into a separate service |
 | **§7 Database** | ✅ One Postgres instance, no replicas | 👀 Watch query performance; add indexes / bump Supabase plan tier if it slows | 🔧 Add read replica(s) for hot reads (trip view, settle-up); audit indexes | 🔧 Multiple read replicas required; evaluate sharding by `trip_id` if writes also grow |
 | **§8 Cache** | ✅ None (only `localStorage` for remembered email) | ✅ Still unnecessary | 👀 Consider caching hot computed views if recompute cost grows | 🔧 Add a real cache layer for hot read paths |
-| **§9 Async/Queues** | ✅ None — email sent synchronously in the request | ✅ Still fine while email volume is low | 🔧 Move email off the request path into a queue/background worker | 🔧 Dedicated queue/worker system required (email, exports, notifications) |
+| **§9 Async/Queues** | ✅ None — email (via Resend) sent synchronously in the request | ✅ Still fine while email volume is low | 🔧 Move email off the request path into a queue/background worker | 🔧 Dedicated queue/worker system required (email, exports, notifications) |
 | **§10 Communication** | ✅ REST-style table calls + RPC for named actions | ✅ No change | ✅ No change | 👀 Consider a more formal API layer if new client types appear (mobile app, integrations) |
-| **§11 Security** | ✅ RLS is the actual enforcement boundary | 👀 Revisit known deferred gaps (e.g. [ADR 0002](adr/0002-restrict-expense-update-rls-to-payer.md)'s delete-policy note) before the blast radius grows | 🔧 Formal RLS policy audit; close intentionally-deferred gaps now that more real users hit them | 🔧 Full security review; rate limiting; consider moving the highest-risk operations fully server-side |
+| **§11 Security** | ✅ RLS is the enforcement boundary; the two guessable-invite-code RPCs are now rate-limited at both the app layer (Upstash) and inside Postgres itself | 👀 Revisit known deferred gaps (e.g. [ADR 0002](adr/0002-restrict-expense-update-rls-to-payer.md)'s delete-policy note); re-verify the rate limiter's `x-forwarded-for` trust assumption live, per [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md)'s own follow-up note | 🔧 Formal RLS policy audit; close intentionally-deferred gaps now that more real users hit them | 🔧 Full security review; extend rate limiting to any other RPC that gains a guessable-credential shape; consider moving the highest-risk operations fully server-side |
 
 ### Reading the table by column, not just by row
 
@@ -875,14 +1030,21 @@ worth watching — 🔧 recommended upgrade at this stage.
 - **§9 Async/queues triggers earlier than §8 Cache.** That's because the
   synchronous email call in
   [`trip-email/route.ts`](../src/app/api/trip-email/route.ts) has a clear,
-  known failure mode today (a slow/failed Gmail SMTP call blocks the user's
+  known failure mode today (a slow/failed Resend call blocks the user's
   request) that just gets more frequent as volume grows — whereas caching
   has no clear problem to solve until read load is genuinely high (see
   [§8](#8-caching) vs. [§9](#9-asynchronism-and-queues)).
 - **§11 Security isn't a one-time migration** — it shows up at every
-  stage, but as *hardening the existing RLS approach* (auditing policies,
-  closing deferred gaps), not as a redesign. The mechanism ([§11](#11-security))
-  doesn't change; the rigor applied to it does.
+  stage, but as *hardening an existing approach* (auditing RLS policies,
+  closing deferred gaps, re-verifying the rate limiter's trust
+  assumptions), not as a redesign. The mechanisms ([§11](#11-security))
+  don't change; the rigor applied to them does. Notice, too, that the rate
+  limiting itself wasn't added proactively at some milestone in this
+  table — it was added in response to an actual finding
+  (`docs/security-review-2026-09-17.md`) once someone went looking. That's
+  a realistic pattern worth naming: NFRs like security don't always get
+  scheduled ahead of time the way this table's milestones suggest: they
+  land when a review or an incident actually surfaces the gap.
 - **§6 Application layer and §10 Communication are the two "maybe never"
   columns.** The monolith and the direct-client/RLS pattern can plausibly
   hold all the way to large scale for an app shaped like Splitiful — the
@@ -890,7 +1052,102 @@ worth watching — 🔧 recommended upgrade at this stage.
   *product* changes (a mobile app, third-party integrations) than raw
   user count.
 
-## 13. Glossary
+## 13. Containers: Vercel's model vs. Docker, and when to switch
+
+### High-level summary
+- **Container** — a package of your app plus everything it needs to run
+  (exact Node version, OS libraries, dependencies) bundled together, so it
+  runs identically no matter what machine starts it. Solves "works on my
+  machine" by shipping the machine's relevant parts along with the code.
+- **Docker** — the standard tool for building and running containers. A
+  `Dockerfile` is the recipe ("start from Node 22, copy in the app, install
+  dependencies, run `next start`"); the result is an *image* you can run
+  anywhere Docker runs.
+- **Docker Compose** — a config file (`docker-compose.yml`) for running
+  *several* containers together as one system — e.g. "app container +
+  database container + cache container, all networked together, one
+  command to start them all." Mainly a local-development tool.
+
+The easy misconception to clear up first: **"not writing a Dockerfile"
+does not mean "not using containers."** It means someone else (Vercel)
+is building and running the container for you, out of sight.
+
+### Splitiful example — what's actually running today, container-wise
+
+```mermaid
+flowchart TB
+    subgraph Today["Today: Vercel builds and runs the container for you"]
+        direction TB
+        Repo["This repo<br/>(source code, no Dockerfile)"] -->|git push| Build["Vercel's build step<br/>(runs 'next build' inside<br/>a container Vercel defines)"]
+        Build --> Fn["Serverless/edge function<br/>(each request may run in a<br/>fresh container instance)"]
+    end
+    Fn -->|network calls, not same-box| SB[("Supabase<br/>Postgres + Auth")]
+    Fn -->|network calls| UP[("Upstash Redis")]
+    Fn -->|network calls| RS[("Resend")]
+```
+
+```mermaid
+flowchart TB
+    subgraph Hypothetical["Hypothetical: you own the Dockerfile"]
+        direction TB
+        Repo2["This repo<br/>+ Dockerfile"] -->|docker build| Img["Image you built yourself"]
+        Img -->|deploy to Fly.io / Railway / ECS / your own box| Cont["Container you chose to run,<br/>on infra you chose"]
+    end
+    Cont -->|network calls, same as today| SB2[("Supabase")]
+    Cont -->|network calls| UP2[("Upstash")]
+    Cont -->|network calls| RS2[("Resend")]
+```
+
+The two diagrams look almost identical on the right-hand side on purpose:
+**Supabase, Upstash, and Resend don't change at all.** They're managed
+services reached over the network either way — nothing about them gets
+containerized by this repo in either world, because you don't own or run
+those servers. The only thing that would change is *who builds the
+container the Next.js app runs in, and where it's deployed* — everything
+left of that stays identical.
+
+| | **Today (Vercel)** | **Hypothetical (Docker, self-managed)** |
+|---|---|---|
+| **Who writes the container recipe** | Vercel (invisible to you) — it infers how to build/run a Next.js app | You — a `Dockerfile` you write and maintain in this repo |
+| **Where it runs** | Vercel's infrastructure only | Anywhere Docker runs: Fly.io, Railway, AWS ECS, your own server |
+| **Local dev** | `next dev` directly on your machine, no container involved | Optionally `docker compose up`, so dev matches prod exactly |
+| **Scaling / load balancing** | Automatic, platform-managed ([§5](#5-load-balancer-and-reverse-proxy)) | You configure it (the platform's autoscaling, or your own) |
+| **Preview deployments per PR, image optimization, edge functions** | Built in, zero config | You'd rebuild or lose these, depending on the target platform |
+| **What you maintain** | Nothing infra-side | Dockerfile, base-image updates/security patches, deploy pipeline |
+
+### Deep dive — local Postgres already uses Docker, just not for the app
+One nuance worth knowing: if this project uses the Supabase CLI for local
+development (`supabase start`), **that already runs Docker Compose under
+the hood** — a local Postgres, a local Auth service, a local Studio UI,
+all as containers — even though there's no `docker-compose.yml` checked
+into this repo. That's Supabase's own tooling doing it for you, the same
+"someone else owns the container" pattern as Vercel, just for the
+database piece instead of the app piece. So in a real sense, Docker is
+already part of this project's toolchain today — it's just not something
+you, personally, configure or maintain.
+
+### When to consider switching
+
+| Trigger | Why it would push toward Docker | Splitiful today |
+|---|---|---|
+| **Leaving Vercel** (cost, a feature Vercel doesn't support, wanting a specific region/cloud) | A Dockerfile is the portable unit almost every other host accepts | Not happening — no stated reason to leave |
+| **A long-running process** Vercel's serverless functions can't do well (a persistent WebSocket server, a background worker polling a queue continuously) | Containers can run indefinitely; serverless functions are built to start, finish, and stop | Nothing in the roadmap needs this — see [§9](#9-asynchronism-and-queues), still synchronous |
+| **Needing the exact same runtime in dev, CI, and prod** because subtle environment differences have caused real bugs | A container is byte-for-byte the same everywhere | Hasn't come up — `next dev` has been sufficient |
+| **Compliance/data-residency requirements** that require self-hosting rather than using someone else's managed platform | You control exactly where and how the container runs | No such requirement exists for this project |
+| **Team/process reasons** — e.g. wanting infra-as-code parity across many services, or a platform team standardizing everything on Kubernetes | Containers are the common denominator most orchestration tooling expects | Splitiful is a monolith with one deploy target ([§6](#6-application-layer-monolith-modular-monolith-and-microservices)) — no such standardization pressure yet |
+
+None of these are true for Splitiful right now. This is the same pattern
+as [§8 Caching](#8-caching) and [§9 Async/queues](#9-asynchronism-and-queues):
+the right move is recognizing there's no problem this would solve today,
+not pre-building infrastructure for a scenario that hasn't happened. If
+one of the triggers above ever becomes real, the migration itself is
+small — Next.js has an official ["standalone" output mode](node_modules/next/dist/docs)
+specifically meant to make writing that first Dockerfile straightforward
+whenever it's actually needed.
+
+---
+
+## 14. Glossary
 
 Quick lookup for terms used throughout this document.
 
@@ -902,11 +1159,14 @@ Quick lookup for terms used throughout this document.
 | CDN | Servers spread globally that serve static files from near the user |
 | Client | The program making a request — usually a browser |
 | DNS | The system that turns domain names into server addresses |
+| Fire-and-forget | The caller sends a request and moves on without waiting for (or acting on) the response — not the same as a queue, since there's no retry or guarantee it ever completes |
 | Latency | How long a request takes |
+| Least privilege | Every part of a system should be able to do only what it actually needs to, nothing more |
 | Load balancer | Spreads incoming requests across multiple server copies |
 | Microservices | An app split into several small, independently-run services |
 | Monolith | An app built and deployed as one single unit |
 | Queue | A waiting line for tasks to be processed later, usually by a background worker |
+| Rate limiting | Capping how many requests a caller can make in a given time window, to stop abuse (e.g. guessing a low-entropy code) rather than to control who's allowed to read/write data at all |
 | Replication | Keeping synced copies of a database |
 | Reverse proxy | Code that inspects/redirects every request before it reaches the real app logic |
 | RLS (Row-Level Security) | A database feature that restricts which rows a query can see/change, enforced by the database itself |

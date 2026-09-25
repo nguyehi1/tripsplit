@@ -6,10 +6,27 @@ const redirectMock = vi.fn((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
+/**
+ * Performance-scaling Tier 1 fix (architecture.md's "/trips — two tiers"): the page now kicks off
+ * its own `trips` select concurrently with `getUser()`, rather than only calling `getUser()` here
+ * — so this mock needs a `.from("trips").select(...).order(...)` chain in addition to `auth`,
+ * even though `getMyTrips` itself is mocked separately below and never exercises this chain for
+ * real. `tripRows` defaults to empty since every test that cares about actual trip data supplies
+ * it via `getMyTripsMock` instead.
+ */
+function createSupabaseMock(tripRows: unknown[] = []) {
+  return {
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: "user-1" } } })) },
-  })),
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        order: vi.fn(() => Promise.resolve({ data: tripRows, error: null })),
+      })),
+    })),
+  };
+}
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(async () => createSupabaseMock()),
 }));
 
 vi.mock("@/lib/data/trips", () => ({
@@ -101,6 +118,7 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
   it("redirects to / when there is no user (defensive fallback)", async () => {
     const { createClient } = await import("@/lib/supabase/server");
     (createClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...createSupabaseMock(),
       auth: { getUser: vi.fn(async () => ({ data: { user: null } })) },
     });
     const { default: TripsDashboardPage } = await import("./page");

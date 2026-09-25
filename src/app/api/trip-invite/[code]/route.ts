@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getTripByInviteCode } from "@/lib/data/trips";
+import { getTripByInviteCode, getTripSummary } from "@/lib/data/trips";
+import { timeAsync } from "@/lib/perf/timing";
 import { dbRateLimitResponse, enforceRateLimit, isDbRateLimitError } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,13 +17,23 @@ import { createClient } from "@/lib/supabase/server";
  * directly (docs/security-review-2026-09-17-followup.md finding #1) — `get_trip_by_invite_code`
  * now also throttles itself from inside Postgres (migration 0013), so `isDbRateLimitError` below
  * catches that path's rejection too, not just this route's own `enforceRateLimit`.
+ *
+ * Also returns the trip's public summary tier (`summary`, additive — performance-scaling
+ * architecture.md's "Invite/join preview" fix): `/join/[code]/page.tsx` used to make a second,
+ * direct-to-Supabase `getTripSummary` call once it had `tripId` from this route's response —
+ * moving that fetch server-side collapses the page's two sequential browser round trips into one.
+ * `getTripSummary` genuinely needs `invite.tripId` (this route's own lookup result), so the two
+ * calls can't run concurrently despite both accepting a plain `SupabaseClient<Database>` — this
+ * is a real dependency chain, not a Promise.all-able pair. Side effect worth flagging (not a
+ * violation, see architecture.md): this incidentally routes `get_trip_summary` through this
+ * route's own Upstash limit for this one code path, since it now runs after `enforceRateLimit`
+ * has already passed — `get_trip_summary` itself is untouched and still unthrottled everywhere
+ * else (e.g. `/trip/[id]`).
  */
 export async function GET(request: Request, { params }: { params: Promise<{ code: string }> }) {
-  const rateLimited = await enforceRateLimit(request, {
-    key: "trip-invite-lookup",
-    limit: 10,
-    windowSeconds: 60,
-  });
+  const rateLimited = await timeAsync("invite-lookup", "enforceRateLimit", () =>
+    enforceRateLimit(request, { key: "trip-invite-lookup", limit: 10, windowSeconds: 60 }),
+  );
   if (rateLimited) return rateLimited;
 
   const { code } = await params;
@@ -33,11 +44,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
   const supabase = await createClient();
 
   try {
-    const invite = await getTripByInviteCode(supabase, code);
+    const invite = await timeAsync("invite-lookup", "getTripByInviteCode", () =>
+      getTripByInviteCode(supabase, code),
+    );
     if (!invite) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
-    return NextResponse.json(invite);
+    const summary = await timeAsync("invite-lookup", "getTripSummary", () =>
+      getTripSummary(supabase, invite.tripId),
+    );
+    return NextResponse.json({ ...invite, summary });
   } catch (e) {
     // 60 must match the `_window_seconds` argument in migration 0013's
     // `perform public.throttle_rpc('invite-lookup:' || _ip, 20, 60);`.

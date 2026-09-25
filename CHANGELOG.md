@@ -12,6 +12,42 @@ a release moves that section under a dated version heading.
 
 ### Added
 
+- **Remove a member from a trip's roster, and self-service "leave trip."**
+  The trip organizer can now remove another real (non-placeholder) member
+  from the roster (`/trip/[id]/invite`), and any non-organizer member can
+  leave a trip themselves, from the same screen. Both require an explicit
+  confirm step that discloses the removed/left member could still rejoin
+  by reusing the same invite link — there's no invite-code rotation in this
+  pass, and this is deliberately not framed as access revocation. Both
+  hard-delete the `trip_members` row via two new `security definer` RPCs
+  (`remove_trip_member`, `leave_trip`, `supabase/migrations/0014_remove_and_leave_trip_member.sql`),
+  mirroring the existing `remove_placeholder_member` pattern, and are
+  blocked once the trip is completed/locked. The organizer can't remove or
+  leave a trip via this flow. Past expenses and `paid_by` history are
+  never altered, reassigned, or deleted; remaining members' computed
+  shares recompute live across the new, smaller member count, the same way
+  they already do when someone joins mid-trip. A removed/left member sees
+  an explicit "you're no longer on this trip" in-app state the next time
+  they load the trip (bookmark, invite link, navigation) instead of the
+  generic public summary a stranger would see — reconstructed from a new
+  read-only `was_removed_from_trip` RPC using `expenses.paid_by` data that
+  already exists, with no new stored fact and no audit table (see
+  [ADR 0012](docs/adr/0012-post-removal-detection-and-ghost-payer-rendering.md)).
+  **Disclosed, accepted gap**: a member removed/left before ever logging an
+  expense on that trip has no such data to reconstruct from and instead
+  sees the pre-existing generic "trip not found" view. As part of this
+  feature, `getTripView` (`src/lib/data/trips.ts`) was also fixed to
+  synthesize a placeholder "ghost payer" (`isRemoved: true`) for any
+  expense whose payer is no longer a current member, since a former
+  member's historical expenses would otherwise crash the expense list's
+  render — this is a fix to a code path that was unreachable before this
+  feature, not a change to any previously-possible behavior. No changes to
+  `expenses` rows, `trip_members`/`expenses` RLS policies, or the existing
+  `remove_placeholder_member`/`add_placeholder_member`/
+  `rename_placeholder_member` placeholder-management RPCs.
+
+### Added
+
 - **"Warm paper" visual restyle of the welcome, create-a-trip, trip view, and
   add-expense screens**, plus a new mascot, Miso. Lit paper background with
   an ochre/terracotta ambient glow, a blurred sticky nav bar with content
@@ -61,6 +97,37 @@ a release moves that section under a dated version heading.
   accessibility delta: the editable expense row is now a real link, so
   keyboard activation works via Enter but no longer via Space (see
   [ADR 0005](docs/adr/0005-ssr-page-conversion-pattern.md)).
+- **Reduced round trips on the three surfaces reported as slow**
+  (`/trips`, `/trip/[id]`, and the invite/join preview), plus a redundant
+  auth call in add-expense. `/trip/[id]` now runs `getUser()` and
+  `getTripSummary()` concurrently instead of sequentially before
+  conditionally fetching `getTripView()`; `/trips` runs its own `getUser()`
+  call concurrently with its `trips` select instead of sequentially
+  (`getMyTrips` now accepts optional pre-fetched trip rows); the invite/join
+  preview (`GET /api/trip-invite/[code]`) now returns the trip's public
+  summary in the same server-side round trip as the invite lookup, so
+  `/join/[code]` makes one fetch instead of one fetch plus a second,
+  direct-to-Supabase call; and add-expense's submit handler no longer makes
+  a second, redundant `supabase.auth.getUser()` call
+  (`requireVerifiedSession` now accepts an optional pre-fetched user). A
+  delayed "Taking a little longer than usual…" second line was added to the
+  four existing blocking loading states so a genuinely slow load (e.g. a
+  cold start) doesn't read as a silent hang. No access-control, RLS,
+  invite-throttle, or split-calculation change on any surface — latency/
+  round-trip reduction only, same behavior otherwise (see
+  [ADR 0011](docs/adr/0011-forward-verified-user-id-header-for-trips-page.md)
+  for a related, larger `/trips` change that was scoped but **not** shipped
+  in this pass). Also ships temporary, interim per-call timing
+  instrumentation (`src/lib/perf/timing.ts`, `POST /api/perf-log`,
+  rate-limited and field-length-bounded) used to measure these surfaces
+  going forward (see
+  [ADR 0010](docs/adr/0010-interim-per-call-timing-instrumentation.md)).
+  **Note**: this fix shipped on code-level bottleneck analysis rather than a
+  measured baseline — the documented before/after p50/p95 measurement this
+  work is meant to satisfy is deferred to post-deploy, since no live
+  production traffic exists in this build environment (see
+  `docs/ROADMAP.md`'s `performance-scaling` entry); this change is not yet a
+  verified performance win.
 - `src/lib/dates.ts` (`formatDate`, `formatDayDate`, `formatDateRange`) now
   parse and format dates against an explicit, fixed `UTC` zone instead of
   the runtime's implicit local timezone. This is a latent-bug fix required

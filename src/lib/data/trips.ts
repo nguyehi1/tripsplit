@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { avatarColorFor, initialsFor } from "@/lib/avatar";
 import { centsToDollars, dollarsToCents } from "@/lib/currency";
 import { formatDayDate, todayIso } from "@/lib/dates";
+import { timeAsync } from "@/lib/perf/timing";
 import { computeBalances, simplifyDebts } from "@/lib/settlement";
 import type { Database } from "@/lib/supabase/types";
 
@@ -89,6 +90,33 @@ export async function removePlaceholderMember(supabase: Client, memberId: string
   if (error) throw error;
 }
 
+/**
+ * Organizer-only, real-non-placeholder-member-only, blocked once the trip is completed or if
+ * targeting the organizer's own row — enforced by the RPC (`remove_trip_member`'s query
+ * predicate), not just this wrapper.
+ */
+export async function removeTripMember(supabase: Client, memberId: string) {
+  const { error } = await supabase.rpc("remove_trip_member", { _member_id: memberId });
+  if (error) throw error;
+}
+
+/** Non-organizer members only, blocked once the trip is completed. Removes the caller's own row. */
+export async function leaveTrip(supabase: Client, tripId: string) {
+  const { error } = await supabase.rpc("leave_trip", { _trip_id: tripId });
+  if (error) throw error;
+}
+
+/**
+ * True if the caller is not currently a member of this trip but has a paid_by expense on it —
+ * see docs/adr/0012-post-removal-detection-and-ghost-payer-rendering.md. Used to distinguish "you
+ * were removed/left" from "you were never a member" on a later, independent page load.
+ */
+export async function wasRemovedFromTrip(supabase: Client, tripId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("was_removed_from_trip", { _trip_id: tripId });
+  if (error) throw error;
+  return Boolean(data);
+}
+
 export async function submitFeedback(
   supabase: Client,
   input: { userId: string; tripId?: string; rating?: "yes" | "fine" | "not_really"; comment?: string },
@@ -145,21 +173,39 @@ export async function updateExpense(
   return data;
 }
 
+type TripRow = Database["public"]["Tables"]["trips"]["Row"];
+
 /**
  * Fetches every trip the current user belongs to (RLS already scopes `trips` and `trip_members`
  * to the caller's own trips), with just enough shape for a summary list: member avatars, total
  * spend, and the caller's own net balance on each trip.
+ *
+ * `prefetchedTripRows` (performance-scaling, architecture.md's "/trips — two tiers", Tier 1) is
+ * an optional pre-fetched `trips` result — when supplied, this skips its own `trips` select
+ * entirely, letting the caller (`src/app/trips/page.tsx`) kick that query off concurrently with
+ * its own `getUser()` call instead of waiting for this function to fetch it sequentially. Omitted
+ * (every other/test call site), behavior is byte-for-byte unchanged: this fetches `trips` itself,
+ * same as before.
  */
-export async function getMyTrips(supabase: Client, currentUserId: string) {
-  const tripsResult = await supabase.from("trips").select("*").order("created_at", { ascending: false });
-  if (tripsResult.error) throw tripsResult.error;
-  const tripRows = tripsResult.data ?? [];
+export async function getMyTrips(supabase: Client, currentUserId: string, prefetchedTripRows?: TripRow[]) {
+  let tripRows: TripRow[];
+  if (prefetchedTripRows) {
+    tripRows = prefetchedTripRows;
+  } else {
+    const tripsResult = await timeAsync("my-trips", "trips", () =>
+      supabase.from("trips").select("*").order("created_at", { ascending: false }),
+    );
+    if (tripsResult.error) throw tripsResult.error;
+    tripRows = tripsResult.data ?? [];
+  }
   if (tripRows.length === 0) return [];
 
   const tripIds = tripRows.map((t) => t.id);
   const [membersResult, expensesResult] = await Promise.all([
-    supabase.from("trip_members").select("*").in("trip_id", tripIds).order("joined_at", { ascending: true }),
-    supabase.from("expenses").select("*").in("trip_id", tripIds),
+    timeAsync("my-trips", "trip_members", () =>
+      supabase.from("trip_members").select("*").in("trip_id", tripIds).order("joined_at", { ascending: true }),
+    ),
+    timeAsync("my-trips", "expenses", () => supabase.from("expenses").select("*").in("trip_id", tripIds)),
   ]);
   if (membersResult.error) throw membersResult.error;
   if (expensesResult.error) throw expensesResult.error;
@@ -227,14 +273,18 @@ export type MyTrip = Awaited<ReturnType<typeof getMyTrips>>[number];
  */
 export async function getTripView(supabase: Client, tripId: string, currentUserId: string) {
   const [tripResult, membersResult, expensesResult] = await Promise.all([
-    supabase.from("trips").select("*").eq("id", tripId).single(),
-    supabase.from("trip_members").select("*").eq("trip_id", tripId).order("joined_at", { ascending: true }),
-    supabase
-      .from("expenses")
-      .select("*")
-      .eq("trip_id", tripId)
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false }),
+    timeAsync("trip-view", "trips", () => supabase.from("trips").select("*").eq("id", tripId).single()),
+    timeAsync("trip-view", "trip_members", () =>
+      supabase.from("trip_members").select("*").eq("trip_id", tripId).order("joined_at", { ascending: true }),
+    ),
+    timeAsync("trip-view", "expenses", () =>
+      supabase
+        .from("expenses")
+        .select("*")
+        .eq("trip_id", tripId)
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false }),
+    ),
   ]);
 
   if (tripResult.error) throw tripResult.error;
@@ -290,13 +340,46 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
   });
   const memberById = new Map(members.map((m) => [m.id, m]));
 
+  // Ghost-payer fix (docs/adr/0012-post-removal-detection-and-ghost-payer-rendering.md,
+  // architecture.md's "Impact analysis — the ghost-payer bug"): a removed/left member's past
+  // expenses still have a `paid_by` that no longer resolves to any *current* `trip_members` row
+  // (their row is gone — this feature is what first makes that possible). Synthesize an
+  // in-memory-only placeholder payer for each distinct such id so expense rendering has a
+  // defined `payer` to read, without adding them to the roster (`members`) or to
+  // `computeBalances`' input — they're not a share-owing party, only a display concern.
+  //
+  // `isRemoved` is optional (rather than a required `false` on every real member) so a current
+  // member's payer object stays exactly the same shape it always was — only the synthetic ghost
+  // entry ever sets it, to `true`.
+  type PayerSummary = (typeof members)[number] & { isRemoved?: boolean };
+  const ghostPayerById = new Map<string, PayerSummary>();
+  for (const e of expenseRows) {
+    const resolvedId = memberIdForPaidBy(e.paid_by);
+    if (memberById.has(resolvedId) || ghostPayerById.has(resolvedId)) continue;
+    ghostPayerById.set(resolvedId, {
+      id: resolvedId,
+      displayName: "Removed member",
+      joinedAt: "",
+      isOrganizer: false,
+      isPlaceholder: false,
+      isRemoved: true,
+      initials: "?",
+      avatar: { bg: "var(--color-avatar-placeholder)", fg: "var(--color-ink)" },
+      paidCents: 0,
+      shareCents: 0,
+      netCents: 0,
+      expenseCount: 0,
+    });
+  }
+  const payerById = (id: string): PayerSummary => memberById.get(id) ?? ghostPayerById.get(id)!;
+
   const expenses = expenseRows.map((e) => ({
     id: e.id,
     paidBy: memberIdForPaidBy(e.paid_by),
     amountCents: dollarsToCents(Number(e.amount)),
     description: e.description,
     day: formatDayDate(e.date),
-    payer: memberById.get(memberIdForPaidBy(e.paid_by))!,
+    payer: payerById(memberIdForPaidBy(e.paid_by)),
   }));
 
   const resolvedSettlements = settlements.map((s) => ({

@@ -73,7 +73,12 @@ export function TripTabs({
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[15px] font-semibold">{expense.description}</div>
                     <div className="mt-px text-[12px] text-ink/[0.72]">
-                      {displayNameFor(expense.payer.displayName, expense.payer.isPlaceholder)} · {expense.day}
+                      {/* A former member's expenses render with a muted, non-roster identity
+                       * (`isRemoved`) instead of their real name — see ADR 0012. */}
+                      {expense.payer.isRemoved
+                        ? expense.payer.displayName
+                        : displayNameFor(expense.payer.displayName, expense.payer.isPlaceholder)}{" "}
+                      · {expense.day}
                     </div>
                   </div>
                   <div className="text-display text-[17px]">{formatCents(expense.amountCents)}</div>

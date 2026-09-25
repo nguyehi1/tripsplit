@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { joinTrip } from "@/lib/data/trips";
 import { sendTripEmail } from "@/lib/email";
+import { timeAsync } from "@/lib/perf/timing";
 import { dbRateLimitResponse, enforceRateLimit, isDbRateLimitError } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,7 +17,9 @@ import { createClient } from "@/lib/supabase/server";
  * (migration 0013), so `isDbRateLimitError` below catches that path's rejection too.
  */
 export async function POST(request: Request) {
-  const rateLimited = await enforceRateLimit(request, { key: "join-trip", limit: 10, windowSeconds: 60 });
+  const rateLimited = await timeAsync("join-trip", "enforceRateLimit", () =>
+    enforceRateLimit(request, { key: "join-trip", limit: 10, windowSeconds: 60 }),
+  );
   if (rateLimited) return rateLimited;
 
   const { inviteCode, displayName } = await request.json();
@@ -28,7 +31,9 @@ export async function POST(request: Request) {
   const { origin } = new URL(request.url);
 
   try {
-    const tripId = await joinTrip(supabase, { inviteCode, displayName: displayName ?? "" });
+    const tripId = await timeAsync("join-trip", "joinTrip", () =>
+      joinTrip(supabase, { inviteCode, displayName: displayName ?? "" }),
+    );
     await sendJoinedEmail(supabase, tripId, origin);
     return NextResponse.json({ tripId });
   } catch (e) {
@@ -48,8 +53,10 @@ async function sendJoinedEmail(
 ) {
   try {
     const [{ data: userData }, { data: trip }] = await Promise.all([
-      supabase.auth.getUser(),
-      supabase.from("trips").select("name").eq("id", tripId).single(),
+      timeAsync("join-trip", "sendJoinedEmail.getUser", () => supabase.auth.getUser()),
+      timeAsync("join-trip", "sendJoinedEmail.trips", () =>
+        supabase.from("trips").select("name").eq("id", tripId).single(),
+      ),
     ]);
     const email = userData.user?.email;
     if (!email || !trip) return;

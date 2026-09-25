@@ -9,8 +9,8 @@ reconstruct it from this file's edit history.
 ## System overview
 
 Splitiful is a Next.js 16 (App Router) app with Supabase for auth, database,
-and row-level security, and Gmail SMTP (via `nodemailer`) for transactional
-email. Deployed on Vercel.
+and row-level security, and Resend for transactional email. Deployed on
+Vercel.
 
 **Mutation pattern**: almost all writes go directly from client components
 through the Supabase browser client (`src/lib/supabase/client.ts`), calling
@@ -18,8 +18,8 @@ either a table `.insert()`/`.update()` or a `security definer` RPC (e.g.
 `create_trip`, `join_trip`, `complete_trip`), with **RLS as the authorization
 boundary** — there is deliberately no Next.js route handler in that path.
 `src/app/api/` is reserved for the rare case where a server-held secret is
-involved (currently just `trip-email/route.ts`, which needs the Gmail App
-Password). New CRUD-style mutations should default to the direct-client pattern
+involved (currently just `trip-email/route.ts`, which needs the Resend API
+key). New CRUD-style mutations should default to the direct-client pattern
 and only add an API route when there's a genuine server-secret or
 server-only-computation reason to.
 
@@ -48,7 +48,12 @@ checked trip *membership* itself (via RLS surfacing an error from
 UI) since that's a check `proxy.ts` structurally cannot make. **As of the
 simplified-onboarding feature this is no longer true for `/trip/*`** — see
 the "Auth model" note directly below; `/trips` alone still matches the
-description above unchanged.
+description above unchanged. **As of the performance-scaling feature**, note
+that `/trips` specifically still pays *two* sequential Supabase-Auth-server
+round trips per request (one inside `proxy.ts`'s gate, one again in the page
+itself) — an already-known, deliberately-accepted tradeoff from ADR 0005; see
+[ADR 0011](adr/0011-forward-verified-user-id-header-for-trips-page.md) for
+the proposed (not yet executed) fix, contingent on real latency data.
 
 **Modal-that's-also-a-route pattern (parallel + intercepting routes)**: as of
 the ux-revamp feature, `src/app/trip/[id]/` has the app's first
@@ -78,7 +83,13 @@ animation, with no separate flag needed for that half of the motion. See
 and `docs/features/ux-revamp/architecture.md` for the full design, the
 rejected simpler alternative, and why this is reserved for the
 page-vs-overlay case rather than adopted as a new default over ADR 0005's
-plain Server Component + `<Link>` pattern.
+plain Server Component + `<Link>` pattern. **As of the performance-scaling
+feature**, note that `add-expense-sheet-content.tsx`'s own mount-time gating
+fetch (member count, lock state, ownership) independently re-fetches data the
+underlying trip page's Server Component already computed — a real, if not
+yet acted-on, round-trip-reduction candidate; see
+`docs/features/performance-scaling/architecture.md`'s add/edit-expense
+section.
 
 **Design tokens / theming**: as of the ux-revamp feature, all color,
 shadow, and radius values used by a restyled screen are expected to be named
@@ -142,12 +153,18 @@ enforcement for those paths now, more so than before.
 detail or writing an expense redirects to the full-page `/check-email` OTP
 flow and resumes the attempted action on success
 (`src/lib/auth-gate.ts`'s `requireVerifiedSession` +
-`src/lib/pending-action.ts`'s save-draft-and-resume). For the **organizer's
-own trip**, this was replaced by a hide-and-reveal pattern: the trip page
-hides its mutating entry points (Add expense, Settle up, Invite others)
-entirely while the owner's session is unverified and shows a persistent
-inline email/code verification widget in their place, with no navigation to
-`/check-email` — see
+`src/lib/pending-action.ts`'s save-draft-and-resume). **As of the
+performance-scaling feature**, `requireVerifiedSession` accepts an optional
+already-fetched user object (`requireVerifiedSession(supabase,
+prefetchedUser?)`) so a caller that's about to need the user object anyway
+(e.g. add-expense's submit handler, which also needs it for `paidBy`) can
+avoid a second, redundant `supabase.auth.getUser()` round trip — existing
+callers that don't pass it keep today's exact behavior. For the
+**organizer's own trip**, this was replaced by a hide-and-reveal pattern: the
+trip page hides its mutating entry points (Add expense, Settle up, Invite
+others) entirely while the owner's session is unverified and shows a
+persistent inline email/code verification widget in their place, with no
+navigation to `/check-email` — see
 `docs/features/simplified-onboarding/architecture.md`'s "Update:
 hide-and-reveal replaces attempt-then-redirect for the organizer" section
 for the full mechanics and rationale. Both mechanisms sit in front of the
@@ -168,7 +185,10 @@ live-computed split (see below), so this was deliberately locked down rather
 than left open the way `join_trip` still is. `join_trip` itself remains
 **unlocked** — a real member can still join a completed trip today; that
 pre-existing gap was out of scope for this feature and was left as-is rather
-than solved unprompted.
+than solved unprompted. As of the remove-member-access feature, the same
+`is_trip_open` gate also covers `remove_trip_member`/`leave_trip` (see the
+`trip_members` entry below) — a completed trip's roster can't change after
+the fact via any of these paths, consistently.
 
 **Client-local device state**: not everything needs to be server state.
 Browser `localStorage` is used for small, non-sensitive, per-device
@@ -189,7 +209,25 @@ client-only (runs in `"use client"` components). Events fire on page mount (for
 page-view events like `trip_create_start`) or in success callbacks after data
 mutations (like `trip_create_complete`). See
 [`docs/features/vercel-analytics/architecture.md`](features/vercel-analytics/architecture.md)
-for the full event list, placement, and privacy safeguards.
+for the full event list, placement, and privacy safeguards. `@vercel/speed-insights`
+is also installed and mounted alongside `<Analytics />` in the root layout,
+giving real-user, per-route Web Vitals (TTFB/LCP/etc.) in the Vercel
+dashboard — page-level only, no per-call/per-query breakdown.
+
+**Performance instrumentation (interim)**: as of the performance-scaling
+feature, `src/lib/perf/timing.ts` provides `timeAsync` (server-side) and
+`reportClientTiming` (client-side, via a small `POST /api/perf-log` beacon
+route) for wrapping individual Supabase calls with structured, greppable
+`[perf]`-tagged log lines (`{ surface, call, durationMs, ok }`, no PII) —
+built because neither `trackEvent` (no properties, by design) nor
+`@vercel/speed-insights` (page-level only) can produce the per-call p50/p95
+breakdown a felt-slowness investigation needs. This is deliberately
+temporary/interim, not a permanent tracing layer — see
+[ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md) and
+`docs/features/performance-scaling/architecture.md` for the full mechanism,
+call sites, and what's deliberately excluded (no instrumentation inside any
+Postgres function body, to avoid an observability-only RPC edit of the kind
+migration 0013 already showed can break production).
 
 **Additive `not null` schema changes on populated tables**: sequence as add
 nullable -> backfill -> set DB-level default -> set `not null`, all in one
@@ -216,14 +254,12 @@ schema; summarized here as it stabilizes:
 - `trip_members` — join table (`trip_id`, `user_id`, `display_name`); no
   direct `insert` RLS policy — the only way a row is created is through the
   `create_trip`/`join_trip` RPCs (`security definer`), so a client can't
-  fabricate membership by guessing a trip's UUID. There is currently no way
-  to remove a *real* member from a trip (no "leave trip" flow exists anywhere
-  in `src/`). As of the add-placeholder-members feature, `user_id` is
-  **nullable** and a new `is_placeholder boolean not null default false`
-  column marks name-only members with no Supabase auth account — a check
-  constraint ties the two together (`is_placeholder` iff `user_id is null`).
-  Placeholders are created/renamed/removed exclusively through
-  `add_placeholder_member`/`rename_placeholder_member`/
+  fabricate membership by guessing a trip's UUID. As of the add-placeholder-members
+  feature, `user_id` is **nullable** and a new `is_placeholder boolean not
+  null default false` column marks name-only members with no Supabase auth
+  account — a check constraint ties the two together (`is_placeholder` iff
+  `user_id is null`). Placeholders are created/renamed/removed exclusively
+  through `add_placeholder_member`/`rename_placeholder_member`/
   `remove_placeholder_member` (`security definer`, organizer-only, and for
   rename/remove, placeholder-only-by-query — see
   `docs/features/add-placeholder-members/architecture.md`), following the
@@ -231,11 +267,30 @@ schema; summarized here as it stabilizes:
   The existing `unique (trip_id, user_id)` constraint needed no change to
   support multiple placeholders per trip: Postgres's default unique-index
   semantics already treat every `NULL` as distinct from every other `NULL`.
-  **Important for any code reading `trip_members`**: because `user_id` is no
-  longer guaranteed unique-and-non-null per row, `src/lib/data/trips.ts`
-  identifies a member by `trip_members.id` (the row's own primary key), not
-  `user_id`, in everything it returns (`members[].id`, `you.id`,
-  `expense.payer.id`, etc.) — see
+  As of the remove-member-access feature, a **real** member's row can also be
+  removed — either by the trip's organizer (`remove_trip_member`, any other
+  non-placeholder member) or by the member themself (`leave_trip`,
+  self-only) — both `security definer` RPCs following the exact same
+  hard-delete/organizer-or-self/`is_trip_open`-gated shape as
+  `remove_placeholder_member`, and both structurally unable to target the
+  organizer's own row (see
+  `docs/features/remove-member-access/architecture.md`). This is a **hard
+  delete**, not a status/soft-delete column — there is no queryable "was a
+  member, now removed" state on `trip_members` itself; see
+  [ADR 0012](adr/0012-post-removal-detection-and-ghost-payer-rendering.md)
+  for how the app still surfaces a removed/left member's own "you're no
+  longer on this trip" state on a later visit (reconstructed from
+  `expenses.paid_by`, not stored), and for a real historical-rendering
+  consequence this creates (a former member's past expenses need a
+  synthetic "ghost payer" in `getTripView`, since their `trip_members` row —
+  and with it their display name — no longer exists to resolve `paid_by`
+  against). **Important for any code reading `trip_members`**: because
+  `user_id` is no longer guaranteed unique-and-non-null per row (and, as of
+  remove-member-access, no longer guaranteed to have a row at all for every
+  `user_id` that ever appears in `expenses.paid_by` on a trip),
+  `src/lib/data/trips.ts` identifies a member by `trip_members.id` (the
+  row's own primary key), not `user_id`, in everything it returns
+  (`members[].id`, `you.id`, `expense.payer.id`, etc.) — see
   [ADR 0004](adr/0004-placeholder-member-nullable-user-id-and-identity-key.md).
   `user_id` remains available on the raw row for matching against
   `expenses.paid_by` (which is still always a real user id), but is not used
@@ -257,7 +312,14 @@ schema; summarized here as it stabilizes:
   included in that count with zero settlement-logic changes — it's just a
   member row with no expenses ever attached to it, since `paid_by` still
   references `auth.users(id)` directly and a placeholder never has a
-  corresponding `auth.users` row to reference.
+  corresponding `auth.users` row to reference. As of remove-member-access,
+  this "current `trip_members` count" denominator can shrink after expenses
+  already exist (a removed/left member's past `paid_by` rows stay exactly
+  as they were, but they no longer count toward the member total the trip
+  total is divided across) — this is a deliberate, live-recompute
+  consequence, not a bug, and mirrors how a member joining mid-trip already
+  changes the same denominator today; see
+  `docs/features/remove-member-access/architecture.md` and ADR 0012.
 - `feedback` — free-standing, scoped to `user_id = auth.uid()` on both
   read and write.
 
@@ -294,7 +356,11 @@ future features touch expenses — see ADRs before changing further):
 **RLS on `trip_members`** (`select`): as of simplified-onboarding,
 `is_owner_or_verified_member(trip_id)` — same predicate and same rationale
 as `expenses`' `select` above (roster identity is detail-tier, readable by
-a pre-verification owner, gated behind verification for anyone else).
+a pre-verification owner, gated behind verification for anyone else). As of
+remove-member-access, no policy change was needed here: once a real member's
+row is hard-deleted by `remove_trip_member`/`leave_trip`, this same `select`
+policy already stops returning it to anyone, the same way it's always
+stopped returning rows for a trip a caller never joined.
 
 ## Known integration points / shared code
 
@@ -327,6 +393,21 @@ this before adding a parallel implementation.
   hard-navigation fallback for the add-expense sheet) can reuse the same
   tiered fetch/render without a second implementation — see
   [ADR 0008](adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md).
+  **As of the performance-scaling feature**, `getMyTrips` accepts an optional
+  pre-fetched `trips` rows parameter so a caller that already needs to run
+  its own `trips` query concurrently with an auth check doesn't force a
+  second, redundant one — see
+  `docs/features/performance-scaling/architecture.md`'s `/trips` section;
+  omitting it keeps today's exact behavior. **As of the remove-member-access
+  feature**, this is also where `removeTripMember`/`leaveTrip`/
+  `wasRemovedFromTrip` live (thin wrappers around the new
+  `remove_trip_member`/`leave_trip`/`was_removed_from_trip` RPCs, same style
+  as `removePlaceholderMember`), and where `getTripView` gained required
+  "ghost payer" handling for a removed/left member's historical `paid_by`
+  rows — see `docs/features/remove-member-access/architecture.md` and ADR
+  0012. Any future function here that maps an `expenses.paid_by` id through
+  a current-`trip_members`-keyed lookup must account for the id possibly not
+  resolving to any current member, the same way `getTripView` now does.
 - Amount/description validation for an expense (positive amount, non-empty
   description) lives in `src/lib/validation/expense.ts`
   (`isValidExpenseInput`), shared by `src/app/trip/[id]/add-expense/page.tsx`
@@ -354,16 +435,22 @@ this before adding a parallel implementation.
   formatting rather than two different behaviors depending on where the
   caller happens to run.
 - `src/lib/avatar.ts` — per-member display derivations (`initialsFor`,
-  `avatarColorFor`); recommended home for a shared "name, with `
+  `avatarColorFor`, and `displayNameFor`); home for the "name, with `
   (placeholder)` suffix if applicable" helper added by the
-  add-placeholder-members feature, rather than reimplementing that string
-  concatenation at each of the several places a member's name is rendered.
+  add-placeholder-members feature. As of the remove-member-access feature,
+  this is also the recommended home for the equivalent "name, with a
+  removed-member marker" treatment `getTripView`'s ghost-payer entries need
+  (see ADR 0012) — extend `displayNameFor`'s existing suffix pattern rather
+  than adding a parallel string-concatenation helper.
 - `src/lib/tracking.ts` — the one analytics event-tracking module
   (`trackEvent(eventName)`), a thin wrapper around `@vercel/analytics`'s
   `track()` with client-only guards and silent-failure error handling. All
   custom event tracking calls go through here. See
   [`docs/features/vercel-analytics/architecture.md`](features/vercel-analytics/architecture.md)
-  for the event list and placement strategy.
+  for the event list and placement strategy. Not the same thing as
+  `src/lib/perf/timing.ts` (performance-scaling feature) — that module is for
+  temporary, numeric-only latency instrumentation, not user-facing product
+  events; see the "Performance instrumentation" note above.
 - `is_trip_member(_trip_id)` and `is_trip_open(_trip_id)` (both
   `security definer` SQL functions, `supabase/migrations/0001_init.sql` and
   `0005_lock_expenses_when_trip_completed.sql`) are the shared building
@@ -380,7 +467,14 @@ this before adding a parallel implementation.
   policy). New trip-scoped tables/policies that need to distinguish
   "verified" from "merely a member" should compose these, not re-check
   `auth.jwt() ->> 'is_anonymous'` inline — see
-  [ADR 0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md).
+  [ADR 0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md). As
+  of remove-member-access, `remove_trip_member`/`leave_trip`/
+  `was_removed_from_trip` (`supabase/migrations/0014_remove_and_leave_trip_member.sql`)
+  reuse `is_trip_open` directly and the same standalone
+  `coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) = false` guard
+  the placeholder-member RPCs already use (not `is_verified_trip_member`,
+  for the same reason noted where that guard was first added — see migration
+  0010's header comment).
 - `src/lib/remembered-email.ts` — the one client-`localStorage` helper in
   the app (`getRememberedEmail`/`setRememberedEmail`/`clearRememberedEmail`,
   namespaced key `splitiful:last-signin-email`), used to prefill the
@@ -392,7 +486,10 @@ this before adding a parallel implementation.
   `src/app/trip/[id]/verify-inline.tsx` (organizer's inline widget). If a
   future feature wants a second piece of per-device local state, check
   here first — same try/catch-wrapped pattern applies rather than a new
-  ad hoc `localStorage` call site.
+  ad hoc `localStorage` call site. (The remove-member-access feature
+  considered, and rejected, a `localStorage` marker for "you just left this
+  trip" — see ADR 0012's "Alternatives considered" for why it can't cover
+  the organizer-removal half of that feature.)
 - `src/components/ui.tsx` — shared, hook-free UI primitives (`Button`,
   `IconButton`, `Card`, `TabSwitch`, etc.) usable from either a Server or
   Client Component as long as no function prop (`onClick`/`onChange`) is
@@ -432,7 +529,17 @@ this before adding a parallel implementation.
   must not assume `proxy.ts` guaranteed a session; it performs its own
   `getUser()` calls and RLS-backed tiered fetches instead (summary via
   `get_trip_summary`, always; detail via `getTripView`, only when
-  entitled).
+  entitled). **As of the performance-scaling feature**, see
+  [ADR 0011](adr/0011-forward-verified-user-id-header-for-trips-page.md) for
+  a proposed (not executed) change that would have this file forward its
+  own verified user id to `/trips` via a trusted request header — flagged
+  here since any future change to this file should check that ADR first,
+  whether or not it's ever acted on. **As of the remove-member-access
+  feature**, `renderTripDashboard` (`src/app/trip/[id]/page.tsx`) gained a
+  new fallback branch between "full detail view" and the pre-existing
+  generic `TripSummaryOnly` view, for a caller who isn't currently a member
+  but was previously — see the `trip_members` data-model entry above and
+  ADR 0012.
 - `src/lib/rate-limit.ts` — the app's one rate-limiting module, added to
   close docs/security-review-2026-09-17.md's blocking finding (invite codes
   are low-entropy and every consuming RPC was unthrottled). Wraps
@@ -461,7 +568,21 @@ this before adding a parallel implementation.
   `dbRateLimitResponse` (`src/lib/rate-limit.ts`) let a route handler map
   that DB-raised rejection to the same 429 shape `enforceRateLimit`
   returns. A future RPC with the same guessable-credential shape should
-  get this same DB-side throttle, not just an app-level one.
+  get this same DB-side throttle, not just an app-level one. **As of the
+  performance-scaling feature**: do not race `enforceRateLimit`/the
+  Postgres-side throttle against the RPC call they gate to save latency —
+  see `docs/features/performance-scaling/architecture.md`'s `join_trip`
+  section for why this was considered and explicitly rejected (it would
+  change when the Postgres-side bucket fills, since a request the app-level
+  limiter would have rejected would still reach and count against it).
+- `GET /api/trip-invite/[code]` — as of the performance-scaling feature,
+  this route's response also carries the trip's public `summary`
+  (`get_trip_summary`, fetched server-side in parallel with the existing
+  invite lookup) alongside the pre-existing `InviteInfo` fields, so
+  `/join/[code]/page.tsx` needs one fetch instead of one fetch plus a
+  direct-to-Supabase RPC call from the browser. Additive-only response
+  shape; see `docs/features/performance-scaling/architecture.md` for the
+  full impact analysis (single consumer, no versioning needed).
 
 ## ADR index
 
@@ -477,3 +598,6 @@ List notable ones here as they're added:
 - [0007](adr/0007-css-custom-property-tokens-for-themeable-restyle.md) — CSS custom properties (extending the existing `globals.css` token set) as the mechanism for a themeable light-now/dark-later visual system, over Tailwind `dark:` variants, a JSON token pipeline, or CSS-in-JS
 - [0008](adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md) — Add-expense as an intercepted/parallel-route overlay sheet over the trip view, with the literal route kept as a hard-navigation/deep-link fallback, over a query-param/client-state overlay; also covers the pathname-driven background dim/blur/scale mechanism and the explicit `animateEntrance` flag that suppresses the sheet's own entrance animation on a cold load
 - [0009](adr/0009-throttle-invite-rpcs-inside-postgres.md) — Throttle `get_trip_by_invite_code`/`join_trip` inside the `plpgsql` functions themselves (keyed by `x-forwarded-for`/`auth.uid()`), over revoking their public grants and routing through a new service-role key, so a direct-to-Supabase caller can't bypass the app-level Upstash limiter
+- [0010](adr/0010-interim-per-call-timing-instrumentation.md) — Structured server-log timing plus a temporary client beacon endpoint for the performance-scaling feature's Phase-1 latency baseline, over extending `trackEvent`, relying solely on Speed Insights, instrumenting inside Postgres RPC bodies, or adopting a full APM vendor
+- [0011](adr/0011-forward-verified-user-id-header-for-trips-page.md) — Proposed (contingent, not yet executed): forward `proxy.ts`'s verified user id to `/trips` via a trusted request header to eliminate the page's duplicate `getUser()` call, over keeping both calls or switching to `getSession()`/`getClaims()`
+- [0012](adr/0012-post-removal-detection-and-ghost-payer-rendering.md) — Detecting "you were removed from this trip" on a later visit by reconstructing it from existing `expenses.paid_by` rows (no new column/table), and synthesizing an in-memory "ghost payer" for a removed member's historical expenses in `getTripView`, over soft-delete, a new tombstone table, or a `localStorage` marker

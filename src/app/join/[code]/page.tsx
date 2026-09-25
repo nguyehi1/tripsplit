@@ -3,12 +3,12 @@
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Button, Card, Divider, Kicker, LinkButton, Screen, ScreenContent } from "@/components/ui";
+import { DelayedLoadingLine } from "@/components/delayed-loading-line";
 import { initialsFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
-import { getTripSummary, type InviteInfo, type TripSummary } from "@/lib/data/trips";
+import type { InviteInfo, TripSummary } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
 import { trackEvent } from "@/lib/tracking";
-import { createClient } from "@/lib/supabase/client";
 
 /**
  * Invitee entry point, redesigned per docs/features/simplified-onboarding/design.md section 5:
@@ -37,10 +37,16 @@ function JoinTripContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setLoadError(null);
-    const supabase = createClient();
     // Goes through the server-side /api/trip-invite/[code] route rather than calling
     // `get_trip_by_invite_code` straight from the browser, so the invite-code lookup is rate-
     // limited (docs/security-review-2026-09-17.md finding #1) — see src/lib/rate-limit.ts.
+    //
+    // performance-scaling architecture.md's "Invite/join preview" fix: this used to be two
+    // sequential browser-to-network hops — this fetch, then a second, direct-to-Supabase
+    // `getTripSummary` call once `tripId` was known. The route now runs `getTripSummary`
+    // server-side (still sequentially after its own invite lookup, since `getTripSummary`
+    // genuinely needs the `tripId` that lookup returns — see that route's own comment) and
+    // returns the combined shape, so the page makes one browser-to-network fetch instead of two.
     fetch(`/api/trip-invite/${encodeURIComponent(code)}`)
       .then(async (res) => {
         if (cancelled) return;
@@ -54,10 +60,9 @@ function JoinTripContent() {
         if (!res.ok) {
           throw new Error("Couldn't load this trip — check your connection and try again.");
         }
-        const result = (await res.json()) as InviteInfo;
+        const result = (await res.json()) as InviteInfo & { summary: TripSummary | null };
         setInvite(result);
-        const summaryResult = await getTripSummary(supabase, result.tripId);
-        if (!cancelled) setSummary(summaryResult);
+        setSummary(result.summary);
       })
       .catch((e) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : "Couldn't load this trip — check your connection and try again.");
@@ -93,6 +98,7 @@ function JoinTripContent() {
       <Screen>
         <ScreenContent className="pt-14">
           <p className="text-[15px] text-ink/70">Loading trip…</p>
+          <DelayedLoadingLine />
         </ScreenContent>
       </Screen>
     );

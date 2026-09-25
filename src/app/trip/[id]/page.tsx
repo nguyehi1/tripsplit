@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChevronLeftIcon, LockIcon, MessageSquareIcon, PlusIcon } from "@/components/icons";
+import { ChevronLeftIcon, LockIcon, MessageSquareIcon, PeopleIcon, PlusIcon } from "@/components/icons";
 import {
   AvatarStack,
   BottomBar,
@@ -14,8 +14,9 @@ import {
   TopBar,
 } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
-import { getTripSummary, getTripView, type TripSummary, type TripView } from "@/lib/data/trips";
+import { getTripSummary, getTripView, wasRemovedFromTrip, type TripSummary, type TripView } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
+import { timeAsync } from "@/lib/perf/timing";
 import { createClient } from "@/lib/supabase/server";
 import { TripTabs } from "./trip-tabs";
 import { InlineVerifyWidget, TripVerificationProvider, VerifiedActionIcons, VerifiedBottomBarContent } from "./verify-inline";
@@ -112,6 +113,61 @@ function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) 
 }
 
 /**
+ * Shown to a returning visitor who is no longer a `trip_members` row on this trip but is
+ * detected (via `wasRemovedFromTrip`, ADR 0012) to have previously participated — i.e. was
+ * removed by the organizer, or left themselves and is returning via a stale tab/bookmark/link
+ * rather than the immediate post-leave redirect (which already shows its own "You left [Trip
+ * Name]." banner on `/trips`, see `src/app/trips/page.tsx`). Deliberately distinct from
+ * `TripSummaryOnly` (the public view a stranger with the link sees) and from the generic
+ * "Couldn't load this trip" fallback — this is the in-app notification requirements.md's
+ * AC4/AC12 require.
+ *
+ * Design.md's copy table distinguishes a "removed" vs. "left" body string, but — per ADR 0012 —
+ * `wasRemovedFromTrip` is a single boolean reconstructed from `expenses`, with no way to tell
+ * organizer-removal apart from a stale-tab self-leave. Since the self-leave case is already
+ * covered immediately (the actor's own redirect + banner, no detection needed), this screen uses
+ * the "removed" phrasing unconditionally — the one case this RPC signal is actually meant to
+ * cover. It also can't name the trip: `getTripSummary` (the only data available once `getTripView`
+ * has returned null) never returns the trip name (see `TripSummaryOnly`'s comment above), so the
+ * copy says "this trip" rather than quoting a name it doesn't have.
+ *
+ * `inviteCode` (from the same `summary` this replaces — `getTripSummary` returns it regardless of
+ * current membership, see its own doc comment) backs the "Rejoin with the invite link" action —
+ * per design.md section 8 point 3, this deliberately doesn't display the code/link itself, only
+ * links through it, so this screen doesn't hand a removed member a fresh, more-convenient way to
+ * re-enter than "use the link you already have."
+ */
+function RemovedFromTripScreen({ inviteCode }: { inviteCode: string }) {
+  return (
+    <Screen glow texture>
+      <ScreenContent className="pt-14 text-center">
+        <div
+          className="mx-auto flex size-[52px] items-center justify-center rounded-full"
+          style={{ background: "var(--color-avatar-placeholder)", color: "var(--color-ink)" }}
+        >
+          <PeopleIcon size={24} strokeWidth={2.2} />
+        </div>
+        <div className="h-4" />
+        <h1 className="text-display text-[24px]">You&apos;re no longer on this trip.</h1>
+        <div className="h-2.5" />
+        <p className="mx-auto max-w-[300px] text-[14px] leading-[1.5] text-ink/[0.73]">
+          The organizer removed you from this trip. Your past expenses are still part of the
+          trip&apos;s record.
+        </p>
+        <div className="h-5" />
+        <LinkButton href={`/join/${inviteCode}`} variant="accent" block={false} className="mx-auto px-6">
+          Rejoin with the invite link
+        </LinkButton>
+        <div className="h-2.5" />
+        <LinkButton href="/trips" variant="soft" block={false} className="mx-auto px-6">
+          Back to my trips
+        </LinkButton>
+      </ScreenContent>
+    </Screen>
+  );
+}
+
+/**
  * The trip dashboard's actual render logic (ADR 0008 point 4) — extracted from the default
  * export below so `add-expense/page.tsx` (the hard-nav/deep-link fallback for the add-expense
  * sheet, AC8) can reuse the exact same tiered-fetch/hide-and-reveal behavior with its `sheet`
@@ -126,19 +182,24 @@ export async function renderTripDashboard(
   { tab, sheet = null }: { tab?: string; sheet?: ReactNode } = {},
 ) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  // Always fetch the public, zero-auth summary tier first (works with or without a session —
-  // see docs/features/simplified-onboarding/architecture.md's "Route/page changes"). If this
-  // 404s/empties (bad id), there's nothing to show at all.
-  let summary: TripSummary | null = null;
-  try {
-    summary = await getTripSummary(supabase, id);
-  } catch {
-    summary = null;
+  // Fetches the public, zero-auth summary tier (works with or without a session — see
+  // docs/features/simplified-onboarding/architecture.md's "Route/page changes") alongside
+  // `getUser()` below, rather than after it (performance-scaling architecture.md's "/trip/[id] —
+  // parallelize getTripSummary/getTripView"): neither call depends on the other's *result* —
+  // `getTripSummary` never uses `user`, and the decision to call `getTripView` only needs
+  // `user.id`, not `summary` — so running them concurrently collapses three sequential round
+  // trips to two with zero visible change (same atomic "nothing, then everything" render as
+  // before). If this 404s/empties (bad id), there's nothing to show at all.
+  async function fetchSummary(): Promise<TripSummary | null> {
+    try {
+      return await timeAsync("trip-dashboard", "getTripSummary", () => getTripSummary(supabase, id));
+    } catch {
+      return null;
+    }
   }
+
+  const [{ data: { user } }, summary] = await Promise.all([supabase.auth.getUser(), fetchSummary()]);
 
   if (!summary) {
     return (
@@ -160,13 +221,34 @@ export async function renderTripDashboard(
   let view: TripView | null = null;
   if (user) {
     try {
-      view = await getTripView(supabase, id, user.id);
+      view = await timeAsync("trip-dashboard", "getTripView", () => getTripView(supabase, id, user.id));
     } catch {
       view = null;
     }
   }
 
   if (!view) {
+    // ADR 0012 / requirements AC4, AC12: a verified, non-anonymous caller who isn't a current
+    // member but previously participated (has a paid_by expense here) was removed or left — show
+    // the explicit in-app notification instead of falling back to the public summary a stranger
+    // would see. Anonymous/no-session callers (and anyone who never logged an expense here, the
+    // disclosed gap) fall through to the existing `TripSummaryOnly` behavior, unchanged.
+    let removed = false;
+    if (user && user.is_anonymous !== true) {
+      try {
+        removed = await wasRemovedFromTrip(supabase, id);
+      } catch {
+        removed = false;
+      }
+    }
+    if (removed) {
+      return (
+        <>
+          <RemovedFromTripScreen inviteCode={summary.inviteCode} />
+          {sheet}
+        </>
+      );
+    }
     return (
       <>
         <TripSummaryOnly id={id} summary={summary} />

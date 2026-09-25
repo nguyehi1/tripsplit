@@ -90,8 +90,43 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
   the simplified-onboarding flow before an email is ever collected. All
   three need a decision from the user/legal, not just an engineering fix —
   see the compliance report for detail.
+- **2026-09-20 addition**: the still-pending live-deployment re-verification
+  above (currently scoped to the `x-forwarded-for` trust caveat) should also
+  confirm whether the Postgres-side throttle plus the added Upstash round
+  trip introduced a *material latency regression* on the join/invite-code
+  path — folded in here per
+  [performance-scaling](features/performance-scaling/requirements.md) rather
+  than duplicated as new scope. If that check finds a real regression (not
+  just a confirmation that the header-trust caveat holds), the fix itself is
+  tracked and delivered under `performance-scaling`, cross-referenced back
+  here — not by reopening ADR 0009's already-settled remediation choice.
 
 ## Planned
+
+### Remove member from trip roster + self-service leave trip (remove-member-access)
+- Status: implemented, QA/security/compliance passed, pending final PR review
+- Requirements: [docs/features/remove-member-access/requirements.md](features/remove-member-access/requirements.md)
+- Docs: [planning.md](features/remove-member-access/planning.md),
+  [architecture.md](features/remove-member-access/architecture.md),
+  [design.md](features/remove-member-access/design.md),
+  [ADR 0012](adr/0012-post-removal-detection-and-ghost-payer-rendering.md)
+- Lets the organizer remove another real (non-placeholder) member from a trip's roster, and lets
+  any non-organizer member remove themselves ("leave trip") — both organizer-only-for-others and
+  self-service, sharing the same underlying mechanism (hard-delete the `trip_members` row, same
+  pattern as the existing `remove_placeholder_member`). **Not** invite-code rotation or true
+  access revocation — the confirmation step for both flows must disclose the person could still
+  rejoin by reusing the same invite link/code, per the `planning.md` debate's convergent
+  recommendation to ship the smaller, honest version rather than the originally-requested "revoke
+  access." Removed/left members' past expenses and `paid_by` history are never altered or
+  reassigned; note the requirements doc's finding that the *computed* equal-split share for
+  remaining members does shift once membership changes, since splits are live-computed off current
+  membership rather than snapshotted per expense (a pre-existing property of the split engine, not
+  new behavior). Notification is in-app state only ("you've been removed"/"you left" shown on
+  return, instead of a generic error) — no email, since no existing pattern lets one member trigger
+  email to another member's address without new scope. Both flows are gated on the trip still being
+  open, mirroring the existing placeholder-removal/expense-lock precedent. Explicit non-goals:
+  outstanding-balance blocking/warning, post-removal read-only balance visibility for the removed
+  member, invite-code rotation, organizer self-removal/ownership transfer, audit trail.
 
 ### UX Revamp (ux-revamp)
 - Status: in progress — implemented, QA/security/compliance passed, pending final PR review
@@ -134,6 +169,81 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
 - Status: planned
 - Requirements: [docs/features/vercel-analytics/requirements.md](features/vercel-analytics/requirements.md)
 - Enable all Vercel Analytics capabilities (Web Vitals) and add custom event tracking for key user flows (trip creation, expenses, invites, settlement) to measure product engagement and performance; include privacy safeguards and dashboard-accessible documentation.
+
+### Performance & latency fix — three core surfaces (performance-scaling)
+- Status: implemented — QA passed on code correctness; **baseline/after
+  measurement deferred to post-deploy** (2026-09-21 user decision, see below)
+- Requirements: [docs/features/performance-scaling/requirements.md](features/performance-scaling/requirements.md)
+- Supersedes [planning.md](features/performance-scaling/planning.md)'s "zero
+  new scope" recommendation: the user confirmed at Checkpoint 1 this is a
+  **felt problem today**, not a speculative growth bet, and named all three
+  of the app's core interaction paths as slow — trip/expense page loads
+  (`/trips`, `/trip/[id]`), the invite-code join/preview flow, and adding/
+  editing an expense. No volume/growth data exists, so this is explicitly
+  **not** capacity/pooling/read-replica work — it's measure-then-fix on
+  three named surfaces. Since there's no observability layer yet
+  (`vercel-analytics` above is still planned, not shipped), this feature
+  ships its own narrow, interim timing instrumentation on just these three
+  surfaces (`src/lib/perf/timing.ts`, `POST /api/perf-log`, per
+  [ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md)) rather
+  than waiting on or duplicating the general analytics rollout. Any DB/RPC-level
+  fix must be live-Postgres-verified, not just CI-green, per the
+  migration-0013 lesson
+  ([ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md)'s
+  post-acceptance correction). No new caching that risks split-total/
+  balance staleness (`docs/v2-vision.md`). Coordinates with, rather than
+  duplicates, `invite-code-rpc-hardening`'s already-pending live-deployment
+  re-verification (see that entry's 2026-09-20 addition above) for the
+  join/invite-code surface specifically. Open questions carried into the
+  requirements doc for user confirmation: priority order across the three
+  surfaces, whether this changes the security/compliance-then-expense-delete
+  sequencing in `docs/v2-vision.md` (default: no), and the proposed ≥30%
+  p95-improvement target (default, adjustable once a baseline exists).
+- **Shipped**: Phase 1 instrumentation (unconditional) plus the safe/default
+  Phase 2 fixes — `/trip/[id]` parallelizes `getUser()`+`getTripSummary()`
+  via `Promise.all` (no Suspense/streaming, to avoid flashing the
+  unverified-visitor summary view to a verified member); `/trips` Tier 1
+  parallelizes its `getUser()` with the `trips` select; the invite-preview
+  route (`GET /api/trip-invite/[code]`) now returns an additive `summary`
+  field from one server-side round trip instead of two browser round trips
+  (necessarily sequential, not parallel, since `get_trip_summary` needs the
+  UUID `getTripByInviteCode` resolves from the invite code — a documented
+  deviation from architecture.md's original parallel sketch); `requireVerifiedSession`
+  gained an optional `prefetchedUser` param, fixing a double `getUser()` call
+  in add-expense; a delayed "Taking a little longer than usual…" loading line
+  (~4s) was added to the four blocking loading states. **Not implemented**:
+  [ADR 0011](adr/0011-forward-verified-user-id-header-for-trips-page.md)'s
+  header-forwarding idea for `/trips` — proposed only, explicitly gated
+  behind live Phase 1 data and a dedicated security sign-off, out of scope
+  for this pass.
+- **QA (2026-09-20)**: code correctness, RLS/visibility-tier race behavior,
+  invite-throttle side effects, split-calculation correctness, and the
+  explicit no-Suspense/no-ADR-0011 constraints all verified and passing
+  (257/257 tests). QA also found the Phase 1 baseline this doc's acceptance
+  criteria call **blocking** — a documented before/after p50/p95 per surface,
+  and an explicit regression finding for the invite-code throttle path —
+  cannot be produced in this build environment, since it requires real
+  production traffic on a live Vercel deployment.
+- **2026-09-21 decision (user)**: ship the implemented fixes now rather than
+  hold the merge for staging data or build a synthetic local benchmark.
+  **Follow-up (not yet actioned)**: once this is deployed, capture real
+  before/after p50/p95 measurements (broken down per Supabase call) for all
+  three surfaces via the shipped `[perf]`-tagged log instrumentation, confirm
+  the ≥30% p95 target per surface (or record why not), and explicitly report
+  whether the invite-code throttle path (folded in from
+  `invite-code-rpc-hardening` above) shows a material latency regression.
+  This roadmap entry should not be marked "shipped" until that follow-up is
+  done.
+  - **Tooling for this follow-up (added 2026-09-21)**: `scripts/perf-baseline.mjs`
+    (`npm run perf:baseline`) aggregates the `[perf]`-tagged log lines into
+    p50/p95/p99 per surface+call — pull raw logs from the live deployment
+    (`vercel logs <deployment-url> --since 24h`) and pipe them into the
+    script; it does not generate traffic or deploy anything itself, only
+    aggregates logs that already exist. Flags any surface+call with fewer
+    than 30 samples as low-confidence. Also remember to delete
+    `src/lib/perf/timing.ts`, `POST /api/perf-log`, and every call site once
+    this baseline is captured and Phase 2 concludes — this instrumentation
+    is explicitly temporary (see ADR 0010).
 
 ## Shipped
 
@@ -198,3 +308,4 @@ Entry format:
 - Requirements: [docs/features/<slug>/requirements.md](features/<slug>/requirements.md)
 - One-line why this exists
 -->
+</content>

@@ -9,6 +9,7 @@ import { formatCents } from "@/lib/currency";
 import { addExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
 import { savePendingExpenseDraft, takePendingExpenseDraft } from "@/lib/pending-action";
+import { reportClientTiming, timeClient } from "@/lib/perf/timing";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
@@ -80,9 +81,13 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
     let cancelled = false;
     const supabase = createClient();
     Promise.all([
-      supabase.auth.getUser(),
-      supabase.from("trip_members").select("id", { count: "exact", head: true }).eq("trip_id", id),
-      supabase.from("trips").select("completed_at, created_by").eq("id", id).single(),
+      timeClient("add-expense", "gating.getUser", () => supabase.auth.getUser()),
+      timeClient("add-expense", "gating.trip_members", () =>
+        supabase.from("trip_members").select("id", { count: "exact", head: true }).eq("trip_id", id),
+      ),
+      timeClient("add-expense", "gating.trips", () =>
+        supabase.from("trips").select("completed_at, created_by").eq("id", id).single(),
+      ),
     ])
       .then(([userResult, membersResult, tripResult]) => {
         if (cancelled) return;
@@ -136,33 +141,45 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
     }
     setError(null);
     setSubmitting(true);
+    // Click-to-navigate span (performance-scaling ADR 0010): the client-perceived total for this
+    // submit, from click to the point the app hands off to the trip page's own render.
+    const navigateSpanStart = performance.now();
     try {
       const supabase = createClient();
+
+      // Performance-scaling architecture.md's "Add/edit-expense" fix (1): this used to call
+      // `supabase.auth.getUser()` twice back-to-back — once inside `requireVerifiedSession`, then
+      // again immediately after just to read `user.id` for `paidBy` — two identical, back-to-back
+      // client-to-Supabase-Auth round trips doing the same lookup. Fetching `user` once and
+      // passing it into `requireVerifiedSession` removes the redundant second call with no
+      // behavior change.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       // The mutation gate (simplified-onboarding): adding an expense is the trigger, not
       // viewing/filling out this screen — see docs/features/simplified-onboarding/design.md
       // section 4. The organizer only gets here once they've already typed the whole expense.
-      if (!(await requireVerifiedSession(supabase))) {
+      if (!(await requireVerifiedSession(supabase, user))) {
         savePendingExpenseDraft(id, { amount, description, date });
         const next = encodeURIComponent(`/trip/${id}/add-expense`);
         router.push(`/check-email?trigger=invitee-expense&next=${next}&back=${next}`);
         return;
       }
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in.");
 
-      await addExpense(supabase, {
-        tripId: id,
-        paidBy: user.id,
-        amountCents,
-        description: description.trim(),
-        date: date || undefined,
-      });
+      await timeClient("add-expense", "addExpense", () =>
+        addExpense(supabase, {
+          tripId: id,
+          paidBy: user.id,
+          amountCents,
+          description: description.trim(),
+          date: date || undefined,
+        }),
+      );
 
       trackEvent("expense_add_complete");
+      reportClientTiming("add-expense", "clickToNavigate", performance.now() - navigateSpanStart);
       // router.push alone can land back on a stale client-cached copy of the trip page (the user
       // was just there moments ago, before opening this sheet) — refresh reconciles the server-
       // rendered expense list/balances with what was just inserted. Same pattern as verify-inline.tsx.
