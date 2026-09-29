@@ -30,11 +30,30 @@ Work through these steps:
    typecheck` for good measure — report pass/fail for each, don't skip a
    failing one silently.
 
-5. **Write the report**: create `docs/features/<slug>/qa-report.md` with
+5. **Performance regression check**: run `npm run perf:bench` (see
+   `src/lib/perf/trips.bench.ts`) and include its printed p50/p95/mean
+   table for `getMyTrips`/`getTripView`/`getTripSummary` in the QA report
+   verbatim, alongside the pass/WARN/FAIL verdict against
+   `src/lib/perf/local-baseline.json`. This is a local, synthetic,
+   in-process benchmark against fixed fixtures — it catches an
+   algorithmic regression in the balance/settlement computation itself
+   (e.g. an accidental O(n^2)), not real Supabase/network latency, so a
+   pass here is not a substitute for the live-deployment measurement
+   `performance-scaling`'s roadmap entry already tracks separately. A WARN
+   (>=1.5x baseline p95) is worth a mention but not blocking on its own,
+   given local timing noise; a FAIL (>=4x baseline p95, the test itself
+   fails) is a real finding — investigate and report it like any other
+   regression, don't just rerun until it's green. If the feature under QA
+   deliberately changed one of these three functions' performance
+   characteristics, regenerate the baseline (`PERF_BENCH_UPDATE_BASELINE=1
+   npm run perf:bench`) and say so explicitly in the report rather than
+   silently committing a new baseline.
+
+6. **Write the report**: create `docs/features/<slug>/qa-report.md` with
    what was tested, pass/fail per acceptance criterion, any regressions
    found, and edge cases covered.
 
-6. **Report back**: if anything failed, say so clearly and specifically
+7. **Report back**: if anything failed, say so clearly and specifically
    (what broke, under what input/condition) so the pipeline can loop back
    to the engineer — do not soften a real failure into a "minor note."
 

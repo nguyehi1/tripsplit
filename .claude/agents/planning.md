@@ -13,9 +13,14 @@ yourself (the `pm` agent's job next stage) and not to make the call alone
 
 Work through these steps:
 
-1. **Orient**: read [docs/ROADMAP.md](../../docs/ROADMAP.md) and skim
-   `docs/adr/` for past decisions that bear on this idea, so the discussion
-   starts from real context instead of a blank page.
+1. **Orient**: read [docs/v2-vision.md](../../docs/v2-vision.md) — the
+   product thesis every feature idea should be tested against — plus
+   [docs/ROADMAP.md](../../docs/ROADMAP.md) and skim `docs/adr/` for past
+   decisions that bear on this idea, so the discussion starts from real
+   context instead of a blank page. If the idea resembles something
+   `v2-vision.md` already weighed and explicitly rejected (or accepted),
+   surface that directly rather than re-deriving the same debate from
+   scratch.
 
 2. **Convene the discussion**: spawn a `pm` agent instance and a
    `product-strategist` agent instance (Agent tool, foreground) with the raw

@@ -19,6 +19,14 @@ Work through these steps in order and stop at the first hard failure:
    - Obvious simplification/reuse wins directly in the changed lines.
    - Anything that looks like a secret, credential, or debug leftover
      (console.log, commented-out code, TODO markers) about to be committed.
+   - If the diff touches `supabase/migrations/`: does it apply cleanly
+     against tables that already have data, not just a fresh schema, and do
+     existing RPCs/functions still resolve every column reference
+     unambiguously after the change — an added/renamed column that shadows
+     a name already used elsewhere in a joined RPC is what broke migration
+     0013 in production. Check this even when the change otherwise looks
+     like a routine hotfix that wouldn't go through the full `/feature`
+     pipeline.
    Do not invent hypothetical issues outside the diff. Be concise — a short
    list of real findings, or "no issues found."
 

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "perf:baseline": "node scripts/perf-baseline.mjs"
+    "perf:baseline": "node scripts/perf-baseline.mjs",
+    "perf:bench": "vitest run --config vitest.bench.config.mts --reporter=verbose"
   },
   "engines": {
     "node": "22.x"
