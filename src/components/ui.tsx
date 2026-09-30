@@ -1,5 +1,7 @@
 import Link, { type LinkProps } from "next/link";
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import { LockIcon } from "@/components/icons";
+import { DelayedLoadingLine } from "@/components/delayed-loading-line";
 import type { AvatarColor } from "@/lib/avatar";
 
 export function Screen({
@@ -88,8 +90,12 @@ export function TopBar({
    *  byte-for-byte unchanged. */
   trailing?: ReactNode;
   titleClassName?: string;
-  /** Sticky, blurred, translucent-paper nav (AC3/AC5/AC6) — content scrolls under it. Opt-in so
-   *  screens outside this feature's scope keep today's plain, non-sticky header. */
+  /** Sticky, blurred, translucent-paper nav (AC3/AC5/AC6) — content scrolls under it. Opt-in.
+   *  Rule (UX consistency review 2026-09-30, finding #11): use on screens with long or
+   *  potentially-long scrolling content (a list, a roster, a settlement breakdown) where the nav
+   *  staying reachable while scrolled is worth the visual weight — `trip/[id]`, `trip/new`, and
+   *  `settle-up` qualify. Screens with a short, mostly-static form (add-expense, edit-expense,
+   *  invite, feedback) keep the plain header. */
   sticky?: boolean;
 }) {
   const stickyClass = sticky
@@ -215,6 +221,84 @@ export function Divider({ className = "" }: { className?: string }) {
 
 export function Kicker({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`text-kicker ${className}`}>{children}</div>;
+}
+
+/**
+ * Full-screen "this action is blocked because the trip is locked" notice (UX consistency review
+ * 2026-09-30, finding #1) — the icon-block-plus-paragraph shape previously duplicated byte-for-
+ * byte across add-expense, add-item, and edit-expense. Renders inside the caller's own
+ * `ScreenContent`/`TopBar`, not a full replacement shell, so each screen keeps its own close
+ * affordance and title.
+ */
+export function LockedNotice({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <div
+        className="flex size-[46px] items-center justify-center rounded-[16px]"
+        style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
+      >
+        <LockIcon size={22} />
+      </div>
+      <div className="h-4" />
+      <p className="max-w-[290px] text-[14.5px] leading-[1.5] text-ink/[0.73]">{children}</p>
+    </>
+  );
+}
+
+/**
+ * Inline variant of `LockedNotice` (UX consistency review 2026-09-30, finding #1) — a single pill
+ * row for use among other controls in a list (e.g. the invite screen's placeholder section),
+ * rather than replacing the whole screen.
+ */
+export function LockedNoticeInline({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="flex items-center gap-[11px] rounded-[22px] px-[18px] py-3.5"
+      style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
+    >
+      <LockIcon size={17} strokeWidth={2.4} />
+      <p className="text-[13px] leading-[1.4]">{children}</p>
+    </div>
+  );
+}
+
+/**
+ * The blocking fetch-on-mount loading state (UX consistency review 2026-09-30, finding #7) —
+ * previously some screens showed the delayed "taking a little longer" reassurance line
+ * (`DelayedLoadingLine`) and others didn't, with no stated rule for which. Renders inside the
+ * caller's own `Screen`, at the same `pt-14` offset every existing usage already used.
+ */
+export function ScreenLoading({ label }: { label: string }) {
+  return (
+    <ScreenContent className="pt-14">
+      <p className="text-[15px] text-ink/70">{label}</p>
+      <DelayedLoadingLine />
+    </ScreenContent>
+  );
+}
+
+/**
+ * The generic fetch-on-mount error state (UX consistency review 2026-09-30, finding #8) —
+ * previously every screen but `/join/[code]` dead-ended the user with text and no recovery
+ * action, even though the underlying failure (a flaky connection) is exactly as likely to be
+ * transient everywhere else. `onRetry` is opt-in so a screen with no retry mechanism (or a
+ * terminal error, e.g. "this invite link doesn't match a trip anymore") can still use this for
+ * the message layout alone.
+ */
+export function ScreenError({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <ScreenContent className="pt-14">
+      <p className="text-[15px] text-ink/70">{message}</p>
+      {onRetry ? (
+        <>
+          <div className="h-3" />
+          <Button block={false} variant="soft" className="px-5" onClick={onRetry}>
+            Try again
+          </Button>
+        </>
+      ) : null}
+    </ScreenContent>
+  );
 }
 
 export function Field({

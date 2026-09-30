@@ -51,7 +51,7 @@ export default function FeedbackPage() {
       <ScreenContent>
         <TopBar
           title="Feedback"
-          leading={
+          trailing={
             <IconButton onClick={() => router.push(`/trip/${id}`)}>
               <CloseIcon size={18} strokeWidth={2.3} />
             </IconButton>

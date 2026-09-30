@@ -2,8 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Button, Card, Divider, Kicker, LinkButton, Screen, ScreenContent } from "@/components/ui";
-import { DelayedLoadingLine } from "@/components/delayed-loading-line";
+import { Card, Divider, Kicker, LinkButton, Screen, ScreenContent, ScreenError, ScreenLoading } from "@/components/ui";
 import { initialsFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
 import type { InviteInfo, TripSummary } from "@/lib/data/trips";
@@ -76,19 +75,10 @@ function JoinTripContent() {
   }, [code, reloadKey]);
 
   if (loadError) {
+    const isTerminal = loadError === "This invite link doesn't match a trip anymore.";
     return (
       <Screen>
-        <ScreenContent className="pt-14">
-          <p className="text-[15px] text-ink/70">{loadError}</p>
-          {loadError !== "This invite link doesn't match a trip anymore." ? (
-            <>
-              <div className="h-3" />
-              <Button block={false} variant="soft" className="px-5" onClick={() => setReloadKey((k) => k + 1)}>
-                Try again
-              </Button>
-            </>
-          ) : null}
-        </ScreenContent>
+        <ScreenError message={loadError} onRetry={isTerminal ? undefined : () => setReloadKey((k) => k + 1)} />
       </Screen>
     );
   }
@@ -96,10 +86,7 @@ function JoinTripContent() {
   if (loading || !invite) {
     return (
       <Screen>
-        <ScreenContent className="pt-14">
-          <p className="text-[15px] text-ink/70">Loading trip…</p>
-          <DelayedLoadingLine />
-        </ScreenContent>
+        <ScreenLoading label="Loading trip…" />
       </Screen>
     );
   }

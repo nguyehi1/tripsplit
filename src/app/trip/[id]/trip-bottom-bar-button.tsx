@@ -2,6 +2,7 @@
 
 import { LockIcon, PlusIcon } from "@/components/icons";
 import { Button, LinkButton } from "@/components/ui";
+import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
 import { useTripTab } from "./trip-tab-context";
 
 /**
@@ -18,7 +19,7 @@ export function TripBottomBarButton({ tripId, isCompleted }: { tripId: string; i
       return (
         <Button variant="capsuleMuted" className="h-[54px] text-[15.5px]">
           <LockIcon size={17} strokeWidth={2.4} />
-          Trip is locked — the list is read-only
+          {LOCKED_TRIP_COPY.items.short}
         </Button>
       );
     }
@@ -34,7 +35,7 @@ export function TripBottomBarButton({ tripId, isCompleted }: { tripId: string; i
     return (
       <Button variant="capsuleMuted" className="h-[54px] text-[15.5px]">
         <LockIcon size={17} strokeWidth={2.4} />
-        Trip is locked — no more expenses
+        {LOCKED_TRIP_COPY.expenses.short}
       </Button>
     );
   }

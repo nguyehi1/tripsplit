@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { CheckIcon, CloseIcon, CopyIcon, LockIcon, PencilIcon, PlusIcon, ShareIcon } from "@/components/icons";
-import { Avatar, BottomBar, Button, Card, Kicker, Screen, ScreenContent } from "@/components/ui";
+import { CheckIcon, CloseIcon, CopyIcon, PencilIcon, PlusIcon, ShareIcon } from "@/components/icons";
+import { Avatar, BottomBar, Button, Card, Kicker, LockedNoticeInline, Screen, ScreenContent, ScreenError, ScreenLoading } from "@/components/ui";
 import { isUnverifiedOwner } from "@/lib/auth-gate";
 import { displayNameFor } from "@/lib/avatar";
 import {
@@ -15,6 +15,7 @@ import {
   renamePlaceholderMember,
   type TripView,
 } from "@/lib/data/trips";
+import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
@@ -27,6 +28,7 @@ export default function TripInvitePage() {
   const [view, setView] = useState<TripView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
@@ -54,6 +56,8 @@ export default function TripInvitePage() {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setError(null);
     const supabase = createClient();
     supabase.auth
       .getUser()
@@ -83,7 +87,7 @@ export default function TripInvitePage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, reloadKey]);
 
   async function refresh() {
     if (!userId) return;
@@ -249,9 +253,7 @@ export default function TripInvitePage() {
   if (error) {
     return (
       <Screen>
-        <ScreenContent className="pt-14">
-          <p className="text-[15px] text-ink/70">{error}</p>
-        </ScreenContent>
+        <ScreenError message={error} onRetry={() => setReloadKey((k) => k + 1)} />
       </Screen>
     );
   }
@@ -259,9 +261,7 @@ export default function TripInvitePage() {
   if (!view) {
     return (
       <Screen>
-        <ScreenContent className="pt-14">
-          <p className="text-[15px] text-ink/70">Loading your trip…</p>
-        </ScreenContent>
+        <ScreenLoading label="Loading your trip…" />
       </Screen>
     );
   }
@@ -558,16 +558,7 @@ export default function TripInvitePage() {
 
             {isOrganizer ? (
               locked ? (
-                <div
-                  className="flex items-center gap-[11px] rounded-[22px] px-[18px] py-3.5"
-                  style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
-                >
-                  <LockIcon size={17} strokeWidth={2.4} />
-                  <p className="text-[13px] leading-[1.4]">
-                    This trip is locked — the organizer already settled it up, so the roster
-                    can&apos;t be changed.
-                  </p>
-                </div>
+                <LockedNoticeInline>{LOCKED_TRIP_COPY.roster.long}</LockedNoticeInline>
               ) : atCap ? (
                 <div className="flex items-center justify-center rounded-[22px] bg-ink/[0.06] px-[18px] py-3.5 text-center text-[13.5px] text-ink/60">
                   {MAX_PLACEHOLDERS}/{MAX_PLACEHOLDERS} placeholders — remove one to add another

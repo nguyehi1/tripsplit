@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, CloseIcon, LockIcon, PlusIcon } from "@/components/icons";
-import { Button, Card, Divider, IconLinkButton, Kicker, ScreenContent, TopBar } from "@/components/ui";
-import { isUnverifiedOwner, requireVerifiedSession } from "@/lib/auth-gate";
+import { CheckIcon, CloseIcon, PlusIcon } from "@/components/icons";
+import { Button, Card, Divider, IconLinkButton, Kicker, LockedNotice, ScreenContent, TopBar } from "@/components/ui";
+import { isUnverifiedOwner, redirectToVerify, requireVerifiedSession } from "@/lib/auth-gate";
 import { addExpenseWithShoppingItems } from "@/lib/data/shopping-list";
 import { addExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
+import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
 import { savePendingExpenseDraft, takePendingExpenseDraft } from "@/lib/pending-action";
 import { reportClientTiming, timeClient } from "@/lib/perf/timing";
 import { trackEvent } from "@/lib/tracking";
@@ -243,8 +244,7 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
       // section 4. The organizer only gets here once they've already typed the whole expense.
       if (!(await requireVerifiedSession(supabase, user))) {
         savePendingExpenseDraft(id, { amount, description, date });
-        const next = encodeURIComponent(`/trip/${id}/add-expense`);
-        router.push(`/check-email?trigger=invitee-expense&next=${next}&back=${next}`);
+        redirectToVerify(router, "invitee-expense", `/trip/${id}/add-expense`);
         return;
       }
       if (!user) throw new Error("Not signed in.");
@@ -303,24 +303,14 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
       <ScreenContent>
         <TopBar
           title="Add an expense"
-          leading={
+          trailing={
             <IconLinkButton href={`/trip/${id}`} aria-label="Close">
               <CloseIcon size={18} strokeWidth={2.3} />
             </IconLinkButton>
           }
         />
         <div className="h-6" />
-        <div
-          className="flex size-[46px] items-center justify-center rounded-[16px]"
-          style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
-        >
-          <LockIcon size={22} />
-        </div>
-        <div className="h-4" />
-        <p className="max-w-[290px] text-[14.5px] leading-[1.5] text-ink/[0.73]">
-          This trip is locked — the organizer already settled it up, so no more expenses can be
-          added.
-        </p>
+        <LockedNotice>{LOCKED_TRIP_COPY.expenses.long}</LockedNotice>
       </ScreenContent>
     );
   }
@@ -329,7 +319,7 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
     <ScreenContent>
       <TopBar
         title="Add an expense"
-        leading={
+        trailing={
           <IconLinkButton href={`/trip/${id}`} aria-label="Close">
             <CloseIcon size={18} strokeWidth={2.3} />
           </IconLinkButton>

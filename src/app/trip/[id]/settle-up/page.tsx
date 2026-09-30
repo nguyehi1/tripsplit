@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowRightIcon, ChevronLeftIcon, CheckIcon, LockIcon } from "@/components/icons";
-import { Avatar, BottomBar, Button, Card, IconButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { Avatar, BottomBar, Button, Card, IconButton, Kicker, Screen, ScreenContent, ScreenError, ScreenLoading, TopBar } from "@/components/ui";
 import { displayNameFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
 import { completeTrip, getTripView, type TripView } from "@/lib/data/trips";
@@ -17,6 +17,7 @@ export default function SettleUpPage() {
   const [view, setView] = useState<TripView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     trackEvent("settlement_view");
@@ -24,6 +25,8 @@ export default function SettleUpPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setError(null);
     const supabase = createClient();
     supabase.auth
       .getUser()
@@ -40,7 +43,7 @@ export default function SettleUpPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   async function handleComplete() {
     setLocking(true);
@@ -68,9 +71,7 @@ export default function SettleUpPage() {
   if (error) {
     return (
       <Screen>
-        <ScreenContent className="pt-14">
-          <p className="text-[15px] text-ink/70">{error}</p>
-        </ScreenContent>
+        <ScreenError message={error} onRetry={() => setReloadKey((k) => k + 1)} />
       </Screen>
     );
   }
@@ -78,9 +79,7 @@ export default function SettleUpPage() {
   if (!view) {
     return (
       <Screen>
-        <ScreenContent className="pt-14">
-          <p className="text-[15px] text-ink/70">Loading…</p>
-        </ScreenContent>
+        <ScreenLoading label="Loading your trip…" />
       </Screen>
     );
   }
@@ -104,7 +103,7 @@ export default function SettleUpPage() {
             </div>
           </Card>
           <div className="h-3.5" />
-          <TopBar title="Settle up" leading={backButton} />
+          <TopBar sticky title="Settle up" trailing={backButton} />
           <div className="h-3.5" />
 
           <div className="rounded-[22px] p-5" style={{ background: "var(--color-terracotta-soft)" }}>
@@ -175,7 +174,7 @@ export default function SettleUpPage() {
   return (
     <Screen>
       <ScreenContent className="pt-4">
-        <TopBar title="Settle up" leading={backButton} />
+        <TopBar sticky title="Settle up" trailing={backButton} />
         <div className="h-3" />
 
         <div className="rounded-[22px] p-5 text-white" style={{ background: "var(--color-accent)" }}>

@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { useRouter } from "next/navigation";
 import type { Database } from "@/lib/supabase/types";
 
 type Client = SupabaseClient<Database>;
+type Router = ReturnType<typeof useRouter>;
 
 /**
  * The client-side mutation gate for the simplified-onboarding feature (see
@@ -44,6 +46,19 @@ export async function requireVerifiedSession(
  * `view.you?.isOrganizer` from `getTripView`, or comparing a fetched `trips.created_by` to the
  * session's own id) — this only combines it with the anonymity check.
  */
+/**
+ * The attempt-then-redirect-to-verify gate's redirect step (UX consistency review 2026-09-30,
+ * finding #6) — previously each call site independently rebuilt the same `next`/`back`/`trigger`
+ * `/check-email` URL. Callers still run `requireVerifiedSession` themselves first (they often need
+ * the fetched `user` afterward, e.g. for `paidBy`, or need to save a pending draft before
+ * redirecting) — this only centralizes the URL construction and the `router.push` once a caller
+ * has decided a redirect is needed.
+ */
+export function redirectToVerify(router: Router, trigger: string, path: string): void {
+  const next = encodeURIComponent(path);
+  router.push(`/check-email?trigger=${trigger}&next=${next}&back=${next}`);
+}
+
 export function isUnverifiedOwner(
   user: { is_anonymous?: boolean | null } | null | undefined,
   isOwner: boolean,

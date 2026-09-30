@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CloseIcon } from "@/components/icons";
 import { Avatar, Button, Card, Kicker } from "@/components/ui";
-import { requireVerifiedSession } from "@/lib/auth-gate";
+import { redirectToVerify, requireVerifiedSession } from "@/lib/auth-gate";
 import {
   claimShoppingListItem,
   deleteShoppingListItem,
@@ -13,11 +13,10 @@ import {
   type ShoppingListItem,
   type ShoppingListView,
 } from "@/lib/data/shopping-list";
+import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
 import { createClient } from "@/lib/supabase/client";
 import { useTripVerification } from "./verify-inline";
 
-const LOCKED_COPY =
-  "This trip is locked — the organizer already settled it up, so the list can't be changed anymore.";
 const UNEXPECTED_COPY = "Couldn't do that — try refreshing the page.";
 
 /** Reused for every claim/unclaim/delete/add attempt (architecture.md section 4) — matches
@@ -30,8 +29,7 @@ async function gateOrRedirect(router: ReturnType<typeof useRouter>, tripId: stri
     data: { user },
   } = await supabase.auth.getUser();
   if (await requireVerifiedSession(supabase, user)) return true;
-  const next = encodeURIComponent(`/trip/${tripId}?tab=list`);
-  router.push(`/check-email?trigger=invitee-shopping-list&next=${next}&back=${next}`);
+  redirectToVerify(router, "invitee-shopping-list", `/trip/${tripId}?tab=list`);
   return false;
 }
 
@@ -276,7 +274,7 @@ export function ShoppingListTab({
         setRaceMessage(`Too slow — ${freshItem.claimedBy.displayName} already grabbed that.`);
         setTimeout(() => setRaceMessage(null), 2500);
       } else {
-        setActionError(isCompleted ? LOCKED_COPY : UNEXPECTED_COPY);
+        setActionError(isCompleted ? LOCKED_TRIP_COPY.items.long : UNEXPECTED_COPY);
       }
     } finally {
       setPendingId(null);
@@ -320,7 +318,7 @@ export function ShoppingListTab({
     } catch {
       const fresh = await onRefresh();
       const stillThere = fresh?.toGet.some((i) => i.id === item.id && i.status === "open");
-      setDeleteError(stillThere ? (isCompleted ? LOCKED_COPY : UNEXPECTED_COPY) : "Couldn't delete that — try again.");
+      setDeleteError(stillThere ? (isCompleted ? LOCKED_TRIP_COPY.items.long : UNEXPECTED_COPY) : "Couldn't delete that — try again.");
     } finally {
       setDeleteSubmitting(false);
     }

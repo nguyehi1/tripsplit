@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CloseIcon, LockIcon, PlusIcon } from "@/components/icons";
-import { Button, IconLinkButton, ScreenContent, TopBar } from "@/components/ui";
-import { isUnverifiedOwner, requireVerifiedSession } from "@/lib/auth-gate";
+import { CloseIcon, PlusIcon } from "@/components/icons";
+import { Button, Card, Divider, IconLinkButton, Kicker, LockedNotice, ScreenContent, TopBar } from "@/components/ui";
+import { isUnverifiedOwner, redirectToVerify, requireVerifiedSession } from "@/lib/auth-gate";
 import { addShoppingListItems } from "@/lib/data/shopping-list";
+import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
 import { createClient } from "@/lib/supabase/client";
 
 const MAX_FIELDS = 8;
@@ -78,7 +79,10 @@ export function AddItemSheetContent({ tripId: id }: { tripId: string }) {
   }
 
   async function handleSubmit() {
-    if (nonEmpty.length === 0) return;
+    if (nonEmpty.length === 0) {
+      setError("Enter at least one item.");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
@@ -88,8 +92,7 @@ export function AddItemSheetContent({ tripId: id }: { tripId: string }) {
       } = await supabase.auth.getUser();
 
       if (!(await requireVerifiedSession(supabase, user))) {
-        const next = encodeURIComponent(`/trip/${id}?tab=list`);
-        router.push(`/check-email?trigger=invitee-shopping-list&next=${next}&back=${next}`);
+        redirectToVerify(router, "invitee-shopping-list", `/trip/${id}?tab=list`);
         return;
       }
       if (!memberId) throw new Error("Couldn't add those — try again.");
@@ -118,24 +121,14 @@ export function AddItemSheetContent({ tripId: id }: { tripId: string }) {
       <ScreenContent>
         <TopBar
           title="Add an item"
-          leading={
+          trailing={
             <IconLinkButton href={`/trip/${id}?tab=list`} aria-label="Close">
               <CloseIcon size={18} strokeWidth={2.3} />
             </IconLinkButton>
           }
         />
         <div className="h-6" />
-        <div
-          className="flex size-[46px] items-center justify-center rounded-[16px]"
-          style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
-        >
-          <LockIcon size={22} />
-        </div>
-        <div className="h-4" />
-        <p className="max-w-[290px] text-[14.5px] leading-[1.5] text-ink/[0.73]">
-          This trip is locked — the organizer already settled it up, so the list can&apos;t be
-          changed anymore.
-        </p>
+        <LockedNotice>{LOCKED_TRIP_COPY.items.long}</LockedNotice>
       </ScreenContent>
     );
   }
@@ -144,37 +137,54 @@ export function AddItemSheetContent({ tripId: id }: { tripId: string }) {
     <ScreenContent>
       <TopBar
         title="Add an item"
-        leading={
+        trailing={
           <IconLinkButton href={`/trip/${id}?tab=list`} aria-label="Close">
             <CloseIcon size={18} strokeWidth={2.3} />
           </IconLinkButton>
         }
-        trailing={<span className="text-[12px] text-ink/70">everyone sees them</span>}
       />
       <div className="h-3.5" />
+      <p className="max-w-[290px] text-[14px] leading-[1.5] text-ink/[0.73]">
+        Everyone on the trip sees what&apos;s on this list.
+      </p>
+      <div className="h-[18px]" />
 
-      {values.map((value, i) => (
-        <div key={i} className="mb-2.5 flex items-center gap-2 rounded-[18px] bg-white px-[18px]">
-          <input
-            type="text"
-            enterKeyHint={i === values.length - 1 ? "done" : "next"}
-            placeholder="Firewood, sunscreen, ice…"
-            value={value}
-            onChange={(e) => updateValue(i, e.target.value)}
-            className="h-[54px] flex-1 bg-transparent text-[16px] font-medium outline-none placeholder:font-normal placeholder:text-ink/50"
-          />
-          {value ? (
-            <button
-              type="button"
-              aria-label="Clear"
-              onClick={() => clearValue(i)}
-              className="flex size-9 flex-none cursor-pointer items-center justify-center rounded-full text-ink/40"
-            >
-              <CloseIcon size={15} strokeWidth={2.2} />
-            </button>
-          ) : null}
-        </div>
-      ))}
+      <Card className="p-[18px]">
+        <Kicker>{values.length === 1 ? "Item" : "Items"}</Kicker>
+        <div className="h-1.5" />
+        {values.map((value, i) => (
+          <div key={i}>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                enterKeyHint={i === values.length - 1 ? "done" : "next"}
+                placeholder="Firewood, sunscreen, ice…"
+                value={value}
+                onChange={(e) => updateValue(i, e.target.value)}
+                className="h-[54px] flex-1 bg-transparent text-[17px] font-medium outline-none placeholder:font-normal placeholder:text-ink/40"
+              />
+              {value ? (
+                <button
+                  type="button"
+                  aria-label="Clear"
+                  onClick={() => clearValue(i)}
+                  className="flex size-9 flex-none cursor-pointer items-center justify-center rounded-full text-ink/40"
+                >
+                  <CloseIcon size={15} strokeWidth={2.2} />
+                </button>
+              ) : null}
+            </div>
+            {i < values.length - 1 ? (
+              <>
+                <div className="h-3.5" />
+                <Divider />
+                <div className="h-3.5" />
+              </>
+            ) : null}
+          </div>
+        ))}
+      </Card>
+      <div className="h-2.5" />
 
       {values.length < MAX_FIELDS ? (
         <button
@@ -192,12 +202,7 @@ export function AddItemSheetContent({ tripId: id }: { tripId: string }) {
       {error ? <p className="mt-3 text-[13px] text-terracotta">{error}</p> : null}
       <div className="h-5" />
 
-      <Button
-        variant={nonEmpty.length === 0 ? "muted" : "primary"}
-        className="text-[16px]"
-        onClick={handleSubmit}
-        disabled={submitting || nonEmpty.length === 0}
-      >
+      <Button variant="primary" className="text-[16px]" onClick={handleSubmit} disabled={submitting}>
         <PlusIcon size={19} strokeWidth={2.6} />
         {submitting ? "Adding…" : nonEmpty.length === 0 ? "Add an item" : `Add ${nonEmpty.length} to list`}
       </Button>

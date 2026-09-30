@@ -3,11 +3,15 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+// Matches .../expense/<any-id>/edit — the edit-expense sheet's URL shape (a dynamic expenseId
+// segment between two fixed ones), unlike add-expense/add-item's fixed final segment.
+const EDIT_EXPENSE_PATH = /\/expense\/[^/]+\/edit$/;
+
 function isAddExpensePath(pathname: string): boolean {
-  // Widened for shopping-list's "Add an item" sheet (architecture.md section 4) — the same
-  // dim/blur/scale receding-behind-the-sheet effect must trigger for it too, reusing the exact
-  // ADR 0008 scaffold a second time.
-  return pathname.endsWith("/add-expense") || pathname.endsWith("/add-item");
+  // Widened for shopping-list's "Add an item" sheet (architecture.md section 4), then again for
+  // "Edit expense" becoming a sheet (UX consistency follow-up) — the same dim/blur/scale
+  // receding-behind-the-sheet effect must trigger for each, reusing the exact ADR 0008 scaffold.
+  return pathname.endsWith("/add-expense") || pathname.endsWith("/add-item") || EDIT_EXPENSE_PATH.test(pathname);
 }
 
 /**

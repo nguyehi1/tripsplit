@@ -93,26 +93,27 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-describe("AddItemSheetContent — submit gating at zero (AC1/design.md section 4)", () => {
-  it("submit button is disabled and reads 'Add an item' when every field is blank", async () => {
+describe("AddItemSheetContent — submit validation at zero (AC1/design.md section 4)", () => {
+  it("submit button stays enabled when every field is blank, and shows an inline error on click instead of submitting (matches add-expense's always-enabled-validate-on-submit convention)", async () => {
     const { container, root } = await renderAddItemSheetContent();
     await act(async () => {
       await flushMicrotasks();
     });
     const submit = getSubmitButton(container);
     expect(submit.textContent).toContain("Add an item");
-    expect(submit.disabled).toBe(true);
+    expect(submit.disabled).toBe(false);
 
     await act(async () => {
       submit.click();
       await flushMicrotasks();
     });
     expect(insertMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Enter at least one item.");
 
     root.unmount();
   });
 
-  it("typing into the first field enables submit and updates the count label", async () => {
+  it("typing into the first field updates the count label", async () => {
     const { container, root } = await renderAddItemSheetContent();
     await act(async () => {
       await flushMicrotasks();
@@ -127,7 +128,7 @@ describe("AddItemSheetContent — submit gating at zero (AC1/design.md section 4
     root.unmount();
   });
 
-  it("blank-only fields (whitespace) don't count toward the submit-enabled total", async () => {
+  it("blank-only fields (whitespace) don't count toward the submitted total, and still show the inline error on submit", async () => {
     const { container, root } = await renderAddItemSheetContent();
     await act(async () => {
       await flushMicrotasks();
@@ -136,8 +137,14 @@ describe("AddItemSheetContent — submit gating at zero (AC1/design.md section 4
     await act(async () => setValue(input, "   "));
 
     const submit = getSubmitButton(container);
-    expect(submit.disabled).toBe(true);
     expect(submit.textContent).toContain("Add an item");
+
+    await act(async () => {
+      submit.click();
+      await flushMicrotasks();
+    });
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Enter at least one item.");
 
     root.unmount();
   });
