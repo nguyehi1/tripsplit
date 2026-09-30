@@ -28,6 +28,21 @@ generic "trip not found" view instead (a disclosed, accepted gap — see
 can't remove or leave a trip via this flow. Full spec:
 [docs/features/remove-member-access/requirements.md](./docs/features/remove-member-access/requirements.md).
 
+The trip page has a third **List** tab (alongside Expenses/Details) for a shared shopping list:
+any verified real trip member can add free-text items, claim an open item for themselves
+(single first-come claimer, enforced at the database level against claim races), and release
+their own claim via a × control — unclaim is claimer-only, not any member. A user's
+claimed-unlogged items appear as multi-select pills in the add-expense sheet; selecting one or
+more composes the expense's description as a comma-joined list of the selected items' names
+(the amount is always typed by hand, never auto-filled). Submitting the expense marks the
+selected items "logged" and links them to it, atomically with the expense's creation; logged
+items move to a "Bought" section and tap through to their linked expense (read-only for anyone
+but the payer, or on a locked trip). The Expenses tab shows a small badge counting the current
+user's own claimed-unlogged items. Placeholder members can't claim or add items. A dark-mode/
+glass visual variant was designed but deferred — not built in this pass, see
+[docs/ROADMAP.md](./docs/ROADMAP.md). Full spec:
+[docs/features/shopping-list/requirements.md](./docs/features/shopping-list/requirements.md).
+
 **Onboarding** is a two-track model (see
 [docs/features/simplified-onboarding/requirements.md](./docs/features/simplified-onboarding/requirements.md)
 for the full spec):
@@ -99,6 +114,11 @@ Pre-production hardening still pending.
   a trip themselves; both are locked once the trip is completed and neither rotates the invite
   code (removal/leaving is disclosed as reversible by reusing the same link, not true access
   revocation). See the "Status" section above for the full behavior.
+- A shared, per-trip shopping list (the "List" tab) lets any verified member add items and claim
+  one for themselves; a claimer's claimed-unlogged items can be selected as pills in the
+  add-expense sheet to prefill the description, then move to "Bought" once that expense is
+  logged. No price/quantity on a list item, no co-claiming, and no delete/undo of a logged item
+  yet. See the "Status" section above for the full behavior.
 - Two views: Summary (settle-up transactions) and Details (per-person paid/share table).
 - Displays amounts owed; no payment integration yet.
 

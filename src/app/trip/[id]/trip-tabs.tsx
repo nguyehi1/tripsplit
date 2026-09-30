@@ -6,7 +6,11 @@ import { PencilIcon } from "@/components/icons";
 import { Avatar, Card, Divider, ProgressBar, TabSwitch } from "@/components/ui";
 import { displayNameFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
+import { getShoppingListView, type ShoppingListView } from "@/lib/data/shopping-list";
 import type { TripView } from "@/lib/data/trips";
+import { createClient } from "@/lib/supabase/client";
+import { ShoppingListTab } from "./shopping-list-tab";
+import { useTripTab } from "./trip-tab-context";
 
 export function TripTabs({
   tripId,
@@ -14,23 +18,54 @@ export function TripTabs({
   expenses,
   you,
   isCompleted,
-  defaultTab = "expenses",
+  shoppingList: initialShoppingList,
 }: {
   tripId: string;
   members: TripView["members"];
   expenses: TripView["expenses"];
   you: TripView["you"];
   isCompleted: boolean;
-  /**
-   * Defaults to "expenses" to match the parent Server Component's implicit first paint — a
-   * caller passing "details" (e.g. an invitee landing here right after verifying from the
-   * "See full details" trigger, design.md section 6.1) must derive it the same way server-side
-   * so the client's first render matches, avoiding a hydration mismatch.
-   */
-  defaultTab?: "expenses" | "details";
+  /** Server-rendered initial shopping-list view (architecture.md section 4) — kept as local
+   *  client state (not just a read-only prop) so claim/unclaim/delete mutations on the List tab
+   *  can refresh in place without needing a full page reload. */
+  shoppingList: ShoppingListView | null;
 }) {
-  const [tab, setTab] = useState<"expenses" | "details">(defaultTab);
+  const { tab, setTab } = useTripTab();
+  const [shoppingList, setShoppingList] = useState(initialShoppingList);
+  const [syncedShoppingList, setSyncedShoppingList] = useState(initialShoppingList);
   const maxPaidCents = Math.max(1, ...members.map((m) => m.paidCents));
+
+  // The add-item sheet lives on a separate route/component tree with no access to
+  // `refreshShoppingList` below (only ShoppingListTab's own claim/unclaim/delete handlers get
+  // that callback directly) — it can only trigger a server refresh via `router.refresh()`. Since
+  // `shoppingList` is local client state seeded once from `initialShoppingList`, React doesn't
+  // re-run the `useState` initializer on a prop change alone, so a freshly server-fetched prop was
+  // silently dropped until a full page reload re-mounted this component. React's own "adjust state
+  // during render" pattern (not an effect, to avoid an extra render + the lint rule against
+  // setState-in-effect) re-syncs whenever the server hands us a genuinely new object.
+  if (initialShoppingList !== syncedShoppingList) {
+    setSyncedShoppingList(initialShoppingList);
+    setShoppingList(initialShoppingList);
+  }
+
+  async function refreshShoppingList(): Promise<ShoppingListView | null> {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setShoppingList(null);
+        return null;
+      }
+      const next = await getShoppingListView(supabase, tripId, user.id);
+      setShoppingList(next);
+      return next;
+    } catch {
+      setShoppingList(null);
+      return null;
+    }
+  }
 
   return (
     <>
@@ -40,25 +75,15 @@ export function TripTabs({
         options={[
           { value: "expenses", label: "Expenses" },
           { value: "details", label: "Details" },
+          { value: "list", label: "List" },
         ]}
       />
       <div className="h-3.5" />
 
       {tab === "expenses" ? (
         expenses.length === 0 ? (
-          <div className="flex items-center gap-2.5 px-1">
-            {/* Miso cameo (AC13) — empty-state only (design.md section 4). Once a trip has real
-             *  expenses this whole row (and Miso with it) disappears. */}
-            {/* eslint-disable-next-line @next/next/no-img-element -- no next/image config for
-               public/images/* yet (architecture.md); a plain <img> is fine for this pass. */}
-            <img
-              src="/images/miso_01.jpg"
-              alt=""
-              width={24}
-              height={24}
-              className="block size-6 flex-none shadow-card-sm"
-            />
-            <p className="text-[13px] text-ink/60">No expenses logged yet — Miso&apos;s ready when you are.</p>
+          <div className="px-1">
+            <p className="text-[13px] text-ink/60">No expenses logged yet.</p>
           </div>
         ) : (
           <Card className="px-4 py-1">
@@ -105,7 +130,7 @@ export function TripTabs({
             })}
           </Card>
         )
-      ) : (
+      ) : tab === "details" ? (
         <Card className="px-[18px] py-4">
           {members.map((member, i) => (
             <div key={member.id}>
@@ -149,6 +174,13 @@ export function TripTabs({
             </div>
           ))}
         </Card>
+      ) : (
+        <ShoppingListTab
+          tripId={tripId}
+          isCompleted={isCompleted}
+          shoppingList={shoppingList}
+          onRefresh={refreshShoppingList}
+        />
       )}
     </>
   );

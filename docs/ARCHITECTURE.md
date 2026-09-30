@@ -21,7 +21,17 @@ boundary** — there is deliberately no Next.js route handler in that path.
 involved (currently just `trip-email/route.ts`, which needs the Resend API
 key). New CRUD-style mutations should default to the direct-client pattern
 and only add an API route when there's a genuine server-secret or
-server-only-computation reason to.
+server-only-computation reason to. As of the shopping-list feature, this
+pattern gained one narrow exception: `public.shopping_list_items`'
+claim/unclaim/log-into-expense transitions go through `security definer`
+RPCs with **no direct UPDATE grant at all** on that table (mirroring
+`trip_members`' existing no-INSERT-grant shape below), and a member's
+removal interaction with an in-flight claim is handled by the app's first DB
+trigger — see [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)
+for why RLS's `using`/`with check` split can't express the needed
+old-row/new-row correlation on its own, and why a trigger (not a second RLS
+policy or an app-level cleanup job) was the right, narrowly-scoped escape
+hatch — not a new default for future features to reach for casually.
 
 **Read/render pattern**: data-fetch-then-render pages default to **Server
 Components** that fetch via `src/lib/supabase/server.ts`'s `createClient()`
@@ -89,7 +99,12 @@ fetch (member count, lock state, ownership) independently re-fetches data the
 underlying trip page's Server Component already computed — a real, if not
 yet acted-on, round-trip-reduction candidate; see
 `docs/features/performance-scaling/architecture.md`'s add/edit-expense
-section.
+section. **As of the shopping-list feature**, this same scaffold is reused a
+second time for an "Add an item" sheet (`@sheet/(.)add-item/page.tsx` +
+`add-item/page.tsx`, same intercepted/hard-nav-fallback shape) — the only
+existing-file edit this required was generalizing `trip-sheet-chrome.tsx`'s
+`dimmed` pathname check to also match `/add-item`, not just `/add-expense`;
+see `docs/features/shopping-list/architecture.md`.
 
 **Design tokens / theming**: as of the ux-revamp feature, all color,
 shadow, and radius values used by a restyled screen are expected to be named
@@ -169,7 +184,14 @@ navigation to `/check-email` — see
 hide-and-reveal replaces attempt-then-redirect for the organizer" section
 for the full mechanics and rationale. Both mechanisms sit in front of the
 same RLS/RPC enforcement described above; neither is itself the security
-boundary.
+boundary. **As of the shopping-list feature**, claim/unclaim/add-item/delete
+all reuse the invitee's exact `requireVerifiedSession`-then-redirect
+mechanism (a new `"invitee-shopping-list"` `check-email` trigger value,
+additive to the existing `Trigger` union); this feature deliberately does
+**not** add a `pending-action.ts`-style resume mechanism for these
+one-tap mutations (accepted, documented tradeoff — see
+`docs/features/shopping-list/architecture.md`), unlike the multi-field
+expense draft that mechanism exists for.
 
 **Locking**: a trip can be marked completed (`trips.completed_at`, set by the
 `complete_trip` RPC, organizer-only, one-way — no "reopen" RPC exists). Once
@@ -188,7 +210,11 @@ pre-existing gap was out of scope for this feature and was left as-is rather
 than solved unprompted. As of the remove-member-access feature, the same
 `is_trip_open` gate also covers `remove_trip_member`/`leave_trip` (see the
 `trip_members` entry below) — a completed trip's roster can't change after
-the fact via any of these paths, consistently.
+the fact via any of these paths, consistently. As of the shopping-list
+feature, the same gate also covers `claim_shopping_list_item`/
+`unclaim_shopping_list_item`/`add_expense_and_log_shopping_items` and the
+plain-RLS add/delete-item policies — a locked trip's list is frozen exactly
+like its expense list already is.
 
 **Client-local device state**: not everything needs to be server state.
 Browser `localStorage` is used for small, non-sensitive, per-device
@@ -284,7 +310,13 @@ schema; summarized here as it stabilizes:
   consequence this creates (a former member's past expenses need a
   synthetic "ghost payer" in `getTripView`, since their `trip_members` row —
   and with it their display name — no longer exists to resolve `paid_by`
-  against). **Important for any code reading `trip_members`**: because
+  against). **As of the shopping-list feature**, `trip_members` also gained
+  the app's first trigger (`before delete`,
+  `release_shopping_list_claims_on_member_removal`) so that removing a
+  member who currently holds a shopping-list claim doesn't break — see the
+  `shopping_list_items` entry below and
+  [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md).
+  **Important for any code reading `trip_members`**: because
   `user_id` is no longer guaranteed unique-and-non-null per row (and, as of
   remove-member-access, no longer guaranteed to have a row at all for every
   `user_id` that ever appears in `expenses.paid_by` on a trip),
@@ -319,7 +351,45 @@ schema; summarized here as it stabilizes:
   total is divided across) — this is a deliberate, live-recompute
   consequence, not a bug, and mirrors how a member joining mid-trip already
   changes the same denominator today; see
-  `docs/features/remove-member-access/architecture.md` and ADR 0012.
+  `docs/features/remove-member-access/architecture.md` and ADR 0012. As of
+  the shopping-list feature, nothing about `expenses` itself changed — the
+  new `add_expense_and_log_shopping_items` RPC (see below) inserts into this
+  table with the same shape/validation `addExpense`'s existing direct insert
+  already enforces, duplicated intentionally rather than routing the
+  existing "skip the list" path through the new RPC (see
+  `docs/features/shopping-list/architecture.md` for the tradeoff).
+- `shopping_list_items` — one row per per-trip shopping-list item (the
+  shopping-list feature). `trip_id`, free-text `description`, nullable
+  `added_by`/`claimed_by` (both `trip_members.id`, per ADR 0004's identity
+  convention — nullable specifically so member removal can clear them
+  without an FK violation, see below), `status` (`open`/`claimed`/`logged`,
+  `text` + check constraint, matching this schema's existing
+  enum-via-check-constraint style — see `feedback.rating` — rather than a
+  Postgres `enum` type), and a nullable `expense_id` (references `expenses`,
+  deliberately with **no** `on delete` action — left blocking rather than
+  cascading, so the not-yet-built expense-delete feature is forced to
+  explicitly reconcile a logged item's status rather than relying on a
+  passive `on delete set null` that would otherwise violate this table's own
+  shape-check constraint). Claim/unclaim/log-into-expense are **RPC-only**
+  (`claim_shopping_list_item`, `unclaim_shopping_list_item`,
+  `add_expense_and_log_shopping_items` — no `UPDATE` grant on the table at
+  all, the same "RPC is the only write path" shape `trip_members` already
+  uses for its own no-`INSERT`-grant), which is also how the DB-level
+  claim-race guarantee works: a single conditional `UPDATE ... WHERE status
+  = 'open'` inside `claim_shopping_list_item` relies on Postgres's own
+  row-locking so exactly one concurrent caller ever wins. Adding and
+  pre-claim deleting an item stay plain RLS-backed `insert`/`delete` (no RPC
+  needed — single-ownership-predicate rules, same shape as ADR 0002's
+  payer-only-edit policy). A `before delete on trip_members` trigger (the
+  app's first trigger) releases a removed member's in-flight claim back to
+  `open` and clears their `added_by`/`claimed_by` references, so
+  `remove_trip_member`/`leave_trip` keep working unchanged even when the
+  removed member held a claim — see
+  [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)
+  for why RLS alone can't express this and `docs/features/shopping-list/architecture.md`
+  for the full design (including the atomic
+  `add_expense_and_log_shopping_items` RPC that links selected items to a
+  new expense in the same transaction it's created in).
 - `feedback` — free-standing, scoped to `user_id = auth.uid()` on both
   read and write.
 
@@ -337,7 +407,11 @@ future features touch expenses — see ADRs before changing further):
   `null` and SQL's `null = <anything>` is never true — combined with
   `paid_by`'s own `not null` FK to `auth.users(id)` (a table placeholders
   never appear in at all), this policy needed no change to keep
-  placeholders permanently unable to be a payer.
+  placeholders permanently unable to be a payer. As of shopping-list, this
+  policy is unchanged and unused by the new
+  `add_expense_and_log_shopping_items` RPC path (a `security definer`
+  function bypasses RLS and re-derives the same checks manually) — see the
+  `expenses` data-model entry above.
 - `update` — as of the edit-own-expense feature, only the row's own
   `paid_by` (i.e., only the member who logged it), only while
   `is_trip_open(trip_id)`; as of simplified-onboarding, that member check is
@@ -351,7 +425,10 @@ future features touch expenses — see ADRs before changing further):
   to `paid_by`**, because no delete UI/flow exists yet. This is now *more*
   permissive than `update` on the same table; a future delete feature
   should revisit whether to apply the same payer-scoping (see ADR 0002's
-  consequences).
+  consequences). **As of the shopping-list feature**, a future delete
+  feature also needs to reconcile `shopping_list_items.expense_id`/`status`
+  for any logged item linked to the deleted expense — see that table's
+  entry above and `docs/features/shopping-list/architecture.md`.
 
 **RLS on `trip_members`** (`select`): as of simplified-onboarding,
 `is_owner_or_verified_member(trip_id)` — same predicate and same rationale
@@ -361,6 +438,24 @@ remove-member-access, no policy change was needed here: once a real member's
 row is hard-deleted by `remove_trip_member`/`leave_trip`, this same `select`
 policy already stops returning it to anyone, the same way it's always
 stopped returning rows for a trip a caller never joined.
+
+**RLS on `shopping_list_items`** (new, shopping-list feature): `select` uses
+the same `is_owner_or_verified_member(trip_id)` predicate as
+`expenses`/`trip_members` above (detail-tier read — the List tab only
+renders inside the same full-detail view those already gate). `insert`
+(adding an item) and `delete` (pre-claim, adder-only) are plain RLS
+policies following ADR 0002's single-ownership-predicate shape. There is
+**no `update` policy or grant at all** — every status transition
+(claim/unclaim/log-into-expense) goes through a `security definer` RPC
+instead, since RLS's `using`/`with check` split can't correlate an old
+status with a new one on a single `for update` policy, and splitting the
+three transitions into separate permissive policies would reopen exactly
+the claim-race hole this feature exists to close (Postgres ORs all
+`using`/`with check` clauses together across permissive policies for the
+same command — see ADR 0002's own "Consequences" note on this same hazard).
+See `docs/features/shopping-list/architecture.md` section 1b for the full
+policy text and reasoning, and [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)
+for the related member-removal trigger.
 
 ## Known integration points / shared code
 
@@ -408,6 +503,22 @@ this before adding a parallel implementation.
   0012. Any future function here that maps an `expenses.paid_by` id through
   a current-`trip_members`-keyed lookup must account for the id possibly not
   resolving to any current member, the same way `getTripView` now does.
+  **As of the shopping-list feature, this module is deliberately not where
+  the new entity's data access lives** — see the new
+  `src/lib/data/shopping-list.ts` entry below for why.
+- `src/lib/data/shopping-list.ts` (new, shopping-list feature) — the data-
+  access module for `shopping_list_items`, split out from `trips.ts` rather
+  than added to it (same "distinct bounded entity gets its own file"
+  reasoning that already produced `src/lib/settlement.ts`,
+  `src/lib/validation/expense.ts`, and `src/lib/avatar.ts` as siblings of
+  `trips.ts` rather than growth inside it). Exposes `getShoppingListView`
+  (one shaped read: open/mine-claimed/logged groupings plus the current
+  user's claimed-unlogged count, for the badge), `addShoppingListItems`
+  (plain multi-row `.insert()` — atomic by construction, no RPC needed),
+  `deleteShoppingListItem` (plain RLS-scoped `.delete()`), and thin wrappers
+  around the three RPCs (`claimShoppingListItem`, `unclaimShoppingListItem`,
+  `addExpenseWithShoppingItems`). See
+  `docs/features/shopping-list/architecture.md` for the full design.
 - Amount/description validation for an expense (positive amount, non-empty
   description) lives in `src/lib/validation/expense.ts`
   (`isValidExpenseInput`), shared by `src/app/trip/[id]/add-expense/page.tsx`
@@ -415,7 +526,13 @@ this before adding a parallel implementation.
   part of edit-own-expense once a second call site existed. New expense-form
   surfaces should import this rather than reinlining the rule. Date
   validation (real calendar date, not in the future) lives alongside it as
-  `isValidExpenseDate`, added by the expense-date-month feature.
+  `isValidExpenseDate`, added by the expense-date-month feature. **As of the
+  shopping-list feature**, `edit/page.tsx` also gained a read-only render
+  branch (a verified non-payer, or any viewer on a locked trip) so a Bought
+  shopping-list item can tap through to the expense it linked to — no RLS
+  change was needed (the existing `select` policy already permits any
+  verified/owner member to read the row; only this page's own gating logic
+  changed), see `docs/features/shopping-list/architecture.md`.
 - `src/lib/dates.ts` — shared date-formatting/date-math helpers
   (`formatDate`, `formatDateRange`, and, as of expense-date-month,
   `todayIso` and `formatDayDate`), used by trip-date display and now
@@ -442,6 +559,16 @@ this before adding a parallel implementation.
   removed-member marker" treatment `getTripView`'s ghost-payer entries need
   (see ADR 0012) — extend `displayNameFor`'s existing suffix pattern rather
   than adding a parallel string-concatenation helper.
+- `src/lib/pending-action.ts` — carries an in-progress expense draft across
+  the redirect-to-`/check-email`-and-back round trip
+  (`savePendingExpenseDraft`/`takePendingExpenseDraft`, `sessionStorage`-
+  backed). **As of the shopping-list feature, deliberately not extended**
+  for claim/unclaim/add-item/delete — those are single-tap mutations with a
+  low resumption cost (unlike a multi-field expense draft), so losing one
+  across an OTP redirect is an accepted, documented UX papercut rather than
+  a reason to add a second pending-action shape; see
+  `docs/features/shopping-list/architecture.md`. Revisit only if this proves
+  to be real friction in practice.
 - `src/lib/tracking.ts` — the one analytics event-tracking module
   (`trackEvent(eventName)`), a thin wrapper around `@vercel/analytics`'s
   `track()` with client-only guards and silent-failure error handling. All
@@ -474,22 +601,13 @@ this before adding a parallel implementation.
   `coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) = false` guard
   the placeholder-member RPCs already use (not `is_verified_trip_member`,
   for the same reason noted where that guard was first added — see migration
-  0010's header comment).
-- `src/lib/remembered-email.ts` — the one client-`localStorage` helper in
-  the app (`getRememberedEmail`/`setRememberedEmail`/`clearRememberedEmail`,
-  namespaced key `splitiful:last-signin-email`), used to prefill the
-  last-used email on the same device. As of simplified-onboarding, this is
-  read from three places instead of one: `src/app/home-screen.tsx`'s
-  no-browser-memory sign-in form (`/?signin=1`, the direct descendant of
-  the old `/` email screen), and, via the shared `src/lib/use-otp-flow.ts`
-  hook, both `src/app/check-email/page.tsx` (invitee flow) and
-  `src/app/trip/[id]/verify-inline.tsx` (organizer's inline widget). If a
-  future feature wants a second piece of per-device local state, check
-  here first — same try/catch-wrapped pattern applies rather than a new
-  ad hoc `localStorage` call site. (The remove-member-access feature
-  considered, and rejected, a `localStorage` marker for "you just left this
-  trip" — see ADR 0012's "Alternatives considered" for why it can't cover
-  the organizer-removal half of that feature.)
+  0010's header comment). **As of the shopping-list feature**,
+  `is_verified_trip_member`/`is_owner_or_verified_member`/`is_trip_open` are
+  reused unchanged by every new RLS policy and RPC this feature adds — no
+  new composable predicate was needed. The one new mechanism this feature
+  adds (a `before delete` trigger on `trip_members`, releasing an in-flight
+  shopping-list claim) is *not* a new RLS predicate — see
+  [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md).
 - `src/components/ui.tsx` — shared, hook-free UI primitives (`Button`,
   `IconButton`, `Card`, `TabSwitch`, etc.) usable from either a Server or
   Client Component as long as no function prop (`onClick`/`onChange`) is
@@ -511,7 +629,12 @@ this before adding a parallel implementation.
   changes to existing defaults, since ~20 route files across the app share
   these components and most of them are outside any given restyle pass's
   scope. See `docs/features/ux-revamp/architecture.md`'s "Shared-component
-  blast radius" section.
+  blast radius" section. **As of the shopping-list feature**, `TabSwitch`
+  gained an optional `badge?: number` field on each option (renders the
+  small accent count-pill design-reference's Screen 2 describes when
+  `badge > 0`) — additive to the existing `{ value, label }` option shape;
+  its one existing consumer (`trip-tabs.tsx`) passes no `badge` and is
+  unaffected.
 - `src/app/globals.css` — as of the ux-revamp feature, this is also the
   app's one design-token source (`:root` custom properties, mirrored into
   the adjacent `@theme inline` block) — see the "Design tokens / theming"
@@ -539,7 +662,12 @@ this before adding a parallel implementation.
   new fallback branch between "full detail view" and the pre-existing
   generic `TripSummaryOnly` view, for a caller who isn't currently a member
   but was previously — see the `trip_members` data-model entry above and
-  ADR 0012.
+  ADR 0012. **As of the shopping-list feature**, `renderTripDashboard` also
+  fetches the trip's shopping-list view (once `getTripView`'s detail tier
+  resolves) alongside `expenses`/`members`, fails soft to an empty list on
+  error (mirroring `getTripSummary`'s own try/catch-to-null handling), and
+  extends its `tab` query-param branch to a third `"list"` value — see
+  `docs/features/shopping-list/architecture.md`.
 - `src/lib/rate-limit.ts` — the app's one rate-limiting module, added to
   close docs/security-review-2026-09-17.md's blocking finding (invite codes
   are low-entropy and every consuming RPC was unthrottled). Wraps
@@ -601,3 +729,4 @@ List notable ones here as they're added:
 - [0010](adr/0010-interim-per-call-timing-instrumentation.md) — Structured server-log timing plus a temporary client beacon endpoint for the performance-scaling feature's Phase-1 latency baseline, over extending `trackEvent`, relying solely on Speed Insights, instrumenting inside Postgres RPC bodies, or adopting a full APM vendor
 - [0011](adr/0011-forward-verified-user-id-header-for-trips-page.md) — Proposed (contingent, not yet executed): forward `proxy.ts`'s verified user id to `/trips` via a trusted request header to eliminate the page's duplicate `getUser()` call, over keeping both calls or switching to `getSession()`/`getClaims()`
 - [0012](adr/0012-post-removal-detection-and-ghost-payer-rendering.md) — Detecting "you were removed from this trip" on a later visit by reconstructing it from existing `expenses.paid_by` rows (no new column/table), and synthesizing an in-memory "ghost payer" for a removed member's historical expenses in `getTripView`, over soft-delete, a new tombstone table, or a `localStorage` marker
+- [0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md) — A `before delete` trigger on `trip_members` (the app's first trigger) to release an in-flight shopping-list claim and clear `added_by`/`claimed_by` when a member is removed, over a declarative `on delete set null`/`restrict`, a relaxed shape-check constraint, read-time reconstruction (ADR 0012's pattern), or an app-level cleanup job

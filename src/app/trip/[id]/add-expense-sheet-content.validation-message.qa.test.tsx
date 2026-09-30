@@ -38,7 +38,20 @@ function createSupabaseMock(tripRow: { completed_at: string | null; created_by: 
     auth: { getUser: getUserMock },
     from: (table: string) => {
       if (table === "trip_members") {
-        return { select: () => ({ eq: () => Promise.resolve({ count: memberCount }) }) };
+        // Supports both call shapes the gating effect makes: the plain member-count select
+        // (awaited directly, a thenable works the same way `Promise.resolve({count})` did
+        // before) and shopping-list's own-member-id lookup (`.eq().eq().maybeSingle()`,
+        // resolved to "no row" — none of these tests exercise the claimed-items block).
+        return {
+          select: () => {
+            const builder = {
+              eq: () => builder,
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              then: (resolve: (value: { count: number }) => void) => resolve({ count: memberCount }),
+            };
+            return builder;
+          },
+        };
       }
       if (table === "trips") {
         return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: tripRow, error: null }) }) }) };

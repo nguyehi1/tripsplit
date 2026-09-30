@@ -27,7 +27,13 @@ type TripVerificationContextValue = {
 
 const TripVerificationContext = createContext<TripVerificationContextValue | null>(null);
 
-function useTripVerification(): TripVerificationContextValue {
+/**
+ * Exported (shopping-list) so a descendant client component that isn't itself one of the three
+ * leaves already defined below (e.g. `shopping-list-tab.tsx`, gating claim/unclaim/delete/add
+ * controls the same hide-until-verified way — design.md section 2) can read the same shared
+ * `verified` flag instead of re-deriving an approximation of it.
+ */
+export function useTripVerification(): TripVerificationContextValue {
   const ctx = useContext(TripVerificationContext);
   if (!ctx) {
     throw new Error("useTripVerification must be used within a TripVerificationProvider");

@@ -12,6 +12,58 @@ a release moves that section under a dated version heading.
 
 ### Added
 
+- **Shared shopping list with per-item claiming.** The trip page gains a third
+  "List" tab (alongside Expenses/Details) where any verified real trip member
+  can add one or more free-text items, claim an open item for themselves
+  (single first-come claimer — a concurrent claim on the same item is
+  DB-enforced, not just UI-prevented, via a conditional `UPDATE` inside the
+  new `claim_shopping_list_item` RPC), and release their own claim by
+  tapping their avatar circle in "Your bag" again — the same control toggles
+  claim and unclaim, no separate button. **Unclaim is claimer-only** — a different member
+  attempting to release someone else's claim is rejected at the RPC layer
+  (`unclaim_shopping_list_item`), which never trusts a client-supplied member
+  id. A user's claimed-unlogged items appear as multi-select toggle pills in
+  the add-expense sheet (both existing call sites — the intercepted sheet and
+  the hard-nav fallback, per ADR 0008); selecting one or more composes the
+  expense's description as a comma-joined list of the selected items' names,
+  client-side — the amount field is never auto-filled, and skipping the list
+  entirely continues to add an expense exactly as it always has. Submitting
+  with items selected calls a new atomic RPC
+  (`add_expense_and_log_shopping_items`) that inserts the expense and marks
+  the selected items "logged," linked to it, in one transaction, so there's
+  no window where the expense exists but its items didn't get linked (or vice
+  versa). Logged items move to a "Bought" section and tap through to their
+  linked expense — readable (read-only) by any verified member, or on a
+  locked trip, via a new render branch on the existing edit-expense page, not
+  just the expense's payer. An open (never-claimed) item can
+  be deleted by whoever added it; a claimed or logged item cannot be deleted.
+  Placeholder members can never claim or add items. Adding, claiming,
+  unclaiming, and deleting are all hidden for an unverified organizer and
+  blocked once the trip is locked, matching every other mutation in the app.
+  **New DB trigger**: removing a member (`remove_trip_member`/`leave_trip`)
+  who currently holds a claim now releases that claim back to "open" instead
+  of failing — the app's first Postgres trigger
+  (`release_shopping_list_claims_on_member_removal`, `before delete on
+  trip_members`), added specifically to avoid regressing the already-shipped
+  remove-member-access feature (see
+  [ADR 0013](docs/adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)).
+  New table `shopping_list_items`
+  (`supabase/migrations/0015_shopping_list.sql`) and new module
+  `src/lib/data/shopping-list.ts`; no existing table, RLS policy, or RPC
+  signature was altered — `addExpense`'s existing (no-items) code path is
+  byte-for-byte unchanged. **Deferred, not built**: a dark-mode/glass visual
+  variant of this feature was designed but is out of scope for this pass
+  (matching the rest of the app's current warm-paper-only theming); tracked
+  as a follow-up in `docs/ROADMAP.md`. **Known, accepted limitation**: a
+  "Bought" item's linked expense has no delete/undo path yet, since
+  expense-delete doesn't exist as a feature — the schema is left able to
+  revert a logged item back to claimed-unlogged without a migration once that
+  feature ships. Also removed the app's "Miso" mascot image/branding from the
+  add-expense sheet header, the List/Expenses empty states, and the
+  trip-creation page (unchanged on the home/welcome screen), and removed the
+  pre-existing "Splits N ways — $X each" summary pill from the add-expense
+  sheet, both per direct user review of the live app.
+
 - **Remove a member from a trip's roster, and self-service "leave trip."**
   The trip organizer can now remove another real (non-placeholder) member
   from the roster (`/trip/[id]/invite`), and any non-organizer member can

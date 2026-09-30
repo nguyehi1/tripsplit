@@ -66,7 +66,7 @@ export function SheetShell({
       <div
         className="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] text-ink"
         style={{
-          top: "120px",
+          maxHeight: "calc(100dvh - 48px)",
           background: "var(--surface-sheet)",
           backdropFilter: "blur(34px) saturate(1.5)",
           WebkitBackdropFilter: "blur(34px) saturate(1.5)",

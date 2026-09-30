@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CloseIcon, LockIcon, PlusIcon } from "@/components/icons";
+import { CheckIcon, CloseIcon, LockIcon, PlusIcon } from "@/components/icons";
 import { Button, Card, Divider, IconLinkButton, Kicker, ScreenContent, TopBar } from "@/components/ui";
 import { isUnverifiedOwner, requireVerifiedSession } from "@/lib/auth-gate";
-import { formatCents } from "@/lib/currency";
+import { addExpenseWithShoppingItems } from "@/lib/data/shopping-list";
 import { addExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
 import { savePendingExpenseDraft, takePendingExpenseDraft } from "@/lib/pending-action";
@@ -13,6 +13,20 @@ import { reportClientTiming, timeClient } from "@/lib/perf/timing";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
+
+type ClaimedItem = { id: string; description: string };
+/** A pill's tracked, appended fragment — design.md section 6's merge algorithm. `itemId` (not
+ *  text-matching) is the single source of truth for "which items are selected," per
+ *  architecture.md section 3's explicit requirement that `selectedItemIds` be tracked
+ *  independently of the text field, since it's exactly the array passed to
+ *  `addExpenseWithShoppingItems`. */
+type PillFragment = { itemId: string; name: string };
+
+function composeDescription(handTyped: string, fragments: PillFragment[]): string {
+  if (fragments.length === 0) return handTyped;
+  const joined = fragments.map((f) => f.name).join(", ");
+  return handTyped.length > 0 ? `${handTyped}, ${joined}` : joined;
+}
 
 /**
  * The add-expense form/gating logic (ADR 0008 point 5) — relocated unchanged (AC10) from the old
@@ -27,30 +41,8 @@ import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expens
  * reachable both via in-app interception (where "back" and "the fixed trip URL" are equivalent)
  * and via the hard-nav fallback (where there's no guaranteed prior same-app history entry).
  */
-/**
- * Miso header badge (AC13, design.md section 5.4) — a static, textless presence in the sheet
- * header's trailing slot, opposite the close (X). Purely decorative (`aria-hidden`), spatially
- * and functionally separate from the amount field and split-summary pill below, so it never
- * narrates or restates the per-person split amount (AC12's carve-out for a non-narrating
- * placement). Shown identically in both the normal and locked-trip header renders.
- */
-function MisoBadge() {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element -- no next/image config for public/images/* yet (architecture.md); a plain <img> is fine for this pass.
-    <img
-      src="/images/miso_01.jpg"
-      alt=""
-      aria-hidden="true"
-      width={26}
-      height={26}
-      className="block size-[26px] flex-none shadow-card-sm"
-    />
-  );
-}
-
 export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
   const router = useRouter();
-  const [memberCount, setMemberCount] = useState<number | null>(null);
   const [locked, setLocked] = useState<boolean | null>(null);
   const [ownerGateBlocked, setOwnerGateBlocked] = useState(false);
   const [amount, setAmount] = useState("");
@@ -58,6 +50,16 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
   const [date, setDate] = useState(todayIso());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The "From your bag" block (design-reference Screen 4, design.md sections 5/6) — the
+  // description field's hand-typed prefix and the ordered, per-item-id-tracked pill fragments
+  // appended after it. `description` itself stays the single controlled input value, always kept
+  // equal to `composeDescription(handTyped, fragments)` by every setter below.
+  const [handTyped, setHandTyped] = useState("");
+  const [fragments, setFragments] = useState<PillFragment[]>([]);
+  const [claimedItems, setClaimedItems] = useState<ClaimedItem[] | null>(null);
+  const [claimedItemsError, setClaimedItemsError] = useState(false);
+  const [showClaimedItemsSkeleton, setShowClaimedItemsSkeleton] = useState(false);
 
   useEffect(() => {
     trackEvent("expense_add_start");
@@ -73,25 +75,43 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setAmount(draft.amount);
       setDescription(draft.description);
+      setHandTyped(draft.description);
       setDate(draft.date);
     }
   }, [id]);
 
+  // Design.md section 5's "loading claimed items" state: no skeleton for the first ~1s (most
+  // loads resolve well within that), only shown if the fetch below is still unresolved past it.
+  useEffect(() => {
+    const timer = setTimeout(() => setShowClaimedItemsSkeleton(true), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
-    Promise.all([
-      timeClient("add-expense", "gating.getUser", () => supabase.auth.getUser()),
-      timeClient("add-expense", "gating.trip_members", () =>
-        supabase.from("trip_members").select("id", { count: "exact", head: true }).eq("trip_id", id),
-      ),
-      timeClient("add-expense", "gating.trips", () =>
-        supabase.from("trips").select("completed_at, created_by").eq("id", id).single(),
-      ),
-    ])
-      .then(([userResult, membersResult, tripResult]) => {
+    // Performance-scaling architecture.md's "Add/edit-expense" fix (1), extended here
+    // (architecture.md section 4): `user` is resolved first, then member count / trip lock /
+    // "my claimed-unlogged items on this trip" fetch concurrently — the last two keyed off
+    // `user.id`. The existing ownership/redirect/lock logic below this point is otherwise
+    // untouched, only reordered.
+    timeClient("add-expense", "gating.getUser", () => supabase.auth.getUser())
+      .then(async (userResult) => {
         if (cancelled) return;
         const user = userResult.data.user;
+
+        const [tripResult, claimedResult] = await Promise.all([
+          timeClient("add-expense", "gating.trips", () =>
+            supabase.from("trips").select("completed_at, created_by").eq("id", id).single(),
+          ),
+          user
+            ? timeClient("add-expense", "gating.own_member_id", () =>
+                supabase.from("trip_members").select("id").eq("trip_id", id).eq("user_id", user.id).maybeSingle(),
+              )
+            : Promise.resolve({ data: null, error: null }),
+        ]);
+        if (cancelled) return;
+
         // Direct-URL guard (design.md section 4.0): the trip page hides this screen's own entry
         // point (the BottomBar's "Add an expense" button) from an unverified owner, but hiding a
         // link doesn't stop a typed or bookmarked URL from reaching this route directly — that must
@@ -110,8 +130,36 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
           router.replace(`/trip/${id}`);
           return;
         }
-        setMemberCount(membersResult.count ?? 1);
         setLocked(Boolean(tripResult.data?.completed_at));
+
+        // "From your bag" (design-reference Screen 4): RLS's existing select policy already
+        // permits reading the caller's own claimed-unlogged items directly — no RPC needed, same
+        // as every other read in this app. A fetch failure degrades to the non-blocking "Couldn't
+        // load your bag" line (design.md section 5) rather than ever blocking this form — kept in
+        // its own try/catch so it can never trip the outer fail-closed owner-gate redirect below.
+        try {
+          const ownMemberId = claimedResult.data?.id ?? null;
+          if (!ownMemberId) {
+            setClaimedItems([]);
+            return;
+          }
+          const itemsResult = await timeClient("add-expense", "gating.claimed_items", () =>
+            supabase
+              .from("shopping_list_items")
+              .select("id, description")
+              .eq("trip_id", id)
+              .eq("status", "claimed")
+              .eq("claimed_by", ownMemberId)
+              .order("created_at", { ascending: true }),
+          );
+          if (cancelled) return;
+          if (itemsResult.error) throw itemsResult.error;
+          setClaimedItems(itemsResult.data ?? []);
+        } catch {
+          if (cancelled) return;
+          setClaimedItemsError(true);
+          setClaimedItems([]);
+        }
       })
       .catch(() => {
         // Same fail-closed reasoning as above, for the case where the queries themselves reject
@@ -128,7 +176,40 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
   }, [id]);
 
   const amountCents = Math.round((parseFloat(amount || "0") || 0) * 100);
-  const splitCents = memberCount ? Math.round(amountCents / memberCount) : 0;
+
+  /**
+   * Design.md section 6's resolved merge algorithm. `description` is always kept equal to
+   * `composeDescription(handTyped, fragments)`; a manual edit either falls within the hand-typed
+   * prefix (the common case — just update `handTyped`, fragments untouched) or disturbs the
+   * pill-owned suffix, in which case every currently-tracked fragment is detached and the whole
+   * field becomes ordinary free text (rule 3) — see the module comment on `PillFragment` for why
+   * per-fragment-precise detection of *which single* pill was touched is out of scope here.
+   */
+  function handleDescriptionChange(nextValue: string) {
+    if (fragments.length === 0) {
+      setHandTyped(nextValue);
+      setDescription(nextValue);
+      return;
+    }
+    const suffix = description.slice(handTyped.length);
+    if (nextValue.length >= suffix.length && nextValue.slice(nextValue.length - suffix.length) === suffix) {
+      setHandTyped(nextValue.slice(0, nextValue.length - suffix.length));
+      setDescription(nextValue);
+      return;
+    }
+    setFragments([]);
+    setHandTyped(nextValue);
+    setDescription(nextValue);
+  }
+
+  function togglePill(item: ClaimedItem) {
+    const isSelected = fragments.some((f) => f.itemId === item.id);
+    const nextFragments = isSelected
+      ? fragments.filter((f) => f.itemId !== item.id)
+      : [...fragments, { itemId: item.id, name: item.description }];
+    setFragments(nextFragments);
+    setDescription(composeDescription(handTyped, nextFragments));
+  }
 
   async function handleSubmit() {
     if (!isValidExpenseInput(amountCents, description) || (date && !isValidExpenseDate(date))) {
@@ -168,15 +249,32 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
       }
       if (!user) throw new Error("Not signed in.");
 
-      await timeClient("add-expense", "addExpense", () =>
-        addExpense(supabase, {
-          tripId: id,
-          paidBy: user.id,
-          amountCents,
-          description: description.trim(),
-          date: date || undefined,
-        }),
-      );
+      // Zero selected shopping-list items -> the existing addExpense call, byte-for-byte
+      // unchanged (requirements' "skip the list continues to work unchanged" AC, satisfied by
+      // construction here rather than by testing after the fact — architecture.md section 4).
+      // One or more selected -> the atomic add_expense_and_log_shopping_items RPC instead.
+      const selectedItemIds = fragments.map((f) => f.itemId);
+      if (selectedItemIds.length === 0) {
+        await timeClient("add-expense", "addExpense", () =>
+          addExpense(supabase, {
+            tripId: id,
+            paidBy: user.id,
+            amountCents,
+            description: description.trim(),
+            date: date || undefined,
+          }),
+        );
+      } else {
+        await timeClient("add-expense", "addExpenseWithShoppingItems", () =>
+          addExpenseWithShoppingItems(supabase, {
+            tripId: id,
+            amountCents,
+            description: description.trim(),
+            date: date || undefined,
+            itemIds: selectedItemIds,
+          }),
+        );
+      }
 
       trackEvent("expense_add_complete");
       reportClientTiming("add-expense", "clickToNavigate", performance.now() - navigateSpanStart);
@@ -210,7 +308,6 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
               <CloseIcon size={18} strokeWidth={2.3} />
             </IconLinkButton>
           }
-          trailing={<MisoBadge />}
         />
         <div className="h-6" />
         <div
@@ -237,7 +334,6 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
             <CloseIcon size={18} strokeWidth={2.3} />
           </IconLinkButton>
         }
-        trailing={<MisoBadge />}
       />
       <div className="h-3.5" />
       <p className="max-w-[290px] text-[14px] leading-[1.5] text-ink/[0.73]">
@@ -245,6 +341,58 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
         <strong className="font-semibold">you</strong> paid for.
       </p>
       <div className="h-[18px]" />
+
+      {claimedItemsError ? (
+        <>
+          <p className="text-[13px] text-ink/60">
+            Couldn&apos;t load your bag — you can still add this expense the usual way.
+          </p>
+          <div className="h-4" />
+        </>
+      ) : claimedItems === null ? (
+        showClaimedItemsSkeleton ? (
+          <>
+            <Kicker>From your bag</Kicker>
+            <div className="h-2" />
+            <div className="flex gap-2">
+              <div className="h-9 w-24 animate-pulse rounded-full bg-ink/[0.06]" />
+              <div className="h-9 w-20 animate-pulse rounded-full bg-ink/[0.06]" />
+            </div>
+            <div className="h-4" />
+          </>
+        ) : null
+      ) : claimedItems.length === 0 ? null : (
+        <>
+          <div className="flex items-baseline justify-between">
+            <Kicker>From your bag</Kicker>
+            <Kicker>
+              {fragments.length} of {claimedItems.length} selected
+            </Kicker>
+          </div>
+          <div className="h-2" />
+          <div className="flex flex-wrap gap-2">
+            {claimedItems.map((item) => {
+              const selected = fragments.some((f) => f.itemId === item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={submitting}
+                  onClick={() => togglePill(item)}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                    selected ? "bg-accent text-white" : "bg-ink/[0.06] text-ink/80"
+                  }`}
+                >
+                  {selected ? <CheckIcon size={13} strokeWidth={3} /> : null}
+                  {item.description}
+                </button>
+              );
+            })}
+          </div>
+          <div className="h-4" />
+        </>
+      )}
 
       <Card className="p-[18px]">
         <Kicker>Amount</Kicker>
@@ -272,7 +420,7 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
           type="text"
           placeholder="Cabin, lift tickets, groceries…"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => handleDescriptionChange(e.target.value)}
           className="w-full bg-transparent text-[17px] font-medium outline-none placeholder:font-normal placeholder:text-ink/40"
         />
         <div className="h-3.5" />
@@ -293,17 +441,6 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
       </Card>
       <div className="h-4" />
 
-      <div
-        className="flex items-center justify-between rounded-full px-5 py-3.5"
-        style={{ background: "var(--color-terracotta-soft)" }}
-      >
-        <span className="whitespace-nowrap text-[13.5px] text-ink/75">
-          Splits {memberCount ?? "…"} ways
-        </span>
-        <span className="text-display whitespace-nowrap text-[22px]">
-          {formatCents(splitCents)} each
-        </span>
-      </div>
       {error ? <p className="mt-3 text-[13px] text-terracotta">{error}</p> : null}
       <div className="h-4" />
 

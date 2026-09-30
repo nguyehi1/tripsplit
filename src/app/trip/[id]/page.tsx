@@ -3,7 +3,6 @@ import { ChevronLeftIcon, LockIcon, MessageSquareIcon, PeopleIcon, PlusIcon } fr
 import {
   AvatarStack,
   BottomBar,
-  Button,
   Card,
   Divider,
   IconLinkButton,
@@ -14,10 +13,13 @@ import {
   TopBar,
 } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
+import { getShoppingListView, type ShoppingListView } from "@/lib/data/shopping-list";
 import { getTripSummary, getTripView, wasRemovedFromTrip, type TripSummary, type TripView } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
 import { timeAsync } from "@/lib/perf/timing";
 import { createClient } from "@/lib/supabase/server";
+import { TripBottomBarButton } from "./trip-bottom-bar-button";
+import { TripTabProvider, type TripTab } from "./trip-tab-context";
 import { TripTabs } from "./trip-tabs";
 import { InlineVerifyWidget, TripVerificationProvider, VerifiedActionIcons, VerifiedBottomBarContent } from "./verify-inline";
 
@@ -218,13 +220,22 @@ export async function renderTripDashboard(
   // is null when RLS filters it out (a non-owner, unverified caller) — the same failure mode
   // this page always handled, just no longer collapsed into "couldn't load" now that there's a
   // summary tier underneath it to fall back to.
+  // shopping-list's List tab is detail-tier, same gate as Expenses/roster (architecture.md
+  // section 4) — fetched as one more parallel query alongside getTripView (neither depends on
+  // the other's result, only on `user`), then discarded below if `view` itself didn't resolve. A
+  // failed shopping-list read degrades to an empty/error list state rather than breaking the
+  // whole trip page, same try/catch-to-empty-default pattern as `fetchSummary` above.
   let view: TripView | null = null;
+  let shoppingList: ShoppingListView | null = null;
   if (user) {
-    try {
-      view = await timeAsync("trip-dashboard", "getTripView", () => getTripView(supabase, id, user.id));
-    } catch {
-      view = null;
-    }
+    const [viewResult, shoppingListResult] = await Promise.all([
+      timeAsync("trip-dashboard", "getTripView", () => getTripView(supabase, id, user.id)).catch(() => null),
+      timeAsync("trip-dashboard", "getShoppingListView", () => getShoppingListView(supabase, id, user.id)).catch(
+        () => null,
+      ),
+    ]);
+    view = viewResult;
+    shoppingList = shoppingListResult;
   }
 
   if (!view) {
@@ -266,128 +277,122 @@ export async function renderTripDashboard(
   // their own trip" — no extra query needed to decide buttons-vs-CTA.
   const isVerified = user != null && user.is_anonymous !== true;
 
+  const initialTab: TripTab = tab === "details" ? "details" : tab === "list" ? "list" : "expenses";
+
   return (
     <TripVerificationProvider initialIsVerified={isVerified}>
-      <Screen glow texture>
-        <ScreenContent className="pt-0.5">
-          <TopBar
-            sticky
-            titleClassName="text-[12.5px] font-semibold text-ink/[0.72]"
-            title="Your trip"
-            leading={
-              <IconLinkButton title="All trips" className="text-ink/[0.73]" href="/trips">
-                <ChevronLeftIcon size={18} strokeWidth={2.3} />
-              </IconLinkButton>
-            }
-            trailing={
-              <>
-                <IconLinkButton title="New trip" className="text-ink/[0.73]" href="/trip/new">
-                  <PlusIcon size={19} strokeWidth={2.4} />
+      <TripTabProvider initialTab={initialTab}>
+        <Screen glow texture>
+          <ScreenContent className="pt-0.5">
+            <TopBar
+              sticky
+              titleClassName="text-[12.5px] font-semibold text-ink/[0.72]"
+              title="Your trip"
+              leading={
+                <IconLinkButton title="All trips" className="text-ink/[0.73]" href="/trips">
+                  <ChevronLeftIcon size={18} strokeWidth={2.3} />
                 </IconLinkButton>
-                <VerifiedActionIcons tripId={id} />
-                <IconLinkButton title="Send feedback" className="text-ink/[0.73]" href={`/trip/${id}/feedback`}>
-                  <MessageSquareIcon size={19} strokeWidth={2.2} />
-                </IconLinkButton>
-              </>
-            }
-          />
+              }
+              trailing={
+                <>
+                  <IconLinkButton title="New trip" className="text-ink/[0.73]" href="/trip/new">
+                    <PlusIcon size={19} strokeWidth={2.4} />
+                  </IconLinkButton>
+                  <VerifiedActionIcons tripId={id} />
+                  <IconLinkButton title="Send feedback" className="text-ink/[0.73]" href={`/trip/${id}/feedback`}>
+                    <MessageSquareIcon size={19} strokeWidth={2.2} />
+                  </IconLinkButton>
+                </>
+              }
+            />
 
-          <Card className="p-[18px]">
-            <div className="flex items-center gap-2">
-              <span
-                className="rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
-                style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}
-              >
-                Trip
-              </span>
-              {trip.isCompleted ? (
+            <Card className="p-[18px]">
+              <div className="flex items-center gap-2">
                 <span
-                  className="flex items-center gap-1 rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
-                  style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
+                  className="rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
+                  style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}
                 >
-                  <LockIcon size={11} strokeWidth={2.6} />
-                  Locked
+                  Trip
                 </span>
-              ) : null}
-              {formatDateRange(trip.startsOn, trip.endsOn) ? (
-                <span className="text-[12.5px] text-ink/[0.72]">
-                  {formatDateRange(trip.startsOn, trip.endsOn)}
+                {trip.isCompleted ? (
+                  <span
+                    className="flex items-center gap-1 rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
+                    style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
+                  >
+                    <LockIcon size={11} strokeWidth={2.6} />
+                    Locked
+                  </span>
+                ) : null}
+                {formatDateRange(trip.startsOn, trip.endsOn) ? (
+                  <span className="text-[12.5px] text-ink/[0.72]">
+                    {formatDateRange(trip.startsOn, trip.endsOn)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="h-3" />
+              <div className="text-display text-[32px]">{trip.name}</div>
+              <div className="h-3.5" />
+              <div className="flex items-center">
+                <AvatarStack members={members} />
+                <span className="ml-2.5 text-[12.5px] text-ink/[0.72]">
+                  {members.length} {members.length === 1 ? "person" : "people"}
                 </span>
-              ) : null}
-            </div>
-            <div className="h-3" />
-            <div className="text-display text-[32px]">{trip.name}</div>
-            <div className="h-3.5" />
-            <div className="flex items-center">
-              <AvatarStack members={members} />
-              <span className="ml-2.5 text-[12.5px] text-ink/[0.72]">
-                {members.length} {members.length === 1 ? "person" : "people"}
-              </span>
-            </div>
-            <div className="h-4" />
-            <Divider />
-            <div className="h-4" />
-            <div className="flex">
-              <div className="flex-1">
-                <Kicker>Total so far</Kicker>
-                <div className="text-display mt-1 text-[28px]">{formatCents(totalCents)}</div>
               </div>
-              <div className="mx-4 w-px bg-ink/10" />
-              <div className="flex-1 text-right">
-                <Kicker>Avg / person</Kicker>
-                <div className="text-display mt-1 text-[28px]">{formatCents(avgPerPersonCents)}</div>
-              </div>
-            </div>
-            {you ? (
-              <>
-                <div className="h-4" />
-                <Divider />
-                <div className="h-4" />
-                <div className="flex items-baseline justify-between">
-                  <Kicker>You&apos;ve paid so far</Kicker>
-                  <div className="text-display text-[16px]">{formatCents(you.paidCents)}</div>
+              <div className="h-4" />
+              <Divider />
+              <div className="h-4" />
+              <div className="flex">
+                <div className="flex-1">
+                  <Kicker>Total so far</Kicker>
+                  <div className="text-display mt-1 text-[28px]">{formatCents(totalCents)}</div>
                 </div>
-                <div className="h-3" />
-                <div className="flex items-baseline justify-between">
-                  <Kicker>You&apos;d owe</Kicker>
-                  <div className="text-display text-[16px]" style={{ color: "var(--color-terracotta)" }}>
-                    {formatCents(Math.max(0, -you.netCents))}
+                <div className="mx-4 w-px bg-ink/10" />
+                <div className="flex-1 text-right">
+                  <Kicker>Avg / person</Kicker>
+                  <div className="text-display mt-1 text-[28px]">{formatCents(avgPerPersonCents)}</div>
+                </div>
+              </div>
+              {you ? (
+                <>
+                  <div className="h-4" />
+                  <Divider />
+                  <div className="h-4" />
+                  <div className="flex items-baseline justify-between">
+                    <Kicker>You&apos;ve paid so far</Kicker>
+                    <div className="text-display text-[16px]">{formatCents(you.paidCents)}</div>
                   </div>
-                </div>
-              </>
-            ) : null}
-          </Card>
+                  <div className="h-3" />
+                  <div className="flex items-baseline justify-between">
+                    <Kicker>You&apos;d owe</Kicker>
+                    <div className="text-display text-[16px]" style={{ color: "var(--color-terracotta)" }}>
+                      {formatCents(Math.max(0, -you.netCents))}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </Card>
 
-          <InlineVerifyWidget />
+            <InlineVerifyWidget />
 
-          <div className="h-3.5" />
+            <div className="h-3.5" />
 
-          <TripTabs
-            tripId={id}
-            members={members}
-            expenses={expenses}
-            you={you}
-            isCompleted={trip.isCompleted}
-            defaultTab={tab === "details" ? "details" : "expenses"}
-          />
-        </ScreenContent>
-        <BottomBar>
-          <VerifiedBottomBarContent>
-            {trip.isCompleted ? (
-              <Button variant="capsuleMuted" className="h-[54px] text-[15.5px]">
-                <LockIcon size={17} strokeWidth={2.4} />
-                Trip is locked — no more expenses
-              </Button>
-            ) : (
-              <LinkButton href={`/trip/${id}/add-expense`} variant="capsule" className="h-[54px] text-[15.5px]">
-                <PlusIcon size={19} strokeWidth={2.6} />
-                Add an expense
-              </LinkButton>
-            )}
-          </VerifiedBottomBarContent>
-        </BottomBar>
-      </Screen>
-      {sheet}
+            <TripTabs
+              tripId={id}
+              members={members}
+              expenses={expenses}
+              you={you}
+              isCompleted={trip.isCompleted}
+              shoppingList={shoppingList}
+            />
+          </ScreenContent>
+          <BottomBar>
+            <VerifiedBottomBarContent>
+              <TripBottomBarButton tripId={id} isCompleted={trip.isCompleted} />
+            </VerifiedBottomBarContent>
+          </BottomBar>
+        </Screen>
+        {sheet}
+      </TripTabProvider>
     </TripVerificationProvider>
   );
 }

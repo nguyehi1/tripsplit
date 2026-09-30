@@ -120,18 +120,10 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
     getTripViewMock.mockResolvedValueOnce({ ...baseView, expenses: [] });
     const el = await callPage();
     const html = renderToStaticMarkup(el);
-    expect(html).toContain("No expenses logged yet — Miso&#x27;s ready when you are.");
+    expect(html).toContain("No expenses logged yet.");
   });
 
-  it("empty-expenses state (AC13) also renders the actual Miso cameo image through the real page tree, not just the updated copy string", async () => {
-    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
-    getTripViewMock.mockResolvedValueOnce({ ...baseView, expenses: [] });
-    const el = await callPage();
-    const html = renderToStaticMarkup(el);
-    expect(html).toContain('src="/images/miso_01.jpg"');
-  });
-
-  it("a trip with real expenses renders no Miso element at all (design.md section 4: common case stays clean)", async () => {
+  it("a trip with real expenses renders no empty-state copy", async () => {
     getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockResolvedValueOnce({
       ...baseView,
@@ -154,7 +146,7 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
     });
     const el = await callPage();
     const html = renderToStaticMarkup(el);
-    expect(html).not.toContain("miso_01.jpg");
+    expect(html).not.toContain("No expenses logged yet.");
   });
 
   it("shows the locked badge and locked bottom bar when the trip is completed", async () => {

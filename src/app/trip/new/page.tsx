@@ -109,28 +109,6 @@ export default function NewTripPage() {
           }
         />
         <div className="h-4" />
-        {/* Miso cameo (AC13) — a miniature version of Welcome's photo-in-a-card treatment
-         *  (design.md section 3), shrunk down for a form screen: `miso_01.jpg` (design.md
-         *  section 6.1, "asset swap"), ~28px, tilted white frame, paired with a compact
-         *  speech-bubble. Its own row, not absolutely positioned, so it can't overlap the
-         *  headline or fields below it. */}
-        <div className="flex items-center gap-2.5">
-          <div className="rounded-[10px] bg-white p-1 shadow-card-sm" style={{ transform: "rotate(-6deg)" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- no next/image config for
-               public/images/* yet (architecture.md); a plain <img> is fine for this pass. */}
-            <img
-              src="/images/miso_01.jpg"
-              alt="Miso, Splitiful's mascot dog"
-              width={28}
-              height={28}
-              className="block size-7"
-            />
-          </div>
-          <div className="rounded-[14px] rounded-bl-[3px] bg-white px-3 py-1.5 shadow-card-sm">
-            <span className="text-[12.5px] font-medium text-ink/80">New trip? Let&apos;s get counting.</span>
-          </div>
-        </div>
-        <div className="h-4" />
         <h1 className="text-display text-[30px]">
           What are we
           <br />

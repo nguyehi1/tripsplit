@@ -72,6 +72,26 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["feedback"]["Row"]>;
         Relationships: Relationships;
       };
+      shopping_list_items: {
+        Row: {
+          id: string;
+          trip_id: string;
+          description: string;
+          added_by: string | null;
+          claimed_by: string | null;
+          status: "open" | "claimed" | "logged";
+          expense_id: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["shopping_list_items"]["Row"]> & {
+          trip_id: string;
+          description: string;
+        };
+        // No update grant for `authenticated` (RPC-only writes for every status transition) —
+        // kept here only so the generated type shape matches PostgREST's own introspection.
+        Update: Partial<Database["public"]["Tables"]["shopping_list_items"]["Row"]>;
+        Relationships: Relationships;
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -154,6 +174,24 @@ export type Database = {
           share_cents: number;
           invite_code: string;
         }[];
+      };
+      claim_shopping_list_item: {
+        Args: { _item_id: string };
+        Returns: undefined;
+      };
+      unclaim_shopping_list_item: {
+        Args: { _item_id: string };
+        Returns: undefined;
+      };
+      add_expense_and_log_shopping_items: {
+        Args: {
+          _trip_id: string;
+          _amount: number;
+          _description: string;
+          _date: string | null;
+          _item_ids: string[] | null;
+        };
+        Returns: Database["public"]["Tables"]["expenses"]["Row"];
       };
     };
   };

@@ -1,0 +1,423 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { CloseIcon } from "@/components/icons";
+import { Avatar, Button, Card, Kicker } from "@/components/ui";
+import { requireVerifiedSession } from "@/lib/auth-gate";
+import {
+  claimShoppingListItem,
+  deleteShoppingListItem,
+  unclaimShoppingListItem,
+  type ShoppingListItem,
+  type ShoppingListView,
+} from "@/lib/data/shopping-list";
+import { createClient } from "@/lib/supabase/client";
+import { useTripVerification } from "./verify-inline";
+
+const LOCKED_COPY =
+  "This trip is locked — the organizer already settled it up, so the list can't be changed anymore.";
+const UNEXPECTED_COPY = "Couldn't do that — try refreshing the page.";
+
+/** Reused for every claim/unclaim/delete/add attempt (architecture.md section 4) — matches
+ *  `add-expense-sheet-content.tsx`'s existing attempt-then-redirect pattern exactly, with its own
+ *  `invitee-shopping-list` trigger/copy on `check-email/page.tsx`. Returns `true` if the caller
+ *  should proceed with the mutation, `false` if it already redirected. */
+async function gateOrRedirect(router: ReturnType<typeof useRouter>, tripId: string): Promise<boolean> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (await requireVerifiedSession(supabase, user)) return true;
+  const next = encodeURIComponent(`/trip/${tripId}?tab=list`);
+  router.push(`/check-email?trigger=invitee-shopping-list&next=${next}&back=${next}`);
+  return false;
+}
+
+function Caption({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <div id={id} className="mt-px text-[12px] text-ink/[0.72]">
+      {children}
+    </div>
+  );
+}
+
+// Row components are declared at module scope (not nested inside `ShoppingListTab`) so their
+// component identity stays stable across re-renders — a component defined inside another
+// component's body gets a fresh identity every render, which would make React unmount/remount
+// every row (losing focus/transition state) on every claim/unclaim/delete. All per-row behavior
+// is passed in as props instead of captured via closure.
+
+function ToGetRow({
+  item,
+  isLast,
+  verified,
+  isCompleted,
+  yourMemberId,
+  pendingId,
+  confirmDeleteId,
+  deleteSubmitting,
+  deleteError,
+  onClaim,
+  onStartDelete,
+  onCancelDelete,
+  onConfirmDelete,
+}: {
+  item: ShoppingListItem;
+  isLast: boolean;
+  verified: boolean;
+  isCompleted: boolean;
+  yourMemberId: string | null;
+  pendingId: string | null;
+  confirmDeleteId: string | null;
+  deleteSubmitting: boolean;
+  deleteError: string | null;
+  onClaim: (item: ShoppingListItem) => void;
+  onStartDelete: (itemId: string) => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: (item: ShoppingListItem) => void;
+}) {
+  const captionId = `shopping-item-caption-${item.id}`;
+  const claimedByOther = item.status === "claimed";
+  const canDelete = !claimedByOther && verified && !isCompleted && item.addedBy?.id === yourMemberId;
+  const isConfirming = confirmDeleteId === item.id;
+
+  return (
+    <div className={`${isLast ? "" : "border-b border-ink/[0.07]"} ${claimedByOther ? "-mx-4 bg-ink/[0.04] px-4" : ""}`}>
+      {isConfirming ? (
+        <div className="py-[13px]">
+          <p className="text-[13.5px] leading-[1.4] text-ink/80">Delete &quot;{item.description}&quot;?</p>
+          {deleteError ? <p className="mt-1.5 text-[12.5px] text-terracotta">{deleteError}</p> : null}
+          <div className="mt-2.5 flex gap-2">
+            <Button
+              variant="soft"
+              block={false}
+              className="h-[38px] flex-1 text-[13px]"
+              onClick={onCancelDelete}
+              disabled={deleteSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="ghost"
+              block={false}
+              className="h-[38px] flex-1 text-[13px]"
+              style={{ color: "var(--color-terracotta)" }}
+              onClick={() => onConfirmDelete(item)}
+              disabled={deleteSubmitting}
+            >
+              {deleteSubmitting ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 py-[13px]">
+          {claimedByOther ? (
+            <span aria-hidden="true">
+              <Avatar initials={item.claimedBy!.initials} color={item.claimedBy!.avatar} size={24} />
+            </span>
+          ) : verified && !isCompleted ? (
+            <button
+              type="button"
+              aria-label={`Claim '${item.description}'`}
+              aria-describedby={captionId}
+              disabled={pendingId === item.id}
+              onClick={() => onClaim(item)}
+              className="-m-2.5 flex size-11 flex-none cursor-pointer items-center justify-center disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="size-6 rounded-full border-[1.8px] border-ink/[0.26]" />
+            </button>
+          ) : (
+            <span className="flex size-6 flex-none items-center justify-center">
+              <span className="size-6 rounded-full border-[1.8px] border-ink/[0.26]" />
+            </span>
+          )}
+          <div className={`min-w-0 flex-1 ${claimedByOther ? "opacity-[0.82]" : ""}`}>
+            <div className="truncate text-[15px] font-semibold">{item.description}</div>
+            <Caption id={captionId}>
+              {claimedByOther
+                ? `${item.claimedBy?.displayName ?? "Someone"}'s got this`
+                : `${item.addedBy?.displayName ?? "Someone"} added`}
+            </Caption>
+          </div>
+          {canDelete ? (
+            <button
+              type="button"
+              aria-label={`Delete '${item.description}'`}
+              onClick={() => onStartDelete(item.id)}
+              className="-m-2.5 flex size-11 flex-none cursor-pointer items-center justify-center text-ink/50"
+            >
+              <CloseIcon size={15} strokeWidth={2.2} />
+            </button>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BagRow({
+  item,
+  isLast,
+  verified,
+  isCompleted,
+  pendingId,
+  onUnclaim,
+}: {
+  item: ShoppingListItem;
+  isLast: boolean;
+  verified: boolean;
+  isCompleted: boolean;
+  pendingId: string | null;
+  onUnclaim: (item: ShoppingListItem) => void;
+}) {
+  const captionId = `shopping-bag-caption-${item.id}`;
+  const canUnclaim = verified && !isCompleted;
+  return (
+    <div className={`flex items-center gap-3 py-[13px] ${isLast ? "" : "border-b border-ink/[0.07]"}`}>
+      {canUnclaim ? (
+        <button
+          type="button"
+          aria-label={`Unclaim '${item.description}'`}
+          aria-describedby={captionId}
+          disabled={pendingId === item.id}
+          onClick={() => onUnclaim(item)}
+          className="-m-2.5 flex size-11 flex-none cursor-pointer items-center justify-center disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Avatar initials={item.claimedBy!.initials} color={item.claimedBy!.avatar} size={24} />
+        </button>
+      ) : (
+        <span aria-hidden="true">
+          <Avatar initials={item.claimedBy!.initials} color={item.claimedBy!.avatar} size={24} />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[15px] font-semibold">{item.description}</div>
+        <Caption id={captionId}>{item.addedBy?.displayName ?? "Someone"} added</Caption>
+      </div>
+    </div>
+  );
+}
+
+function BoughtRow({ item, isLast, tripId }: { item: ShoppingListItem; isLast: boolean; tripId: string }) {
+  const payerName = item.claimedBy?.displayName ?? "someone";
+  const content = (
+    <div className={`flex items-center gap-3 py-[13px] ${isLast ? "" : "border-b border-ink/[0.07]"}`}>
+      {item.claimedBy ? <Avatar initials={item.claimedBy.initials} color={item.claimedBy.avatar} size={24} /> : null}
+      <div className="min-w-0 flex-1 opacity-60">
+        <div className="truncate text-[15px] font-medium line-through decoration-[1.5px]">{item.description}</div>
+      </div>
+    </div>
+  );
+  if (!item.expenseId) return content;
+  return (
+    <Link
+      href={`/trip/${tripId}/expense/${item.expenseId}/edit`}
+      aria-label={`Bought by ${payerName} — tap to view the expense`}
+      className="block cursor-pointer"
+    >
+      {content}
+    </Link>
+  );
+}
+
+export function ShoppingListTab({
+  tripId,
+  isCompleted,
+  shoppingList,
+  onRefresh,
+}: {
+  tripId: string;
+  isCompleted: boolean;
+  shoppingList: ShoppingListView | null;
+  onRefresh: () => Promise<ShoppingListView | null>;
+}) {
+  const router = useRouter();
+  const { verified } = useTripVerification();
+
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [raceMessage, setRaceMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  if (!shoppingList) {
+    return <p className="px-1 text-[13.5px] text-ink/60">Couldn&apos;t load the list — try again in a moment.</p>;
+  }
+
+  const { toGet, yourBag, bought, yourMemberId } = shoppingList;
+  const allEmpty = shoppingList.items.length === 0;
+
+  async function withGate(itemId: string, kind: "claim" | "unclaim", run: () => Promise<void>) {
+    if (pendingId) return;
+    setPendingId(itemId);
+    setRaceMessage(null);
+    setActionError(null);
+    try {
+      const proceed = await gateOrRedirect(router, tripId);
+      if (!proceed) return;
+      await run();
+      await onRefresh();
+    } catch {
+      const fresh = await onRefresh();
+      const freshItem = fresh?.items.find((i) => i.id === itemId);
+      // "Too slow — {name} already grabbed that." (design.md section 9) is scoped to a *claim*
+      // attempt losing a race to another claimer — not a generic "someone else's claim changed"
+      // signal, so it's never shown for an unclaim failure.
+      if (
+        kind === "claim" &&
+        freshItem &&
+        freshItem.status === "claimed" &&
+        freshItem.claimedBy &&
+        freshItem.claimedBy.id !== yourMemberId
+      ) {
+        setRaceMessage(`Too slow — ${freshItem.claimedBy.displayName} already grabbed that.`);
+        setTimeout(() => setRaceMessage(null), 2500);
+      } else {
+        setActionError(isCompleted ? LOCKED_COPY : UNEXPECTED_COPY);
+      }
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function handleClaim(item: ShoppingListItem) {
+    await withGate(item.id, "claim", async () => {
+      const supabase = createClient();
+      await claimShoppingListItem(supabase, item.id);
+    });
+  }
+
+  async function handleUnclaim(item: ShoppingListItem) {
+    await withGate(item.id, "unclaim", async () => {
+      const supabase = createClient();
+      await unclaimShoppingListItem(supabase, item.id);
+    });
+  }
+
+  function startDelete(itemId: string) {
+    setConfirmDeleteId(itemId);
+    setDeleteError(null);
+  }
+
+  function cancelDelete() {
+    setConfirmDeleteId(null);
+    setDeleteError(null);
+  }
+
+  async function handleDeleteConfirm(item: ShoppingListItem) {
+    setDeleteSubmitting(true);
+    setDeleteError(null);
+    try {
+      const proceed = await gateOrRedirect(router, tripId);
+      if (!proceed) return;
+      const supabase = createClient();
+      await deleteShoppingListItem(supabase, item.id);
+      setConfirmDeleteId(null);
+      await onRefresh();
+    } catch {
+      const fresh = await onRefresh();
+      const stillThere = fresh?.toGet.some((i) => i.id === item.id && i.status === "open");
+      setDeleteError(stillThere ? (isCompleted ? LOCKED_COPY : UNEXPECTED_COPY) : "Couldn't delete that — try again.");
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  }
+
+  if (allEmpty) {
+    return (
+      <div className="px-1">
+        <p className="text-[13px] text-ink/60">Nothing on the list yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {raceMessage ? (
+        <>
+          <p className="rounded-[14px] bg-ink/[0.06] px-3.5 py-2.5 text-[13px] font-medium text-ink/80">
+            {raceMessage}
+          </p>
+          <div className="h-3" />
+        </>
+      ) : null}
+      {actionError ? (
+        <>
+          <p className="text-[13px] text-terracotta">{actionError}</p>
+          <div className="h-3" />
+        </>
+      ) : null}
+
+      {yourBag.length > 0 ? (
+        <>
+          <div className="flex items-baseline justify-between px-1">
+            <Kicker>Your bag</Kicker>
+          </div>
+          <div className="h-2" />
+          <Card className="px-4 py-1">
+            {yourBag.map((item, i) => (
+              <BagRow
+                key={item.id}
+                item={item}
+                isLast={i === yourBag.length - 1}
+                verified={verified}
+                isCompleted={isCompleted}
+                pendingId={pendingId}
+                onUnclaim={handleUnclaim}
+              />
+            ))}
+          </Card>
+          <div className="h-3.5" />
+        </>
+      ) : null}
+
+      <div className="flex items-baseline justify-between px-1">
+        <Kicker>To get</Kicker>
+        <Kicker>tap a circle to grab it</Kicker>
+      </div>
+      <div className="h-2" />
+      <Card className="px-4 py-1">
+        {toGet.length === 0 ? (
+          <p className="py-3.5 text-[13.5px] text-ink/60">All caught up — nothing left to grab.</p>
+        ) : (
+          toGet.map((item, i) => (
+            <ToGetRow
+              key={item.id}
+              item={item}
+              isLast={i === toGet.length - 1}
+              verified={verified}
+              isCompleted={isCompleted}
+              yourMemberId={yourMemberId}
+              pendingId={pendingId}
+              confirmDeleteId={confirmDeleteId}
+              deleteSubmitting={deleteSubmitting}
+              deleteError={deleteError}
+              onClaim={handleClaim}
+              onStartDelete={startDelete}
+              onCancelDelete={cancelDelete}
+              onConfirmDelete={handleDeleteConfirm}
+            />
+          ))
+        )}
+      </Card>
+
+      {bought.length > 0 ? (
+        <>
+          <div className="h-3.5" />
+          <div className="flex items-baseline justify-between px-1">
+            <Kicker>Bought</Kicker>
+          </div>
+          <div className="h-2" />
+          <Card className="px-4 py-1">
+            {bought.map((item, i) => (
+              <BoughtRow key={item.id} item={item} isLast={i === bought.length - 1} tripId={tripId} />
+            ))}
+          </Card>
+        </>
+      ) : null}
+    </>
+  );
+}

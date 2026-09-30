@@ -43,7 +43,7 @@
   --surface-nav: color-mix(in srgb, var(--color-paper) 78%, transparent);
   --surface-capsule: color-mix(in srgb, var(--color-ink) 86%, transparent);
   --surface-capsule-muted: color-mix(in srgb, var(--color-ink) 8%, var(--color-paper));
-  --surface-sheet: color-mix(in srgb, var(--color-card) 90%, transparent);
+  --surface-sheet: color-mix(in srgb, var(--color-paper) 90%, transparent);
   --color-scrim: color-mix(in srgb, var(--color-ink) 22%, transparent);
 
   /* Faint, full-bleed paw-print texture (AC3) — opt-in via Screen's `texture` prop.
@@ -124,10 +124,17 @@ body {
 ::selection {
   background: color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
-:focus {
-  outline: none;
-}
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+/* In Tailwind's `base` layer (not left unlayered) so a utility class like `outline-none` or
+   `focus-visible:outline-none` — itself in the higher-priority `utilities` layer — correctly
+   overrides this default, per normal Tailwind convention. An unlayered rule here would always
+   win over any utility regardless of specificity, which is what silently defeated an earlier,
+   more-specific `focus-visible:outline-none` attempt on the add-expense/add-item fields. */
+@layer base {
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }

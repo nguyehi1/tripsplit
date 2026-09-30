@@ -17,10 +17,15 @@ import { useOtpFlow } from "@/lib/use-otp-flow";
 // nothing navigates here with those values anymore. See
 // docs/features/simplified-onboarding/architecture.md's "Fate of /check-email and its ?trigger="
 // params". Only the invitee's two triggers remain.
-type Trigger = "detail" | "invitee-expense";
+// shopping-list adds "invitee-shopping-list" — the same attempt-then-redirect trigger shape as
+// "invitee-expense", for a verified-session-but-unverified-email invitee's claim/unclaim/add-
+// item/delete attempt (architecture.md section 4). No pending-action resume mechanism for these
+// (unlike an expense draft) — the fallback copy below just explains they can go back and do the
+// action now that they're verified (design.md section 9).
+type Trigger = "detail" | "invitee-expense" | "invitee-shopping-list";
 
 function isTrigger(value: string | null): value is Trigger {
-  return value === "detail" || value === "invitee-expense";
+  return value === "detail" || value === "invitee-expense" || value === "invitee-shopping-list";
 }
 
 function triggerHeadline(trigger: Trigger) {
@@ -29,6 +34,8 @@ function triggerHeadline(trigger: Trigger) {
       return "Confirm your email to see the full expense list.";
     case "invitee-expense":
       return "Confirm your email to add an expense.";
+    case "invitee-shopping-list":
+      return "Confirm your email to update the shopping list.";
   }
 }
 

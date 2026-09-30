@@ -15,11 +15,22 @@ import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
 
+/**
+ * `null` while still loading/unresolved. `"editable"` is the original, unchanged payer-and-
+ * unlocked case. `"readonly"` is shopping-list's Bought tap-through addition (design.md section
+ * 7) — any other verified viewer, or a locked trip regardless of payer; same screen shell, every
+ * field disabled, no "Save changes" button. No RLS change: `expenses`' select policy already
+ * permits any verified/owner trip member to read the row, so this only widens what was
+ * previously an application-layer block, not a new grant.
+ */
+type ViewMode = "editable" | "readonly-not-payer" | "readonly-locked";
+
 export default function EditExpensePage() {
   const router = useRouter();
   const { id, expenseId } = useParams<{ id: string; expenseId: string }>();
   const [memberCount, setMemberCount] = useState<number | null>(null);
-  const [locked, setLocked] = useState<boolean | null>(null);
+  const [mode, setMode] = useState<ViewMode | null>(null);
+  const [payerName, setPayerName] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -43,22 +54,53 @@ export default function EditExpensePage() {
         supabase.from("trip_members").select("id", { count: "exact", head: true }).eq("trip_id", id),
       ),
       timeClient("edit-expense", "gating.trips", () => supabase.from("trips").select("completed_at").eq("id", id).single()),
-    ]).then(([userResult, expenseResult, membersResult, tripResult]) => {
+    ]).then(async ([userResult, expenseResult, membersResult, tripResult]) => {
       if (cancelled) return;
       const user = userResult.data.user;
-      if (!user || expenseResult.error || !expenseResult.data || expenseResult.data.paid_by !== user.id) {
-        setLoadError("Couldn't load this expense.");
+      if (!user || expenseResult.error || !expenseResult.data) {
+        setLoadError("Couldn't open that expense — try again.");
         return;
       }
-      // Resume intent: if this edit was redirected out to the OTP trigger and back (design.md
-      // section 4 "Resuming intent"), restore whatever was typed before the redirect instead of
-      // the freshly-loaded, pre-edit values.
-      const draft = takePendingExpenseDraft(expenseId);
-      setAmount(draft?.amount ?? Number(expenseResult.data.amount).toFixed(2));
-      setDescription(draft?.description ?? expenseResult.data.description);
-      setDate(draft?.date ?? expenseResult.data.date);
+      const expenseRow = expenseResult.data;
+      const isPayer = expenseRow.paid_by === user.id;
+      const isLocked = Boolean(tripResult.data?.completed_at);
+
+      setAmount(Number(expenseRow.amount).toFixed(2));
+      setDescription(expenseRow.description);
+      setDate(expenseRow.date);
       setMemberCount(membersResult.count ?? 1);
-      setLocked(Boolean(tripResult.data?.completed_at));
+
+      if (isPayer && !isLocked) {
+        // Resume intent: if this edit was redirected out to the OTP trigger and back (design.md
+        // section 4 "Resuming intent"), restore whatever was typed before the redirect instead
+        // of the freshly-loaded, pre-edit values.
+        const draft = takePendingExpenseDraft(expenseId);
+        if (draft) {
+          setAmount(draft.amount);
+          setDescription(draft.description);
+          setDate(draft.date);
+        }
+        setMode("editable");
+        return;
+      }
+
+      if (isLocked) {
+        setMode("readonly-locked");
+        return;
+      }
+
+      // Not the payer, trip not locked — the caption needs the payer's display name (design.md
+      // section 7's exact copy), fetched only in this one branch since neither other branch
+      // needs it.
+      const payerResult = await supabase
+        .from("trip_members")
+        .select("display_name")
+        .eq("trip_id", id)
+        .eq("user_id", expenseRow.paid_by)
+        .maybeSingle();
+      if (cancelled) return;
+      setPayerName(payerResult.data?.display_name ?? null);
+      setMode("readonly-not-payer");
     });
     return () => {
       cancelled = true;
@@ -118,8 +160,9 @@ export default function EditExpensePage() {
     }
   }
 
+  const closeHref = mode === "readonly-not-payer" || mode === "readonly-locked" ? `/trip/${id}?tab=list` : `/trip/${id}`;
   const closeButton = (
-    <IconButton onClick={() => router.push(`/trip/${id}`)}>
+    <IconButton onClick={() => router.push(closeHref)}>
       <CloseIcon size={18} strokeWidth={2.3} />
     </IconButton>
   );
@@ -136,29 +179,7 @@ export default function EditExpensePage() {
     );
   }
 
-  if (locked) {
-    return (
-      <Screen>
-        <ScreenContent>
-          <TopBar title="Edit expense" leading={closeButton} />
-          <div className="h-6" />
-          <div
-            className="flex size-[46px] items-center justify-center rounded-[16px]"
-            style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
-          >
-            <LockIcon size={22} />
-          </div>
-          <div className="h-4" />
-          <p className="max-w-[290px] text-[14.5px] leading-[1.5] text-ink/[0.73]">
-            This trip is locked — the organizer already settled it up, so expenses can no longer
-            be edited.
-          </p>
-        </ScreenContent>
-      </Screen>
-    );
-  }
-
-  if (memberCount === null || locked === null) {
+  if (mode === null) {
     return (
       <Screen>
         <ScreenContent className="pt-14">
@@ -169,14 +190,39 @@ export default function EditExpensePage() {
     );
   }
 
+  const readOnly = mode !== "editable";
+  const fieldClassName = `w-full bg-transparent text-[17px] font-medium outline-none placeholder:font-normal placeholder:text-ink/40 ${
+    readOnly ? "text-ink/70" : ""
+  }`;
+
   return (
     <Screen>
       <ScreenContent>
-        <TopBar title="Edit expense" leading={closeButton} />
+        <TopBar title={readOnly ? "Expense" : "Edit expense"} leading={closeButton} />
         <div className="h-3.5" />
-        <p className="max-w-[290px] text-[14px] leading-[1.5] text-ink/[0.73]">
-          Same equal split across everyone on the trip — just update what changed.
-        </p>
+        {mode === "readonly-locked" ? (
+          <>
+            <div
+              className="flex size-[46px] items-center justify-center rounded-[16px]"
+              style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
+            >
+              <LockIcon size={22} />
+            </div>
+            <div className="h-4" />
+            <p className="max-w-[290px] text-[14.5px] leading-[1.5] text-ink/[0.73]">
+              This trip is locked — the organizer already settled it up, so expenses can no longer
+              be edited.
+            </p>
+          </>
+        ) : mode === "readonly-not-payer" ? (
+          <p className="max-w-[290px] text-[14px] leading-[1.5] text-ink/[0.73]">
+            Only {payerName ?? "the payer"} can edit this expense.
+          </p>
+        ) : (
+          <p className="max-w-[290px] text-[14px] leading-[1.5] text-ink/[0.73]">
+            Same equal split across everyone on the trip — just update what changed.
+          </p>
+        )}
         <div className="h-[18px]" />
 
         <Card className="p-[18px]">
@@ -191,8 +237,11 @@ export default function EditExpensePage() {
               inputMode="decimal"
               placeholder="0.00"
               value={amount}
+              readOnly={readOnly}
               onChange={(e) => setAmount(e.target.value)}
-              className="text-display w-full bg-transparent text-[52px] outline-none placeholder:text-ink/20"
+              className={`text-display w-full bg-transparent text-[52px] outline-none placeholder:text-ink/20 ${
+                readOnly ? "opacity-70" : ""
+              }`}
               style={{ color: "var(--color-accent)" }}
             />
           </div>
@@ -205,8 +254,9 @@ export default function EditExpensePage() {
             type="text"
             placeholder="Cabin, lift tickets, groceries…"
             value={description}
+            readOnly={readOnly}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full bg-transparent text-[17px] font-medium outline-none placeholder:font-normal placeholder:text-ink/40"
+            className={fieldClassName}
           />
           <div className="h-3.5" />
           <Divider />
@@ -217,8 +267,10 @@ export default function EditExpensePage() {
             type="date"
             value={date}
             max={todayIso()}
+            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full bg-transparent text-[17px] font-medium outline-none"
+            className={fieldClassName}
           />
         </Card>
         <div className="h-4" />
@@ -237,10 +289,12 @@ export default function EditExpensePage() {
         {error ? <p className="mt-3 text-[13px] text-terracotta">{error}</p> : null}
         <div className="h-4" />
 
-        <Button variant="primary" className="text-[16px]" onClick={handleSubmit} disabled={submitting}>
-          <CheckIcon size={17} strokeWidth={2.6} />
-          {submitting ? "Saving…" : "Save changes"}
-        </Button>
+        {readOnly ? null : (
+          <Button variant="primary" className="text-[16px]" onClick={handleSubmit} disabled={submitting}>
+            <CheckIcon size={17} strokeWidth={2.6} />
+            {submitting ? "Saving…" : "Save changes"}
+          </Button>
+        )}
       </ScreenContent>
     </Screen>
   );

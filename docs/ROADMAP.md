@@ -247,6 +247,55 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
 
 ## Shipped
 
+### Shared shopping list with per-item claiming (shopping-list)
+- Status: shipped — QA/security/compliance passed
+- Requirements: [docs/features/shopping-list/requirements.md](features/shopping-list/requirements.md)
+- Docs: [architecture.md](features/shopping-list/architecture.md),
+  [design.md](features/shopping-list/design.md),
+  [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)
+- Adds a third "List" tab (alongside Expenses/Details) where any verified real trip
+  member can add free-text items, claim an open item (single first-come claimer,
+  DB-enforced against claim races via `claim_shopping_list_item`), and release their
+  own claim by tapping their avatar circle in "Your bag" again (the same control
+  toggles claim and unclaim). **Unclaim is claimer-only** — this was tightened during
+  implementation review from planning's earlier "anyone can unclaim" default; see
+  requirements.md decision 2's "Superseded post-implementation (2026-09-29)" note and
+  `unclaim_shopping_list_item`'s RPC-level enforcement (never trusting a
+  client-supplied member id). A user's claimed-unlogged items surface as multi-select
+  pills in the add-expense sheet (both existing call sites, per ADR 0008); selecting
+  one or more composes a comma-joined description client-side — the amount is always
+  typed by hand, never auto-filled. Submitting an expense with items selected calls a
+  new atomic RPC (`add_expense_and_log_shopping_items`) that inserts the expense and
+  marks the items "logged" in a single transaction, closing a staleness gap flagged in
+  design.md rather than leaving it as a two-call, non-atomic sequence. Logged items
+  move to a "Bought" section and tap through to their linked expense — now readable
+  (read-only) by any verified member, or on a locked trip, via a new render branch on
+  the existing edit-expense route, not just the payer (a real, if small, scope
+  addition beyond every prior tap-through precedent in the app, flagged and accepted
+  in design.md). Placeholder members can't claim or add items (ADR 0004's
+  identity convention). A removed member's in-flight claim is released by the app's
+  first DB trigger (`before delete on trip_members`,
+  [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)), so
+  member removal keeps working unchanged even mid-claim. **Deferred, not built**: a
+  dark-mode/glass visual variant of this feature was explored but is explicitly out of
+  scope for this pass (design.md is warm-paper only, matching the rest of the app
+  today) — tracked as a follow-up. **Known, accepted limitation carried from
+  requirements.md**: a "Bought" item's linked expense has no delete/undo path yet,
+  since expense-delete doesn't exist as a feature; the data model is deliberately left
+  able to revert a logged item back to claimed-unlogged without a schema change once
+  that feature ships. Non-goals (unchanged from requirements.md): any price/amount on
+  an item, co-claiming, cost-splitting a claim, editing a claimed item's description,
+  deleting a claimed/logged item, claim notifications, a cross-trip "common items"
+  template, a quantity field. Also, per direct user review of the live app ahead of
+  ship: removed the "Miso" mascot from the add-expense header, List/Expenses empty
+  states, and trip-creation page (left unchanged on the home/welcome screen), and
+  removed the pre-existing "Splits N ways — $X each" pill from the add-expense sheet.
+  **Pending follow-up**: `ShoppingListView.myClaimedUnloggedCount` (`src/lib/data/shopping-list.ts`)
+  is still computed and covered by its own unit test, but has had no UI consumer since the
+  Expenses-tab badge above was removed — kept rather than deleted since it's cheap, correct, and
+  may be wired back up if the badge (or something like it) returns in a future pass; revisit and
+  remove if it's still unused by then.
+
 ### Simplified onboarding (simplified-onboarding)
 - Status: shipped
 - Requirements: [docs/features/simplified-onboarding/requirements.md](features/simplified-onboarding/requirements.md)
