@@ -34,14 +34,15 @@ import { InlineVerifyWidget, TripVerificationProvider, VerifiedActionIcons, Veri
  * `get_trip_by_invite_code` RPC). A bare `/trip/[id]` link is a secondary entry point relative
  * to the invite link.
  *
- * "See full details" routes through `invite=<summary.inviteCode>` (migration 0012, pre-push
- * review fix), the same mechanism `/join/[code]` uses — `/check-email`'s handleConfirm only
- * calls `/api/join` (which actually inserts the `trip_members` row) when `invite` is present, so
- * without this a visitor who verified via this bare-link path would become a verified user who
- * was still never added as a member, and land right back here in a permanent loop.
+ * "See full details" routes through `joinTripId=<id>` (migration 0016 — see `join_trip_by_id`
+ * and `joinTripById`/`getTripSummary`'s doc comments in `src/lib/data/trips.ts`) — `/check-email`'s
+ * handleConfirm only calls the join RPC (which actually inserts the `trip_members` row) when
+ * `invite`/`joinTripId` is present, so without this a visitor who verified via this bare-link
+ * path would become a verified user who was still never added as a member, and land right back
+ * here in a permanent loop.
  */
 function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) {
-  const { members, settlements, totalCents, avgPerPersonCents, inviteCode } = summary;
+  const { members, settlements, totalCents, avgPerPersonCents } = summary;
   return (
     <Screen glow texture>
       <ScreenContent className="pt-0.5">
@@ -101,7 +102,7 @@ function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) 
           </div>
           <div className="h-3" />
           <LinkButton
-            href={`/check-email?trigger=detail&invite=${encodeURIComponent(inviteCode)}&next=${encodeURIComponent(`/trip/${id}`)}&back=${encodeURIComponent(`/trip/${id}`)}`}
+            href={`/check-email?trigger=detail&joinTripId=${encodeURIComponent(id)}&next=${encodeURIComponent(`/trip/${id}`)}&back=${encodeURIComponent(`/trip/${id}`)}`}
             variant="accent"
             block={false}
             className="px-5 text-[14px]"
@@ -133,13 +134,14 @@ function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) 
  * has returned null) never returns the trip name (see `TripSummaryOnly`'s comment above), so the
  * copy says "this trip" rather than quoting a name it doesn't have.
  *
- * `inviteCode` (from the same `summary` this replaces — `getTripSummary` returns it regardless of
- * current membership, see its own doc comment) backs the "Rejoin with the invite link" action —
- * per design.md section 8 point 3, this deliberately doesn't display the code/link itself, only
- * links through it, so this screen doesn't hand a removed member a fresh, more-convenient way to
- * re-enter than "use the link you already have."
+ * `id` (the trip's own UUID, already in scope at the call site — no RPC needed) backs the "Rejoin
+ * with the invite link" action, routed through the same `joinTripId=<id>` mechanism as
+ * `TripSummaryOnly` above (migration 0016) rather than the literal invite code — per design.md
+ * section 8 point 3, this deliberately doesn't display the code/link itself, only links through
+ * it, so this screen doesn't hand a removed member a fresh, more-convenient way to re-enter than
+ * "use the link you already have."
  */
-function RemovedFromTripScreen({ inviteCode }: { inviteCode: string }) {
+function RemovedFromTripScreen({ id }: { id: string }) {
   return (
     <Screen glow texture>
       <ScreenContent className="pt-14 text-center">
@@ -157,7 +159,12 @@ function RemovedFromTripScreen({ inviteCode }: { inviteCode: string }) {
           trip&apos;s record.
         </p>
         <div className="h-5" />
-        <LinkButton href={`/join/${inviteCode}`} variant="accent" block={false} className="mx-auto px-6">
+        <LinkButton
+          href={`/check-email?trigger=detail&joinTripId=${encodeURIComponent(id)}&next=${encodeURIComponent(`/trip/${id}`)}&back=${encodeURIComponent(`/trip/${id}`)}`}
+          variant="accent"
+          block={false}
+          className="mx-auto px-6"
+        >
           Rejoin with the invite link
         </LinkButton>
         <div className="h-2.5" />
@@ -255,7 +262,7 @@ export async function renderTripDashboard(
     if (removed) {
       return (
         <>
-          <RemovedFromTripScreen inviteCode={summary.inviteCode} />
+          <RemovedFromTripScreen id={id} />
           {sheet}
         </>
       );

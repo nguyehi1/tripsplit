@@ -1,12 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const joinTripMock = vi.fn();
+const joinTripByIdMock = vi.fn();
 const sendTripEmailMock = vi.fn();
 const getUserMock = vi.fn();
 const singleMock = vi.fn();
 
 vi.mock("@/lib/data/trips", () => ({
   joinTrip: (...args: unknown[]) => joinTripMock(...args),
+  joinTripById: (...args: unknown[]) => joinTripByIdMock(...args),
 }));
 
 vi.mock("@/lib/email", () => ({
@@ -37,7 +39,7 @@ describe("POST /api/join", () => {
     singleMock.mockResolvedValue({ data: { name: "Ski Trip" } });
   });
 
-  it("400s when inviteCode is missing", async () => {
+  it("400s when both inviteCode and tripId are missing", async () => {
     const { POST } = await importRoute();
     const res = await POST(
       new Request("http://localhost/api/join", {
@@ -46,6 +48,26 @@ describe("POST /api/join", () => {
       }),
     );
     expect(res.status).toBe(400);
+    expect(joinTripMock).not.toHaveBeenCalled();
+    expect(joinTripByIdMock).not.toHaveBeenCalled();
+  });
+
+  it("joins by tripId (migration 0016's join_trip_by_id) when inviteCode is absent", async () => {
+    joinTripByIdMock.mockResolvedValue("trip-456");
+    const { POST } = await importRoute();
+    const res = await POST(
+      new Request("http://localhost/api/join", {
+        method: "POST",
+        body: JSON.stringify({ tripId: "trip-456", displayName: "Sam" }),
+      }),
+    );
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ tripId: "trip-456" });
+    expect(joinTripByIdMock).toHaveBeenCalledWith(expect.anything(), {
+      tripId: "trip-456",
+      displayName: "Sam",
+    });
     expect(joinTripMock).not.toHaveBeenCalled();
   });
 

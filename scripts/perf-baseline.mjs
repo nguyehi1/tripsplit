@@ -8,12 +8,18 @@
  * This only aggregates logs you already have — it does not generate traffic or deploy
  * anything. Get raw log text into it first, e.g.:
  *
- *   vercel logs <deployment-url> --since 24h > perf.log
+ *   vercel logs <deployment-url> --json --since 24h > perf.log
  *   node scripts/perf-baseline.mjs < perf.log
  *
  * or pipe `vercel logs` directly:
  *
- *   vercel logs <deployment-url> --since 24h | node scripts/perf-baseline.mjs
+ *   vercel logs <deployment-url> --json --since 24h | node scripts/perf-baseline.mjs
+ *
+ * `--json` matters: `vercel logs`'s default pretty-printed output truncates long log messages
+ * (the `[perf] {...}` payload gets cut off mid-JSON), which this script can't recover from.
+ * `--json` emits one untruncated JSON object per line with the full message in a `message` (or
+ * `text`/`log`) field; this script unwraps that envelope automatically, and also accepts plain
+ * pretty-printed lines where `[perf] ` already appears directly in the line.
  *
  * Non-`[perf]` lines (everything else in a normal log stream) are silently skipped, so it's
  * safe to pipe an entire raw log export in without pre-filtering.
@@ -32,6 +38,28 @@ const minSamplesFlagIndex = args.indexOf("--min-samples");
 const minSamples = minSamplesFlagIndex !== -1 ? Number(args[minSamplesFlagIndex + 1]) : 30;
 
 const PERF_PREFIX = "[perf] ";
+const MESSAGE_FIELDS = ["message", "text", "log"];
+
+/**
+ * `vercel logs --json` wraps each log line in an envelope (timestamp/requestId/source/etc.)
+ * with the actual log text in one of a few field names depending on CLI version. Unwrap it so
+ * the rest of the pipeline can look for `[perf] ` the same way it does for plain log lines.
+ */
+function unwrapJsonEnvelope(line) {
+  let outer;
+  try {
+    outer = JSON.parse(line);
+  } catch {
+    return line;
+  }
+  if (outer === null || typeof outer !== "object") return line;
+  for (const field of MESSAGE_FIELDS) {
+    if (typeof outer[field] === "string" && outer[field].includes(PERF_PREFIX)) {
+      return outer[field];
+    }
+  }
+  return line;
+}
 
 /** @type {Map<string, { surface: string, call: string, durations: number[], okCount: number, errCount: number }>} */
 const groups = new Map();
@@ -40,7 +68,8 @@ let tsMax = -Infinity;
 let parsedCount = 0;
 let malformedCount = 0;
 
-function ingest(line) {
+function ingest(rawLine) {
+  const line = unwrapJsonEnvelope(rawLine);
   const idx = line.indexOf(PERF_PREFIX);
   if (idx === -1) return;
   const jsonText = line.slice(idx + PERF_PREFIX.length).trim();

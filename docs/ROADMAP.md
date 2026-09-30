@@ -68,18 +68,48 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
   (b) **(chosen)** add a throttle inside the `plpgsql` functions
   themselves, the one layer every call path — in-app or direct —
   actually passes through.
-- **Also should-fix, not yet actioned**: `get_trip_summary` (public,
-  zero-auth) also returns the trip's `invite_code` keyed only on trip UUID
-  (`supabase/migrations/0012_add_invite_code_to_trip_summary.sql`),
-  collapsing the intended separation between the public view-only link and
-  the join credential; `getTripSummary` is also still called directly from
-  the browser, same unthrottled-RPC class of issue as the one just
-  mitigated. An open redirect exists in `src/app/check-email/page.tsx`
-  (`next`/`back` query params flow unvalidated into `router.push`). The
-  anon-to-permanent-account linking assumption every new RLS policy in
-  `0009_simplified_onboarding.sql` depends on has never been verified
-  against a live Supabase project (flagged in the team's own
-  [ADR 0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md)).
+- **Also should-fix**: the anon-to-permanent-account linking assumption every
+  new RLS policy in `0009_simplified_onboarding.sql` depends on has never been
+  verified against a live Supabase project (flagged in the team's own
+  [ADR 0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md)) —
+  still open, needs a live-deployment pass.
+- **2026-09-30 fix (open redirect)**: the open redirect flagged above is
+  closed — both `src/app/check-email/page.tsx` and
+  `src/app/join/[code]/welcome/page.tsx` read their `next`/`back` query params
+  through a new `sanitizeInternalPath` (`src/lib/validation/redirect.ts`,
+  tested in `redirect.test.ts`), which only allows a same-document-relative
+  internal path through (`/...`, rejecting `//`, `/\`, and any embedded
+  `://` scheme) and falls back to a safe default otherwise.
+- **2026-09-30 fix (`get_trip_summary` invite-code leak)**: closed via
+  migration `0016_join_by_trip_id_drop_invite_code_leak.sql` (option B from
+  the three considered — see the migration's own comment for the full
+  trade-off writeup). `get_trip_summary` no longer returns `invite_code` at
+  all; the two callers that used it (`TripSummaryOnly` and
+  `RemovedFromTripScreen` in `src/app/trip/[id]/page.tsx`) now join via a new
+  `join_trip_by_id` RPC (`joinTripById` in `src/lib/data/trips.ts`, wired
+  through `/api/join`'s existing route and a new `joinTripId` query param on
+  `/check-email`) keyed by the trip UUID they already have, instead of ever
+  learning the literal invite code. Preserves both screens' exact current
+  behavior (a bare-`/trip/<uuid>` visitor can still confirm-and-join; a
+  removed member can still rejoin) — this does not change who can end up
+  joining a trip, only removes the invite-code string itself from ever
+  reaching a client that only had the UUID. `join_trip_by_id` mirrors
+  `join_trip`'s guards exactly (migration 0010's anonymity check, migration
+  0013's per-`auth.uid()` throttle, same on-conflict membership upsert), and
+  was live-verified against a throwaway local Postgres 10 instance
+  (`initdb`/`pg_ctl`, same method as migration 0013's own verification) before
+  being handed over: confirmed `get_trip_summary`'s returned columns no
+  longer include `invite_code`, `join_trip_by_id` rejects an anonymous
+  caller and an unknown trip id, succeeds and upserts (not duplicates) on
+  rejoin for a verified caller, throttles after 10 calls/60s same as
+  `join_trip`, and that `join_trip`/`get_trip_by_invite_code` are unchanged.
+  Migration applied to the live Supabase project (2026-09-30, user-confirmed).
+  **Not yet done**: a live functional check that both call sites (bare
+  `/trip/<uuid>` "See full details", a removed member's "Rejoin with the
+  invite link") still actually complete a join end-to-end against the
+  deployed app/RPC, and that `get_trip_summary` no longer returns
+  `invite_code` in a real response — needed before this item is marked fully
+  closed.
 - **Explicitly out of scope for this item**: receipt-storage RLS still
   using bare `is_trip_member` pre-verification — deferred since receipt
   storage isn't a shipped feature yet.
@@ -102,68 +132,6 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
   here — not by reopening ADR 0009's already-settled remediation choice.
 
 ## Planned
-
-### Remove member from trip roster + self-service leave trip (remove-member-access)
-- Status: implemented, QA/security/compliance passed, pending final PR review
-- Requirements: [docs/features/remove-member-access/requirements.md](features/remove-member-access/requirements.md)
-- Docs: [planning.md](features/remove-member-access/planning.md),
-  [architecture.md](features/remove-member-access/architecture.md),
-  [design.md](features/remove-member-access/design.md),
-  [ADR 0012](adr/0012-post-removal-detection-and-ghost-payer-rendering.md)
-- Lets the organizer remove another real (non-placeholder) member from a trip's roster, and lets
-  any non-organizer member remove themselves ("leave trip") — both organizer-only-for-others and
-  self-service, sharing the same underlying mechanism (hard-delete the `trip_members` row, same
-  pattern as the existing `remove_placeholder_member`). **Not** invite-code rotation or true
-  access revocation — the confirmation step for both flows must disclose the person could still
-  rejoin by reusing the same invite link/code, per the `planning.md` debate's convergent
-  recommendation to ship the smaller, honest version rather than the originally-requested "revoke
-  access." Removed/left members' past expenses and `paid_by` history are never altered or
-  reassigned; note the requirements doc's finding that the *computed* equal-split share for
-  remaining members does shift once membership changes, since splits are live-computed off current
-  membership rather than snapshotted per expense (a pre-existing property of the split engine, not
-  new behavior). Notification is in-app state only ("you've been removed"/"you left" shown on
-  return, instead of a generic error) — no email, since no existing pattern lets one member trigger
-  email to another member's address without new scope. Both flows are gated on the trip still being
-  open, mirroring the existing placeholder-removal/expense-lock precedent. Explicit non-goals:
-  outstanding-balance blocking/warning, post-removal read-only balance visibility for the removed
-  member, invite-code rotation, organizer self-removal/ownership transfer, audit trail.
-
-### UX Revamp (ux-revamp)
-- Status: in progress — implemented, QA/security/compliance passed, pending final PR review
-- Requirements: [docs/features/ux-revamp/requirements.md](features/ux-revamp/requirements.md)
-- Restyles the existing browser app's highest-traffic path — welcome,
-  create-a-trip, the trip main view, and add-expense — to the "warm paper"
-  visual treatment (lit paper ground, ochre/terracotta glow, blurred nav,
-  floating capsule primary action, spring-up sheet for add-expense, Miso
-  the mascot) imported from a design exploration
-  (`docs/features/ux-revamp/design-import/`). Presentation-layer restyle of
-  the existing Next.js/Supabase app on the ADR 0005 SSR pattern — not a
-  mobile-specific build, native wrapper, or PWA. Ships as the app's light
-  theme, built on themeable tokens from the start so the design's "dark
-  glass" counterpart is a future token swap rather than a rebuild.
-  Add-expense's page-to-overlay-sheet conversion is flagged as real
-  routing/history/deep-link architecture work for the architect stage, not
-  a cosmetic change. Defers Details, Settle-up, and ~11 other canvas
-  screens (sign-back-in, pre-confirmation state, edit-expense, invite-link
-  opening, roster, feedback, all-trips states, loading/error patterns) to
-  later slices. Carries forward four open questions for user confirmation
-  (with working defaults chosen so the doc is buildable as written): whether
-  the invite-code RPC-grant fix above needs to sequence before this work
-  (default: no, independent), this feature's priority relative to the rest
-  of the open roadmap (default: proceeds now, in parallel), whether
-  placeholder/lower-resolution Miso art is acceptable for the first slice
-  given the unresolved mascot-art asset pipeline gap (default: yes, swap in
-  final art as a fast-follow), and the target browser support matrix
-  (default: unchanged from today).
-- **Follow-up needed before any real launch/marketing push for Miso**
-  (user decision, 2026-09-18, not a blocker for this slice): compliance
-  flagged that Miso's art is AI-generated and now a permanent brand
-  element, raising (a) whether any target jurisdiction's AI-generated-
-  content disclosure rules apply, and (b) copyright/trademark
-  protectability of AI-generated art plus the generating tool's ToS for
-  commercial/brand use. User chose to proceed now and revisit this before
-  investing further in Miso as a brand identity — see
-  [docs/features/ux-revamp/compliance-report.md](features/ux-revamp/compliance-report.md) §2.
 
 ### Vercel Analytics – Full Enable and Custom Event Tracking (vercel-analytics)
 - Status: planned
@@ -295,6 +263,65 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
   Expenses-tab badge above was removed — kept rather than deleted since it's cheap, correct, and
   may be wired back up if the badge (or something like it) returns in a future pass; revisit and
   remove if it's still unused by then.
+
+### Remove member from trip roster + self-service leave trip (remove-member-access)
+- Status: shipped (2026-09-30 roadmap update — code shipped on `main` at `83d9453`;
+  no open PR existed to review, so "pending final PR review" was stale)
+- Requirements: [docs/features/remove-member-access/requirements.md](features/remove-member-access/requirements.md)
+- Docs: [planning.md](features/remove-member-access/planning.md),
+  [architecture.md](features/remove-member-access/architecture.md),
+  [design.md](features/remove-member-access/design.md),
+  [ADR 0012](adr/0012-post-removal-detection-and-ghost-payer-rendering.md)
+- Lets the organizer remove another real (non-placeholder) member from a trip's roster, and lets
+  any non-organizer member remove themselves ("leave trip") — both organizer-only-for-others and
+  self-service, sharing the same underlying mechanism (hard-delete the `trip_members` row, same
+  pattern as the existing `remove_placeholder_member`). **Not** invite-code rotation or true
+  access revocation — the confirmation step for both flows must disclose the person could still
+  rejoin by reusing the same invite link/code, per the `planning.md` debate's convergent
+  recommendation to ship the smaller, honest version rather than the originally-requested "revoke
+  access." Removed/left members' past expenses and `paid_by` history are never altered or
+  reassigned; note the requirements doc's finding that the *computed* equal-split share for
+  remaining members does shift once membership changes, since splits are live-computed off current
+  membership rather than snapshotted per expense (a pre-existing property of the split engine, not
+  new behavior). Notification is in-app state only ("you've been removed"/"you left" shown on
+  return, instead of a generic error) — no email, since no existing pattern lets one member trigger
+  email to another member's address without new scope. Both flows are gated on the trip still being
+  open, mirroring the existing placeholder-removal/expense-lock precedent. Explicit non-goals:
+  outstanding-balance blocking/warning, post-removal read-only balance visibility for the removed
+  member, invite-code rotation, organizer self-removal/ownership transfer, audit trail.
+
+### UX Revamp (ux-revamp)
+- Status: shipped (2026-09-30 roadmap update — code shipped on `main` at `79ba628`;
+  no open PR existed to review, so "pending final PR review" was stale)
+- Requirements: [docs/features/ux-revamp/requirements.md](features/ux-revamp/requirements.md)
+- Restyles the existing browser app's highest-traffic path — welcome,
+  create-a-trip, the trip main view, and add-expense — to the "warm paper"
+  visual treatment (lit paper ground, ochre/terracotta glow, blurred nav,
+  floating capsule primary action, spring-up sheet for add-expense, Miso
+  the mascot) imported from a design exploration
+  (`docs/features/ux-revamp/design-import/`). Presentation-layer restyle of
+  the existing Next.js/Supabase app on the ADR 0005 SSR pattern — not a
+  mobile-specific build, native wrapper, or PWA. Ships as the app's light
+  theme, built on themeable tokens from the start so the design's "dark
+  glass" counterpart is a future token swap rather than a rebuild.
+  Add-expense's page-to-overlay-sheet conversion is flagged as real
+  routing/history/deep-link architecture work for the architect stage, not
+  a cosmetic change. Defers Details, Settle-up, and ~11 other canvas
+  screens (sign-back-in, pre-confirmation state, edit-expense, invite-link
+  opening, roster, feedback, all-trips states, loading/error patterns) to
+  later slices — note edit-expense's page-to-sheet conversion and cross-screen
+  consistency pass has since shipped separately (`1fadc46`,
+  `docs/ux-consistency-review-2026-09-30.md`), not tracked as its own
+  roadmap entry.
+- **Follow-up needed before any real launch/marketing push for Miso**
+  (user decision, 2026-09-18, not a blocker for this slice): compliance
+  flagged that Miso's art is AI-generated and now a permanent brand
+  element, raising (a) whether any target jurisdiction's AI-generated-
+  content disclosure rules apply, and (b) copyright/trademark
+  protectability of AI-generated art plus the generating tool's ToS for
+  commercial/brand use. User chose to proceed now and revisit this before
+  investing further in Miso as a brand identity — see
+  [docs/features/ux-revamp/compliance-report.md](features/ux-revamp/compliance-report.md) §2.
 
 ### Simplified onboarding (simplified-onboarding)
 - Status: shipped

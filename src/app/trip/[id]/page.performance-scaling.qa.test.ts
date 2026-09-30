@@ -66,7 +66,6 @@ const baseSummary = {
   settlements: [],
   totalCents: 1000,
   avgPerPersonCents: 1000,
-  inviteCode: "abc123",
 };
 
 function callPage(overrides: { tab?: string } = {}) {

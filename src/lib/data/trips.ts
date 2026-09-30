@@ -60,6 +60,21 @@ export async function joinTrip(supabase: Client, input: { inviteCode: string; di
   return data as string;
 }
 
+/**
+ * Joins a trip by its UUID rather than its invite code (migration 0016) — for the two call
+ * sites (`TripSummaryOnly`, `RemovedFromTripScreen` in `src/app/trip/[id]/page.tsx`) that only
+ * ever had the trip's UUID in scope to begin with, closing the `get_trip_summary` invite-code
+ * leak (docs/ROADMAP.md's invite-code-rpc-hardening entry) without changing who can join.
+ */
+export async function joinTripById(supabase: Client, input: { tripId: string; displayName: string }) {
+  const { data, error } = await supabase.rpc("join_trip_by_id", {
+    _trip_id: input.tripId,
+    _display_name: input.displayName,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
 export async function completeTrip(supabase: Client, tripId: string) {
   const { error } = await supabase.rpc("complete_trip", { _trip_id: tripId });
   if (error) throw error;
@@ -422,12 +437,13 @@ export type TripView = NonNullable<Awaited<ReturnType<typeof getTripView>>>;
  * in TS rather than porting the greedy-settle algorithm to SQL. Returns `null` for an unknown
  * trip id (RPC returns zero rows), matching `getTripByInviteCode`'s "not found" shape.
  *
- * Also surfaces `inviteCode` (migration 0012, pre-push review fix): the trip's invite code is
- * public/non-sensitive (already exposed in the reverse direction by `get_trip_by_invite_code`),
- * and giving `TripSummaryOnly` (src/app/trip/[id]/page.tsx) access to it is what lets its "See
- * full details" link route through the same `invite=<code>` -> `/api/join` mechanism
- * `/join/[code]` uses, instead of leaving a bare `/trip/[id]` visitor stuck in a verify-but-never-
- * join loop.
+ * No longer surfaces the trip's invite code (migration 0012 added it, migration 0016 removed
+ * it — docs/ROADMAP.md's invite-code-rpc-hardening entry): handing the invite code to anyone who
+ * merely has the trip's UUID collapsed the separation between the public, view-only UUID and the
+ * actual join credential. The two callers that used it (`TripSummaryOnly`,
+ * `RemovedFromTripScreen` in src/app/trip/[id]/page.tsx) already have the trip UUID directly, so
+ * they now join via `joinTripById`/`join_trip_by_id` instead of round-tripping through the
+ * invite code at all.
  */
 export async function getTripSummary(supabase: Client, tripId: string) {
   const { data, error } = await supabase.rpc("get_trip_summary", { _trip_id: tripId });
@@ -452,9 +468,8 @@ export async function getTripSummary(supabase: Client, tripId: string) {
 
   const totalCents = balances.reduce((sum, b) => sum + b.paidCents, 0);
   const avgPerPersonCents = members.length > 0 ? Math.round(totalCents / members.length) : 0;
-  const inviteCode = rows[0].invite_code;
 
-  return { members, settlements, totalCents, avgPerPersonCents, inviteCode };
+  return { members, settlements, totalCents, avgPerPersonCents };
 }
 
 export type TripSummary = NonNullable<Awaited<ReturnType<typeof getTripSummary>>>;

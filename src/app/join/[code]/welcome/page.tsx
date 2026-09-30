@@ -9,6 +9,7 @@ import { formatCents } from "@/lib/currency";
 import { formatDateRange } from "@/lib/dates";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
+import { sanitizeInternalPath } from "@/lib/validation/redirect";
 
 function ordinal(n: number) {
   const s = ["th", "st", "nd", "rd"];
@@ -24,6 +25,7 @@ export default function JoinWelcomePage() {
   // detail/add-expense trigger (design.md section 6.1) rather than the original join form — lets
   // "See the trip" land on the thing they actually asked for instead of a generic trip landing.
   const next = searchParams.get("next");
+  const safeNext = sanitizeInternalPath(next, "");
   const [view, setView] = useState<TripView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,7 +124,7 @@ export default function JoinWelcomePage() {
         </div>
       </ScreenContent>
       <BottomBar>
-        <Button variant="primary" className="text-[16px]" onClick={() => router.push(next || `/trip/${tripId}`)}>
+        <Button variant="primary" className="text-[16px]" onClick={() => router.push(safeNext || `/trip/${tripId}`)}>
           See the trip
         </Button>
       </BottomBar>

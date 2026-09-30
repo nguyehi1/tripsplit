@@ -6,6 +6,7 @@ import { ArrowRightIcon, ChevronLeftIcon, MailIcon } from "@/components/icons";
 import { BottomBar, Button, Field, IconButton, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { trackEvent } from "@/lib/tracking";
 import { useOtpFlow } from "@/lib/use-otp-flow";
+import { sanitizeInternalPath } from "@/lib/validation/redirect";
 
 // Contextual mutation triggers (simplified-onboarding): who's being asked to confirm, and what
 // for — controls the headline/sub-copy on the email-entry step below. See
@@ -49,9 +50,15 @@ function CheckEmailContent() {
   const router = useRouter();
   const params = useSearchParams();
   const emailParam = params.get("email");
-  const back = params.get("back") ?? "/";
-  const next = params.get("next") ?? "/trips";
+  const back = sanitizeInternalPath(params.get("back"), "/");
+  const next = sanitizeInternalPath(params.get("next"), "/trips");
   const invite = params.get("invite");
+  // Set by `TripSummaryOnly`/`RemovedFromTripScreen` (src/app/trip/[id]/page.tsx, migration
+  // 0016) — a visitor who only has the trip's UUID, not an invite code. Joins via
+  // `join_trip_by_id` instead of `join_trip`, closing the `get_trip_summary` invite-code leak
+  // (docs/ROADMAP.md's invite-code-rpc-hardening entry) without changing either screen's
+  // behavior: the raw invite code just never needs to reach this page at all for these two.
+  const joinTripId = params.get("joinTripId");
   const triggerParam = params.get("trigger");
   const trigger = isTrigger(triggerParam) ? triggerParam : null;
   const tripName = params.get("tripName") ?? "";
@@ -84,7 +91,7 @@ function CheckEmailContent() {
   const showClear = otp.remembered !== "" && otp.email === otp.remembered;
 
   async function handleSendCode() {
-    if (invite && !name.trim()) {
+    if ((invite || joinTripId) && !name.trim()) {
       otp.setSendError("Your name and email are both required.");
       return;
     }
@@ -112,6 +119,22 @@ function CheckEmailContent() {
         welcomeUrl.searchParams.set("tripId", data.tripId);
         if (next !== "/trips") welcomeUrl.searchParams.set("next", next);
         router.push(`${welcomeUrl.pathname}${welcomeUrl.search}`);
+        return;
+      }
+      if (joinTripId) {
+        // No invite code to build a `/join/<code>/welcome` celebration screen around here, and
+        // this visitor already came from viewing the trip directly — land them straight back on
+        // it (`next`) rather than inventing a parallel welcome flow for this path only.
+        const res = await fetch("/api/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tripId: joinTripId, displayName: name }),
+        });
+        if (!res.ok) {
+          router.push(`${back}?error=join`);
+          return;
+        }
+        router.push(next);
         return;
       }
       router.push(next);
@@ -145,7 +168,7 @@ function CheckEmailContent() {
           ) : null}
           <div className="h-7" />
 
-          {invite ? (
+          {invite || joinTripId ? (
             <>
               <Field
                 label="Your name"

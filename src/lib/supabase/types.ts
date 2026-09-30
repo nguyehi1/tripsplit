@@ -121,6 +121,10 @@ export type Database = {
         Args: { _invite_code: string; _display_name: string };
         Returns: string;
       };
+      join_trip_by_id: {
+        Args: { _trip_id: string; _display_name: string };
+        Returns: string;
+      };
       complete_trip: {
         Args: { _trip_id: string };
         Returns: undefined;
@@ -172,7 +176,6 @@ export type Database = {
           display_name: string;
           paid_cents: number;
           share_cents: number;
-          invite_code: string;
         }[];
       };
       claim_shopping_list_item: {

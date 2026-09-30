@@ -43,3 +43,7 @@ next-env.d.ts
 
 # supabase
 supabase/.temp/
+
+# raw production log captures (scripts/perf-baseline.mjs input) — contain request data (IPs etc.)
+perf-raw.log
+*.perf.log

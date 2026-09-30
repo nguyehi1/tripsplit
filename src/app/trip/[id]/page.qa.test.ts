@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const getTripViewMock = vi.fn();
 const getTripSummaryMock = vi.fn();
+const wasRemovedFromTripMock = vi.fn().mockResolvedValue(false);
 
 // The trip page's full-detail branch wraps its mutation entry points in
 // `TripVerificationProvider` (src/app/trip/[id]/verify-inline.tsx), a small client leaf that
@@ -23,6 +24,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/data/trips", () => ({
   getTripView: (...args: unknown[]) => getTripViewMock(...args),
   getTripSummary: (...args: unknown[]) => getTripSummaryMock(...args),
+  wasRemovedFromTrip: (...args: unknown[]) => wasRemovedFromTripMock(...args),
 }));
 
 const baseView = {
@@ -62,7 +64,6 @@ const baseSummary = {
   settlements: [],
   totalCents: 1000,
   avgPerPersonCents: 1000,
-  inviteCode: "abc123",
 };
 
 function callPage(overrides: { tab?: string } = {}) {
@@ -102,17 +103,35 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
     expect(html).not.toContain("Lake Tahoe");
   });
 
-  // Pre-push review fix 1: the bare-`/trip/[id]` "See full details" link must carry the trip's
-  // invite code so confirming email actually joins the visitor as a member (via /api/join, the
-  // same mechanism /join/[code] uses) instead of leaving them verified but never added, looping
-  // back to this exact screen forever.
-  it('"See full details" link on the summary-only tier includes the invite code (fix for the verify-but-never-join loop)', async () => {
+  // Pre-push review fix 1 (original), superseded by migration 0016: the bare-`/trip/[id]` "See
+  // full details" link must carry enough for confirming email to actually join the visitor as a
+  // member, instead of leaving them verified but never added, looping back to this exact screen
+  // forever. It now does that via the trip's own UUID (`joinTripId`, `join_trip_by_id`) instead
+  // of the invite code — docs/ROADMAP.md's invite-code-rpc-hardening entry, "should-fix" item on
+  // `get_trip_summary` leaking the invite code to any UUID holder.
+  it('"See full details" link on the summary-only tier includes the trip id, not the invite code (fix for the verify-but-never-join loop)', async () => {
     getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockRejectedValueOnce(new Error("RLS denied"));
     const el = await callPage();
     const html = renderToStaticMarkup(el);
-    expect(html).toContain("invite=abc123");
-    expect(html).toContain("/check-email?trigger=detail&amp;invite=abc123");
+    expect(html).toContain("joinTripId=trip-1");
+    expect(html).toContain("/check-email?trigger=detail&amp;joinTripId=trip-1");
+    expect(html).not.toContain("invite=");
+  });
+
+  // ADR 0012's ghost-payer screen, updated by migration 0016 (docs/ROADMAP.md's
+  // invite-code-rpc-hardening entry): "Rejoin with the invite link" used to link straight to
+  // `/join/<inviteCode>`, which needed `get_trip_summary` to hand the invite code to the client.
+  // It now routes through the same `joinTripId=<id>` mechanism as "See full details" above.
+  it('"Rejoin with the invite link" on the removed-member screen uses the trip id, not the invite code', async () => {
+    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
+    getTripViewMock.mockResolvedValueOnce(null);
+    wasRemovedFromTripMock.mockResolvedValueOnce(true);
+    const el = await callPage();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("You&#x27;re no longer on this trip.");
+    expect(html).toContain("joinTripId=trip-1");
+    expect(html).not.toContain("/join/");
   });
 
   it("renders the empty-expenses state (AC6)", async () => {

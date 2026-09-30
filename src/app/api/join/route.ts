@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { joinTrip } from "@/lib/data/trips";
+import { joinTrip, joinTripById } from "@/lib/data/trips";
 import { sendTripEmail } from "@/lib/email";
 import { timeAsync } from "@/lib/perf/timing";
 import { dbRateLimitResponse, enforceRateLimit, isDbRateLimitError } from "@/lib/rate-limit";
@@ -15,6 +15,11 @@ import { createClient } from "@/lib/supabase/server";
  * directly against Supabase with an authenticated JWT (docs/security-review-2026-09-17-followup.md
  * finding #1) — `join_trip` now also throttles itself from inside Postgres, keyed by `auth.uid()`
  * (migration 0013), so `isDbRateLimitError` below catches that path's rejection too.
+ *
+ * Accepts either `inviteCode` (the `/join/[code]` flow) or `tripId` (migration 0016's
+ * `join_trip_by_id` — `TripSummaryOnly`/`RemovedFromTripScreen` in `src/app/trip/[id]/page.tsx`,
+ * which only ever have the trip's UUID, not its invite code, and shouldn't need to learn it just
+ * to join). Exactly one of the two must be present.
  */
 export async function POST(request: Request) {
   const rateLimited = await timeAsync("join-trip", "enforceRateLimit", () =>
@@ -22,9 +27,11 @@ export async function POST(request: Request) {
   );
   if (rateLimited) return rateLimited;
 
-  const { inviteCode, displayName } = await request.json();
-  if (!inviteCode || typeof inviteCode !== "string") {
-    return NextResponse.json({ error: "Missing invite code." }, { status: 400 });
+  const { inviteCode, tripId: joinTripId, displayName } = await request.json();
+  const hasInviteCode = typeof inviteCode === "string" && inviteCode.length > 0;
+  const hasTripId = typeof joinTripId === "string" && joinTripId.length > 0;
+  if (!hasInviteCode && !hasTripId) {
+    return NextResponse.json({ error: "Missing invite code or trip id." }, { status: 400 });
   }
 
   const supabase = await createClient();
@@ -32,13 +39,16 @@ export async function POST(request: Request) {
 
   try {
     const tripId = await timeAsync("join-trip", "joinTrip", () =>
-      joinTrip(supabase, { inviteCode, displayName: displayName ?? "" }),
+      hasTripId
+        ? joinTripById(supabase, { tripId: joinTripId, displayName: displayName ?? "" })
+        : joinTrip(supabase, { inviteCode, displayName: displayName ?? "" }),
     );
     await sendJoinedEmail(supabase, tripId, origin);
     return NextResponse.json({ tripId });
   } catch (e) {
-    // 60 must match the `_window_seconds` argument in migration 0013's
-    // `perform public.throttle_rpc('join-trip:' || auth.uid()::text, 10, 60);`.
+    // 60 must match the `_window_seconds` argument in migration 0013's/0016's
+    // `perform public.throttle_rpc('join-trip:' || auth.uid()::text, 10, 60);` (and
+    // `'join-trip-by-id:' || ...`, same window).
     if (isDbRateLimitError(e)) return dbRateLimitResponse(60);
     console.error("Failed to join trip", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Couldn't join the trip." }, { status: 500 });

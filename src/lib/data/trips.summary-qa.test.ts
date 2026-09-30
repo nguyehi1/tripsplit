@@ -16,10 +16,11 @@ type Client = SupabaseClient<Database>;
  */
 
 /**
- * Pre-push review fix 1: `get_trip_summary` (migration 0012) now also returns `invite_code`, so
- * `getTripSummary` must surface it as `inviteCode` — this is what lets `TripSummaryOnly`
- * (src/app/trip/[id]/page.tsx) build a `/check-email?invite=<code>` link for a bare `/trip/[id]`
- * visitor, closing the verify-but-never-join loop.
+ * Migration 0012 added `invite_code` to `get_trip_summary`'s return; migration 0016 removed it
+ * again (docs/ROADMAP.md's invite-code-rpc-hardening entry — handing the invite code to anyone
+ * with just the trip's UUID collapsed the separation between the two). `TripSummaryOnly`
+ * (src/app/trip/[id]/page.tsx) now joins via `joinTripById`/`join_trip_by_id` using the trip UUID
+ * it already has, instead of needing `getTripSummary` to hand it the invite code.
  */
 
 function makeRpcFake(result: { data: unknown; error: unknown }) {
@@ -35,8 +36,8 @@ describe("getTripSummary", () => {
   it("calls get_trip_summary with the trip id and computes net from paid/share", async () => {
     const fake = makeRpcFake({
       data: [
-        { member_id: "m1", display_name: "Alex", paid_cents: 10_000, share_cents: 5_000, invite_code: "abc123" },
-        { member_id: "m2", display_name: "Sam", paid_cents: 0, share_cents: 5_000, invite_code: "abc123" },
+        { member_id: "m1", display_name: "Alex", paid_cents: 10_000, share_cents: 5_000 },
+        { member_id: "m2", display_name: "Sam", paid_cents: 0, share_cents: 5_000 },
       ],
       error: null,
     });
@@ -47,7 +48,7 @@ describe("getTripSummary", () => {
     expect(summary).not.toBeNull();
     expect(summary!.totalCents).toBe(10_000);
     expect(summary!.avgPerPersonCents).toBe(5_000);
-    expect(summary!.inviteCode).toBe("abc123");
+    expect(summary).not.toHaveProperty("inviteCode");
     // Alex is owed $50, Sam owes $50 — simplifyDebts should resolve this to one transaction.
     expect(summary!.settlements).toEqual([
       { fromMemberId: "m2", toMemberId: "m1", amountCents: 5_000, from: expect.anything(), to: expect.anything() },
