@@ -3,6 +3,7 @@
 import { useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightIcon } from "@/components/icons";
+import { LegalLinks } from "@/components/legal-page";
 import { Button, Field, ScreenContent } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/auth-errors";
 import { clearRememberedEmail, getRememberedEmail, setRememberedEmail } from "@/lib/remembered-email";
@@ -215,5 +216,10 @@ function WelcomeContent() {
 }
 
 export function HomeScreen({ showSignIn }: { showSignIn: boolean }) {
-  return <ScreenContent className="pt-8">{showSignIn ? <SignInForm /> : <WelcomeContent />}</ScreenContent>;
+  return (
+    <ScreenContent className="pt-8">
+      {showSignIn ? <SignInForm /> : <WelcomeContent />}
+      <LegalLinks />
+    </ScreenContent>
+  );
 }
