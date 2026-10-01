@@ -37,6 +37,13 @@ export function useOtpFlow(opts: { initialEmail?: string; skipToCode?: boolean }
   const [code, setCode] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  // True once `sendCode`/`resend` had to fall back from linking (an anonymous session trying to
+  // upgrade in place) to a plain sign-in, because the email already belongs to an existing
+  // permanent account (Supabase's `email_exists` on `updateUser`) — an anonymous session can't
+  // be linked to an email someone else already owns. `confirmCode` needs this because the
+  // session is *still* anonymous at verify time (the OTP hasn't been confirmed yet), so its own
+  // `isAnonymous` check would otherwise re-pick the linking verify type and fail the same way.
+  const [signingIntoExisting, setSigningIntoExisting] = useState(false);
 
   useEffect(() => {
     if (phase !== "code") return;
@@ -68,6 +75,13 @@ export function useOtpFlow(opts: { initialEmail?: string; skipToCode?: boolean }
    * via `updateUser`, never a fresh `signInWithOtp`, so the existing anonymous session's
    * `auth.uid()` (and any RLS ownership already tied to it) carries forward instead of silently
    * resolving to a different/new user. Returns whether the send succeeded.
+   *
+   * Live-verified gap closed: `updateUser({ email })` fails with `email_exists` when that email
+   * already belongs to a different, existing permanent account — Supabase won't link an
+   * anonymous session to someone else's identity. That's not a dead end, just the wrong branch:
+   * this is actually a returning registered user with no local session (e.g. a private window,
+   * or browser data cleared), so it falls back to a plain `signInWithOtp` for that email instead
+   * of surfacing "already registered" as if it were an error.
    */
   async function sendCode(inputEmail: string): Promise<boolean> {
     if (!inputEmail.trim()) {
@@ -92,13 +106,19 @@ export function useOtpFlow(opts: { initialEmail?: string; skipToCode?: boolean }
         } = await supabase.auth.getUser());
       }
       const isAnonymous = user?.is_anonymous === true;
-      const { error: authError } = isAnonymous
-        ? await supabase.auth.updateUser({ email: inputEmail.trim() })
-        : await supabase.auth.signInWithOtp({ email: inputEmail.trim() });
+      let authError = isAnonymous
+        ? (await supabase.auth.updateUser({ email: inputEmail.trim() })).error
+        : (await supabase.auth.signInWithOtp({ email: inputEmail.trim() })).error;
+      let fellBackToSignIn = false;
+      if (isAnonymous && authError?.code === "email_exists") {
+        authError = (await supabase.auth.signInWithOtp({ email: inputEmail.trim() })).error;
+        fellBackToSignIn = true;
+      }
       if (authError) {
         setSendError(friendlyAuthError(authError));
         return false;
       }
+      setSigningIntoExisting(fellBackToSignIn);
       setEmail(inputEmail.trim());
       setRememberedEmail(inputEmail.trim());
       setRemembered(inputEmail.trim());
@@ -123,9 +143,15 @@ export function useOtpFlow(opts: { initialEmail?: string; skipToCode?: boolean }
         data: { user },
       } = await supabase.auth.getUser();
       const isAnonymous = user?.is_anonymous === true;
-      const { error } = isAnonymous
-        ? await supabase.auth.updateUser({ email })
-        : await supabase.auth.signInWithOtp({ email });
+      let error = (
+        isAnonymous && !signingIntoExisting
+          ? await supabase.auth.updateUser({ email })
+          : await supabase.auth.signInWithOtp({ email })
+      ).error;
+      if (isAnonymous && !signingIntoExisting && error?.code === "email_exists") {
+        error = (await supabase.auth.signInWithOtp({ email })).error;
+        setSigningIntoExisting(true);
+      }
       if (error) {
         setResendError(friendlyAuthError(error));
         return false;
@@ -160,7 +186,12 @@ export function useOtpFlow(opts: { initialEmail?: string; skipToCode?: boolean }
         data: { user },
       } = await supabase.auth.getUser();
       const isAnonymous = user?.is_anonymous === true;
-      const { error } = isAnonymous
+      // signingIntoExisting overrides the isAnonymous-derived branch: the session is still
+      // anonymous right up until this verifyOtp succeeds, but sendCode/resend already fell back
+      // to a plain sign-in (because the email belongs to an existing permanent account), so this
+      // must verify as a sign-in ("email"), not a linking ("email_change") — the latter would
+      // just fail with the same email_exists error all over again.
+      const { error } = isAnonymous && !signingIntoExisting
         ? await supabase.auth.verifyOtp({ email, token: inputCode.trim(), type: "email_change" })
         : await supabase.auth.verifyOtp({ email, token: inputCode.trim(), type: "email" });
       if (error) {
@@ -179,6 +210,7 @@ export function useOtpFlow(opts: { initialEmail?: string; skipToCode?: boolean }
   /** Local, in-place transition back to the email step — no navigation involved. */
   function useDifferentEmail() {
     setPhase("email");
+    setSigningIntoExisting(false);
   }
 
   return {

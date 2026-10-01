@@ -165,6 +165,49 @@ describe("useOtpFlow — send-code branching (anonymous-to-permanent linking for
 
     root.unmount();
   });
+
+  // Live smoke-test finding (2026-10-01): an anonymous session (no local session at all, e.g. a
+  // private window) trying to link to an email that already belongs to a different, existing
+  // permanent account fails with Supabase's `email_exists` — not a dead end, since this is
+  // actually a returning registered user; sendCode must fall back to a plain sign-in for that
+  // email instead of surfacing the linking failure as the final answer.
+  it("anonymous session, email already registered to an existing account: falls back from updateUser to signInWithOtp instead of failing", async () => {
+    getUserMock.mockResolvedValue({ data: { user: anonymousUser } });
+    updateUserMock.mockResolvedValueOnce({ error: { code: "email_exists", message: "A user with this email address has already been registered" } });
+    const { container, root } = await renderHarness();
+
+    setValue(container, "email", "already@example.com");
+    let sent = false;
+    await act(async () => {
+      clickButtonWithText(container, "Send me a sign-in code");
+      await flushMicrotasks();
+      sent = true;
+    });
+
+    expect(sent).toBe(true);
+    expect(updateUserMock).toHaveBeenCalledTimes(1);
+    expect(signInWithOtpMock).toHaveBeenCalledTimes(1);
+    expect(signInWithOtpMock).toHaveBeenCalledWith({ email: "already@example.com" });
+
+    root.unmount();
+  });
+
+  it("anonymous session with an email_exists fallback: a genuinely unrelated send error (not email_exists) still surfaces, no fallback attempted", async () => {
+    getUserMock.mockResolvedValue({ data: { user: anonymousUser } });
+    updateUserMock.mockResolvedValueOnce({ error: { code: "over_email_send_rate_limit", status: 429, message: "rate limited" } });
+    const { container, root } = await renderHarness();
+
+    setValue(container, "email", "organizer@example.com");
+    await act(async () => {
+      clickButtonWithText(container, "Send me a sign-in code");
+      await flushMicrotasks();
+    });
+
+    expect(updateUserMock).toHaveBeenCalledTimes(1);
+    expect(signInWithOtpMock).not.toHaveBeenCalled();
+
+    root.unmount();
+  });
 });
 
 describe("useOtpFlow — confirm-code branching (verifyOtp `type` fork)", () => {
@@ -201,6 +244,33 @@ describe("useOtpFlow — confirm-code branching (verifyOtp `type` fork)", () => 
     expect(verifyOtpMock).toHaveBeenCalledWith({
       email: "target@example.com",
       token: "654321",
+      type: "email",
+    });
+
+    root.unmount();
+  });
+
+  it("anonymous session that fell back to sign-in (email_exists): confirmCode still calls verifyOtp with type 'email', not 'email_change', even though the session is still anonymous at verify time", async () => {
+    getUserMock.mockResolvedValue({ data: { user: anonymousUser } });
+    updateUserMock.mockResolvedValueOnce({ error: { code: "email_exists", message: "already registered" } });
+    const { container, root } = await renderHarness();
+
+    setValue(container, "email", "already@example.com");
+    await act(async () => {
+      clickButtonWithText(container, "Send me a sign-in code");
+      await flushMicrotasks();
+    });
+    expect(signInWithOtpMock).toHaveBeenCalledTimes(1);
+
+    setValue(container, "code", "222222");
+    await act(async () => {
+      clickButtonWithText(container, "Confirm code");
+      await flushMicrotasks();
+    });
+
+    expect(verifyOtpMock).toHaveBeenCalledWith({
+      email: "already@example.com",
+      token: "222222",
       type: "email",
     });
 

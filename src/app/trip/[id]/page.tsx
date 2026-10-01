@@ -18,6 +18,7 @@ import { getTripSummary, getTripView, wasRemovedFromTrip, type TripSummary, type
 import { formatDateRange } from "@/lib/dates";
 import { timeAsync } from "@/lib/perf/timing";
 import { createClient } from "@/lib/supabase/server";
+import { JoinTripInline } from "./join-trip-inline";
 import { TripBottomBarButton } from "./trip-bottom-bar-button";
 import { TripTabProvider, type TripTab } from "./trip-tab-context";
 import { TripTabs } from "./trip-tabs";
@@ -40,8 +41,26 @@ import { InlineVerifyWidget, TripVerificationProvider, VerifiedActionIcons, Veri
  * `invite`/`joinTripId` is present, so without this a visitor who verified via this bare-link
  * path would become a verified user who was still never added as a member, and land right back
  * here in a permanent loop.
+ *
+ * `alreadySignedIn` (2026-10-01 follow-up): a visitor who already has a verified, non-anonymous
+ * session — the browser's own persisted Supabase session, nothing bespoke — skips the
+ * email+OTP detour entirely and gets `JoinTripInline`'s one-field "join" form instead. Surfaced
+ * a real bug fixed the same day: without this, such a visitor's only path was through
+ * `/check-email`, where an anonymous-session upgrade attempt for an email that already belongs
+ * to their own existing account failed outright (Supabase's `email_exists`) — see
+ * `src/lib/use-otp-flow.ts`'s `signingIntoExisting` fallback, which fixes that path for someone
+ * who still has no session at all (e.g. a different browser/private window) but shouldn't be the
+ * primary route for someone this browser already recognizes.
  */
-function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) {
+function TripSummaryOnly({
+  id,
+  summary,
+  alreadySignedIn,
+}: {
+  id: string;
+  summary: TripSummary;
+  alreadySignedIn: boolean;
+}) {
   const { members, settlements, totalCents, avgPerPersonCents } = summary;
   return (
     <Screen glow texture>
@@ -96,19 +115,33 @@ function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) 
         </Card>
         <div className="h-4" />
         <div className="rounded-chip p-4" style={{ background: "var(--color-accent-soft)" }}>
-          <div className="text-[15px] font-semibold">Want the full expense list?</div>
-          <div className="mt-1.5 text-[13px] leading-[1.45] text-ink/[0.72]">
-            See exactly what was spent and add your own — just confirm your email.
-          </div>
-          <div className="h-3" />
-          <LinkButton
-            href={`/check-email?trigger=detail&joinTripId=${encodeURIComponent(id)}&next=${encodeURIComponent(`/trip/${id}`)}&back=${encodeURIComponent(`/trip/${id}`)}`}
-            variant="accent"
-            block={false}
-            className="px-5 text-[14px]"
-          >
-            See full details
-          </LinkButton>
+          {alreadySignedIn ? (
+            <>
+              <div className="text-[15px] font-semibold">Join this trip?</div>
+              <div className="mt-1.5 text-[13px] leading-[1.45] text-ink/[0.72]">
+                You&apos;re already signed in — just add your name to see the full list and add
+                your own expenses.
+              </div>
+              <div className="h-3" />
+              <JoinTripInline tripId={id} />
+            </>
+          ) : (
+            <>
+              <div className="text-[15px] font-semibold">Want the full expense list?</div>
+              <div className="mt-1.5 text-[13px] leading-[1.45] text-ink/[0.72]">
+                See exactly what was spent and add your own — just confirm your email.
+              </div>
+              <div className="h-3" />
+              <LinkButton
+                href={`/check-email?trigger=detail&joinTripId=${encodeURIComponent(id)}&next=${encodeURIComponent(`/trip/${id}`)}&back=${encodeURIComponent(`/trip/${id}`)}`}
+                variant="accent"
+                block={false}
+                className="px-5 text-[14px]"
+              >
+                See full details
+              </LinkButton>
+            </>
+          )}
         </div>
       </ScreenContent>
     </Screen>
@@ -134,12 +167,18 @@ function TripSummaryOnly({ id, summary }: { id: string; summary: TripSummary }) 
  * has returned null) never returns the trip name (see `TripSummaryOnly`'s comment above), so the
  * copy says "this trip" rather than quoting a name it doesn't have.
  *
- * `id` (the trip's own UUID, already in scope at the call site — no RPC needed) backs the "Rejoin
- * with the invite link" action, routed through the same `joinTripId=<id>` mechanism as
- * `TripSummaryOnly` above (migration 0016) rather than the literal invite code — per design.md
- * section 8 point 3, this deliberately doesn't display the code/link itself, only links through
- * it, so this screen doesn't hand a removed member a fresh, more-convenient way to re-enter than
- * "use the link you already have."
+ * `id` (the trip's own UUID, already in scope at the call site — no RPC needed) backs the rejoin
+ * action, via `JoinTripInline` (2026-10-01 follow-up) rather than a link through
+ * `/check-email?joinTripId=<id>` (migration 0016's original version of this fix) — this screen's
+ * own precondition (`user && user.is_anonymous !== true`, checked by the caller before rendering
+ * it) means whoever sees it is *always* already in a verified, non-anonymous session, so sending
+ * them through an email+OTP step they've already completed was always redundant, and — per the
+ * live bug this surfaced — could outright fail (Supabase's `email_exists` on the anonymous-
+ * linking attempt /check-email otherwise forces, if their session had reverted to anonymous
+ * somehow). Per design.md section 8 point 3, this still deliberately doesn't display the
+ * code/link itself — `JoinTripInline` only takes a display name, never the invite code — so this
+ * screen doesn't hand a removed member a fresh, more-convenient way to re-enter than "use the
+ * link you already have."
  */
 function RemovedFromTripScreen({ id }: { id: string }) {
   return (
@@ -159,14 +198,9 @@ function RemovedFromTripScreen({ id }: { id: string }) {
           trip&apos;s record.
         </p>
         <div className="h-5" />
-        <LinkButton
-          href={`/check-email?trigger=detail&joinTripId=${encodeURIComponent(id)}&next=${encodeURIComponent(`/trip/${id}`)}&back=${encodeURIComponent(`/trip/${id}`)}`}
-          variant="accent"
-          block={false}
-          className="mx-auto px-6"
-        >
-          Rejoin with the invite link
-        </LinkButton>
+        <div className="mx-auto max-w-[260px] text-left">
+          <JoinTripInline tripId={id} cta="Rejoin trip" />
+        </div>
         <div className="h-2.5" />
         <LinkButton href="/trips" variant="soft" block={false} className="mx-auto px-6">
           Back to my trips
@@ -269,7 +303,7 @@ export async function renderTripDashboard(
     }
     return (
       <>
-        <TripSummaryOnly id={id} summary={summary} />
+        <TripSummaryOnly id={id} summary={summary} alreadySignedIn={user != null && user.is_anonymous !== true} />
         {sheet}
       </>
     );

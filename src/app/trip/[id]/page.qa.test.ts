@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 const getTripViewMock = vi.fn();
 const getTripSummaryMock = vi.fn();
 const wasRemovedFromTripMock = vi.fn().mockResolvedValue(false);
+// Default user has no `is_anonymous` field (so `!== true` reads as verified) — this is the
+// implicit "verified organizer" identity most of this file's full-detail-tier tests rely on.
+// Tests exercising the summary tier's "stranger"/"unverified visitor" scenarios override this
+// per-call via `mockResolvedValueOnce` below, rather than flipping the shared default and
+// breaking every full-detail-tier assertion that depends on it staying verified.
+const getUserMock = vi.fn(async (): Promise<{ data: { user: { id: string; is_anonymous?: boolean } | null } }> => ({
+  data: { user: { id: "user-1" } },
+}));
 
 // The trip page's full-detail branch wraps its mutation entry points in
 // `TripVerificationProvider` (src/app/trip/[id]/verify-inline.tsx), a small client leaf that
@@ -17,7 +25,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
-    auth: { getUser: vi.fn(async () => ({ data: { user: { id: "user-1" } } })) },
+    auth: { getUser: () => getUserMock() },
   })),
 }));
 
@@ -94,6 +102,7 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
   });
 
   it("renders the summary-only tier when getTripSummary succeeds but getTripView fails (non-owner, unverified caller)", async () => {
+    getUserMock.mockResolvedValueOnce({ data: { user: { id: "user-1", is_anonymous: true } } });
     getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockRejectedValueOnce(new Error("RLS denied"));
     const el = await callPage();
@@ -110,6 +119,7 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
   // of the invite code — docs/ROADMAP.md's invite-code-rpc-hardening entry, "should-fix" item on
   // `get_trip_summary` leaking the invite code to any UUID holder.
   it('"See full details" link on the summary-only tier includes the trip id, not the invite code (fix for the verify-but-never-join loop)', async () => {
+    getUserMock.mockResolvedValueOnce({ data: { user: { id: "user-1", is_anonymous: true } } });
     getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockRejectedValueOnce(new Error("RLS denied"));
     const el = await callPage();
@@ -119,19 +129,39 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
     expect(html).not.toContain("invite=");
   });
 
-  // ADR 0012's ghost-payer screen, updated by migration 0016 (docs/ROADMAP.md's
-  // invite-code-rpc-hardening entry): "Rejoin with the invite link" used to link straight to
-  // `/join/<inviteCode>`, which needed `get_trip_summary` to hand the invite code to the client.
-  // It now routes through the same `joinTripId=<id>` mechanism as "See full details" above.
-  it('"Rejoin with the invite link" on the removed-member screen uses the trip id, not the invite code', async () => {
+  // 2026-10-01 follow-up to migration 0016 (live smoke test finding): a visitor who already has
+  // a verified, non-anonymous session shouldn't be sent through the email+OTP detour at all —
+  // among other things, if their email happens to already be their own registered account, the
+  // anonymous-linking attempt that detour would otherwise require fails outright (Supabase's
+  // `email_exists`). They get `JoinTripInline`'s one-field form instead.
+  it('shows "Join this trip?" with a direct join form (no /check-email) when the visitor already has a verified session', async () => {
+    getUserMock.mockResolvedValueOnce({ data: { user: { id: "user-1", is_anonymous: false } } });
+    getTripSummaryMock.mockResolvedValueOnce(baseSummary);
+    getTripViewMock.mockRejectedValueOnce(new Error("RLS denied"));
+    const el = await callPage();
+    const html = renderToStaticMarkup(el);
+    expect(html).toContain("Join this trip?");
+    expect(html).toContain("Your name");
+    expect(html).not.toContain("See full details");
+    expect(html).not.toContain("/check-email");
+  });
+
+  // ADR 0012's ghost-payer screen, updated by migration 0016 then by the 2026-10-01 follow-up
+  // above: "Rejoin with the invite link" used to link straight to `/join/<inviteCode>`, then to
+  // `/check-email?joinTripId=<id>`, both needing an email+OTP round trip this screen's own
+  // precondition (always a verified, non-anonymous session) makes unnecessary. It now joins
+  // directly via `JoinTripInline`, no detour at all.
+  it('removed-member screen rejoins directly via JoinTripInline, no /check-email or invite code', async () => {
+    getUserMock.mockResolvedValueOnce({ data: { user: { id: "user-1", is_anonymous: false } } });
     getTripSummaryMock.mockResolvedValueOnce(baseSummary);
     getTripViewMock.mockResolvedValueOnce(null);
     wasRemovedFromTripMock.mockResolvedValueOnce(true);
     const el = await callPage();
     const html = renderToStaticMarkup(el);
     expect(html).toContain("You&#x27;re no longer on this trip.");
-    expect(html).toContain("joinTripId=trip-1");
+    expect(html).toContain("Rejoin trip");
     expect(html).not.toContain("/join/");
+    expect(html).not.toContain("/check-email");
   });
 
   it("renders the empty-expenses state (AC6)", async () => {
