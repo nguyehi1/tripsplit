@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getTripByInviteCode, getTripSummary } from "@/lib/data/trips";
 import { timeAsync } from "@/lib/perf/timing";
 import { dbRateLimitResponse, enforceRateLimit, isDbRateLimitError } from "@/lib/rate-limit";
+import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -17,6 +18,15 @@ import { createClient } from "@/lib/supabase/server";
  * directly (docs/security-review-2026-09-17-followup.md finding #1) — `get_trip_by_invite_code`
  * now also throttles itself from inside Postgres (migration 0013), so `isDbRateLimitError` below
  * catches that path's rejection too, not just this route's own `enforceRateLimit`.
+ *
+ * `getTripByInviteCode` now calls through a service-role client (migration 0017), not the normal
+ * session-bound one: a live test confirmed the Postgres-side throttle on `get_trip_by_invite_code`
+ * is trivially bypassed by a direct-to-Supabase caller who spoofs a different `x-forwarded-for`
+ * on every request (Supabase's API layer, unlike Vercel's edge, never overwrites that header with
+ * the real connecting IP). The public anon/authenticated grant on that function is revoked, so
+ * this route's own `enforceRateLimit` above — keyed on Vercel's actually-trustworthy IP — is now
+ * the only gate left, and it's the real one. `getTripSummary` below is untouched (still on the
+ * normal client, still separately anon-callable, still a separately tracked gap).
  *
  * Also returns the trip's public summary tier (`summary`, additive — performance-scaling
  * architecture.md's "Invite/join preview" fix): `/join/[code]/page.tsx` used to make a second,
@@ -42,10 +52,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
   }
 
   const supabase = await createClient();
+  const serviceClient = createServiceClient();
 
   try {
     const invite = await timeAsync("invite-lookup", "getTripByInviteCode", () =>
-      getTripByInviteCode(supabase, code),
+      getTripByInviteCode(serviceClient, code),
     );
     if (!invite) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });

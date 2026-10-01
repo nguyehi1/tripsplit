@@ -17,8 +17,19 @@ vi.mock("@/lib/rate-limit", async () => {
   };
 });
 
+const regularClient = { kind: "regular-session-client" };
+const serviceClient = { kind: "service-role-client" };
+
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({}),
+  createClient: async () => regularClient,
+}));
+
+// Migration 0017: getTripByInviteCode now goes through a service-role client instead of the
+// normal session-bound one (the public grant on get_trip_by_invite_code was revoked after a
+// live-confirmed x-forwarded-for spoofing bypass). The two mocks are distinguishable objects
+// (not both `{}`) so the test below can confirm which one actually reaches each call.
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => serviceClient,
 }));
 
 async function importRoute() {
@@ -135,6 +146,15 @@ describe("GET /api/trip-invite/[code]", () => {
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBe("42");
     expect(getTripByInviteCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("calls getTripByInviteCode with the service-role client, and getTripSummary with the normal session-bound client (migration 0017)", async () => {
+    getTripByInviteCodeMock.mockResolvedValue({ tripId: "trip-123" });
+    getTripSummaryMock.mockResolvedValue(null);
+    const { GET } = await importRoute();
+    await GET(new Request("http://localhost/api/trip-invite/ABC12345"), paramsFor("ABC12345"));
+    expect(getTripByInviteCodeMock).toHaveBeenCalledWith(serviceClient, "ABC12345");
+    expect(getTripSummaryMock).toHaveBeenCalledWith(regularClient, "trip-123");
   });
 
   it("passes the rate limiter the correct key/limit/window", async () => {

@@ -28,6 +28,13 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({}),
 }));
 
+// Migration 0017: getTripByInviteCode now goes through a service-role client (the public grant
+// was revoked after a live-confirmed x-forwarded-for spoofing bypass of its throttle) — mocked
+// here too so this file's own tests don't hit the real "not configured" throw.
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({}),
+}));
+
 async function importRoute() {
   return import("./route");
 }

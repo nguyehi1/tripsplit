@@ -68,11 +68,20 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
   (b) **(chosen)** add a throttle inside the `plpgsql` functions
   themselves, the one layer every call path — in-app or direct —
   actually passes through.
-- **Also should-fix**: the anon-to-permanent-account linking assumption every
-  new RLS policy in `0009_simplified_onboarding.sql` depends on has never been
-  verified against a live Supabase project (flagged in the team's own
-  [ADR 0006](adr/0006-anonymous-auth-and-otp-linking-for-onboarding.md)) —
-  still open, needs a live-deployment pass.
+- **2026-10-01 verified (anon-to-permanent-account linking, ADR 0006)**: this
+  assumption — every new RLS policy in `0009_simplified_onboarding.sql`
+  depends on it — had never been checked against a live Supabase project.
+  Verified directly against the live project's Auth REST API (anonymous
+  sign-up → `updateUser({email})` → real OTP code delivered to a genuinely
+  unregistered test inbox → `verifyOtp({type:"email_change"})`): the
+  resulting user is the **same `auth.uid()`** as the original anonymous
+  session (`76700021-ea47-40bf-bac4-5ef103d81f97` before and after),
+  `is_anonymous` flips `true` → `false`, email confirmed — a true
+  upgrade-in-place, not a new/different identity. ADR 0006's open risk is
+  closed. (Separately exercised in the same pass: `updateUser({email})` for
+  an email that's already a different, existing permanent account correctly
+  returns `email_exists` rather than silently misbehaving — the case
+  `use-otp-flow.ts`'s `email_exists` fallback, above, now handles.)
 - **2026-09-30 fix (open redirect)**: the open redirect flagged above is
   closed — both `src/app/check-email/page.tsx` and
   `src/app/join/[code]/welcome/page.tsx` read their `next`/`back` query params
@@ -104,12 +113,63 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
   rejoin for a verified caller, throttles after 10 calls/60s same as
   `join_trip`, and that `join_trip`/`get_trip_by_invite_code` are unchanged.
   Migration applied to the live Supabase project (2026-09-30, user-confirmed).
-  **Not yet done**: a live functional check that both call sites (bare
-  `/trip/<uuid>` "See full details", a removed member's "Rejoin with the
-  invite link") still actually complete a join end-to-end against the
-  deployed app/RPC, and that `get_trip_summary` no longer returns
-  `invite_code` in a real response — needed before this item is marked fully
-  closed.
+  Live functional smoke test passed (2026-10-01, user-confirmed): both call
+  sites complete a join end-to-end against the deployed app. That same test
+  surfaced a real, separate bug — see the 2026-10-01 entries below — fixed
+  the same day. This item is closed.
+- **2026-10-01 fix (anonymous-session email-linking failure)**: the live
+  smoke test above found that a visitor with no local session at all (e.g. a
+  private window) whose email already belonged to a different, existing
+  permanent account got a hard failure (Supabase's `email_exists`) instead of
+  completing the join — `src/lib/use-otp-flow.ts`'s `sendCode`/`resend` only
+  knew how to *link* an anonymous session to an email, never to fall back to
+  a plain sign-in when that email turns out to already be someone's account.
+  Fixed: on `email_exists`, falls back to `signInWithOtp` for that email
+  (`signingIntoExisting` state threads the right `verifyOtp` type through to
+  `confirmCode`, since the session is still anonymous at verify time).
+  Covered by new tests in `use-otp-flow.qa.test.tsx`. Separately,
+  `TripSummaryOnly`/`RemovedFromTripScreen` now skip the email+OTP step
+  entirely for a visitor who already has a verified, non-anonymous session —
+  `JoinTripInline` (`src/app/trip/[id]/join-trip-inline.tsx`) joins them
+  directly via the existing `/api/join` route, since they're already who
+  they say they are. User-confirmed working live.
+- **2026-10-01 fix (`get_trip_by_invite_code` throttle bypass, live-confirmed
+  exploitable)**: live-tested the `x-forwarded-for` trust caveat flagged
+  under migration 0013/ADR 0009 by calling the RPC directly against
+  Supabase's own REST endpoint (bypassing this app/Vercel) 30 times, each
+  with a different forged `x-forwarded-for` value — **all 30 succeeded, 0
+  blocked** (versus 20-then-blocked when the forged header was held
+  constant). Confirmed: Supabase's API layer, unlike Vercel's edge in front
+  of this app's own routes, does not overwrite that header with the real
+  connecting IP, so the Postgres-side throttle is trivially bypassed by
+  anyone willing to spoof a different value per request — the original
+  invite-code-guessing surface this migration was meant to close. (`join_trip`
+  is not affected — it's keyed on `auth.uid()`, a JWT-verified identity with
+  no header to spoof.)
+  Fixed via `0017_revoke_public_invite_lookup_grant.sql`: revokes the
+  `anon`/`authenticated` execute grant on `get_trip_by_invite_code` entirely
+  (an `authenticated` JWT is itself free/anon-reachable via
+  `signInAnonymously()`, so that grant gave no real protection either). The
+  one legitimate caller (`src/app/api/trip-invite/[code]/route.ts`, already
+  behind its own Vercel-IP-keyed `enforceRateLimit`) now calls it via a new
+  service-role client (`src/lib/supabase/service.ts`, `SUPABASE_SERVICE_ROLE_KEY`,
+  server-only). Live-verified the grant revocation itself against a
+  throwaway local Postgres instance: `anon`/`authenticated` now get
+  "permission denied," a privileged role (standing in for `service_role`)
+  can still call it, and `join_trip` is unaffected.
+  **Not yet done**: this repo can't simulate Supabase's own `service_role`
+  bootstrap privileges locally, only vanilla Postgres grants — needs
+  `SUPABASE_SERVICE_ROLE_KEY` added to both `.env.local` and the Vercel
+  project's env vars, the migration applied live, and one real invite-link
+  preview tested end-to-end post-deploy to confirm the service-role path
+  actually works in production, not just that the grant revocation does.
+- **Still open, not part of today's fixes**: `get_trip_summary` (public,
+  zero-auth) is still called directly from the browser in places, same
+  unthrottled-RPC class of issue as `get_trip_by_invite_code` was — it has
+  no throttle at all (migration 0013 only added one to
+  `get_trip_by_invite_code`/`join_trip`). Worth the same live-bypass check
+  this entry just ran on `get_trip_by_invite_code`, and likely the same
+  service-role-route fix, once prioritized.
 - **Explicitly out of scope for this item**: receipt-storage RLS still
   using bare `is_trip_member` pre-verification — deferred since receipt
   storage isn't a shipped feature yet.

@@ -1,0 +1,31 @@
+-- Live-confirmed bypass of migration 0013's throttle on get_trip_by_invite_code
+-- (docs/ROADMAP.md's invite-code-rpc-hardening entry, 2026-10-01 live verification): the
+-- throttle is keyed on the `x-forwarded-for` header read from PostgREST's `request.headers`,
+-- which Supabase's own API layer -- unlike Vercel's edge in front of this app's own routes --
+-- does not overwrite with the real connecting IP. Calling this RPC directly against Supabase
+-- (skipping this app/Vercel entirely) and sending a different fake `x-forwarded-for` value on
+-- every request gave every single request a fresh throttle bucket: verified live, 30/30 requests
+-- succeeded with no blocking, versus 20-then-blocked when the forged header was held constant.
+-- That's the exact invite-code brute-force surface this migration's throttle was supposed to
+-- close, still fully open for anyone willing to spoof a header -- trivial.
+--
+-- join_trip isn't affected by this same trick: it requires `authenticated` and keys its throttle
+-- on `auth.uid()`, a JWT-verified identity with no header to spoof. get_trip_by_invite_code is
+-- deliberately anon-callable (zero-auth invite preview) with no session to key off at all, so
+-- there's no *header* fix available here -- the only header. Postgres/PostgREST ever sees for an
+-- anon caller is exactly as trustworthy as the caller wants it to be.
+--
+-- Fix: stop letting the public (anon or authenticated -- getting an authenticated JWT is itself
+-- free and anon-reachable via signInAnonymously(), so authenticated grants no real protection for
+-- a function with no ownership check) call this RPC at all. The one legitimate caller
+-- (`src/app/api/trip-invite/[code]/route.ts`, already sitting behind its own Vercel-IP-keyed
+-- `enforceRateLimit` -- trustworthy specifically because Vercel's edge, unlike Supabase's,
+-- overwrites `x-forwarded-for` with the real client IP before this app ever sees it) now calls it
+-- via a service-role client (`src/lib/supabase/service.ts`) instead of the normal
+-- anon/authenticated one. No grant is added for `service_role` here -- Supabase's default role
+-- setup already lets it call every function in `public` regardless of explicit grants, the same
+-- assumption every other migration in this repo relies on implicitly.
+--
+-- Function body/return shape unchanged -- this migration only touches grants.
+
+revoke execute on function public.get_trip_by_invite_code(text) from anon, authenticated;
