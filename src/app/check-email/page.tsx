@@ -3,6 +3,7 @@
 import { Suspense, useLayoutEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRightIcon, ChevronLeftIcon, MailIcon } from "@/components/icons";
+import { LegalLinks } from "@/components/legal-page";
 import { BottomBar, Button, Field, IconButton, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { trackEvent } from "@/lib/tracking";
 import { useOtpFlow } from "@/lib/use-otp-flow";
@@ -274,6 +275,7 @@ function CheckEmailContent() {
         <Button variant="ghost" className="h-[50px] text-[14px]" onClick={() => router.push(back)}>
           Use a different email
         </Button>
+        <LegalLinks />
       </ScreenContent>
       <BottomBar>
         <Button

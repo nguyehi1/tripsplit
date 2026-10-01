@@ -123,3 +123,7 @@ independent of whatever session was active beforehand.
   anonymous users become an operational concern (row growth, unclear cost
   implications for the Supabase plan tier), that's a follow-up, not solved
   here.
+
+**Update 2026-10-01:** the cleanup gap above is now closed by migration 0018
+(`purge_abandoned_anonymous_users`, 90-day inactivity, pg_cron daily). Users who paid expenses or
+organize a trip with other members are skipped and handled via the manual runbook.

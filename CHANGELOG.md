@@ -12,6 +12,14 @@ a release moves that section under a dated version heading.
 
 ### Added
 
+- **Privacy policy, terms of service, and anonymous-account retention.** New `/privacy` and
+  `/terms` pages (linked from the home and check-email screens) disclose what is collected, the
+  processors (Supabase, Vercel, Resend, Upstash), and how to request export or deletion by email
+  (Splitiful@gmail.com). Migration 0018 adds `purge_abandoned_anonymous_users`, scheduled daily via
+  pg_cron, which deletes unverified anonymous accounts inactive for 90 days (skipping any that paid
+  expenses or organize a trip with other members). Manual export/deletion steps are in
+  `docs/runbooks/account-deletion-and-export.md`. Draft copy, not yet reviewed by counsel.
+
 - **Shared shopping list with per-item claiming.** The trip page gains a third
   "List" tab (alongside Expenses/Details) where any verified real trip member
   can add one or more free-text items, claim an open item for themselves

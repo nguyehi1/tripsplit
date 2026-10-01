@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LockIcon, PlusIcon } from "@/components/icons";
+import { LegalLinks } from "@/components/legal-page";
 import { AvatarStack, Card, IconLinkButton, Kicker, LinkButton, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
 import { getMyTrips, type MyTrip } from "@/lib/data/trips";
@@ -171,6 +172,7 @@ export default async function TripsDashboardPage({
             ) : null}
           </>
         )}
+        <LegalLinks />
       </ScreenContent>
     </Screen>
   );

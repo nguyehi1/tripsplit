@@ -179,7 +179,9 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
   exists; no retention policy for abandoned anonymous accounts created by
   the simplified-onboarding flow before an email is ever collected. All
   three need a decision from the user/legal, not just an engineering fix —
-  see the compliance report for detail.
+  see the compliance report for detail. **Update 2026-10-01**: privacy/terms pages, an
+  email-request deletion/export runbook, and a 90-day anonymous-account purge (migration 0018)
+  shipped; counsel sign-off and a self-serve delete flow remain open.
 - **2026-09-20 addition**: the still-pending live-deployment re-verification
   above (currently scoped to the `x-forwarded-for` trust caveat) should also
   confirm whether the Postgres-side throttle plus the added Upstash round
