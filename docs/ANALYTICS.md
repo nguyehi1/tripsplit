@@ -31,6 +31,7 @@ All events listed below are custom events tracked by Splitiful. Vercel Analytics
 | Event | Trigger | Route/Component | Why Track | Payload Example |
 |-------|---------|-----------------|-----------|-----------------|
 | `member_invite_send` | User clicks "Send invite(s)" and email(s) sent successfully | `src/app/trip/[id]/invite/page.tsx` after email send or RPC call | Measure how many people are invited (network effect breadth); engagement with invite feature | `{ event: "member_invite_send" }` |
+| `member_email_invite_open` | Organizer taps Invite on "Invite by email" and the mail app is opened with the prefilled message (Splitiful sends nothing) | `src/app/trip/[id]/invite/page.tsx` in `handleInvite`, right before the `mailto:` opens | Measure adoption of the email-invite shortcut vs. copy/share link | `{ event: "member_email_invite_open" }` |
 | `member_placeholder_add` | Organizer adds a placeholder member (name-only, no invite) | `src/app/trip/[id]/page.tsx` or invite component after `add_placeholder_member()` RPC returns | Measure adoption of placeholder feature; preference for adding names vs. sending invites | `{ event: "member_placeholder_add" }` |
 
 ### Authentication

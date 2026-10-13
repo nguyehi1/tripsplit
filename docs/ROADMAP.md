@@ -7,6 +7,20 @@ visible in one place instead of scattered across per-feature docs.
 
 Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
 
+## Pending at a glance
+
+_Last reviewed 2026-10-12. Summary only — the entries below are the source of truth._
+
+| # | Feature | Slug | Stage | What's left |
+|---|---------|------|-------|-------------|
+| 1 | Invite by email (mailto) | `email-invites` | Implemented, awaiting ship | Ship with migration 0020, `/feedback` page, UI tweaks; counsel review of Terms invite clause |
+| 2 | Invite-code RPC hardening | `invite-code-rpc-hardening` | In progress | Add `SUPABASE_SERVICE_ROLE_KEY` (`.env.local` + Vercel), apply migration 0017 live, test one invite preview end-to-end; throttle/lock down `get_trip_summary`; counsel sign-off + self-serve delete flow |
+| 3 | Performance & latency fix | `performance-scaling` | Implemented, measurement deferred | After deploy: capture p50/p95 via `npm run perf:baseline`, confirm ≥30% target, check invite-throttle latency; then remove temp instrumentation (ADR 0010) |
+| 4 | Vercel Analytics + custom events | `vercel-analytics` | Planned | Not started |
+| 5 | Expense delete / undo | _(no entry yet)_ | Unscoped | Referenced as next after security/compliance; also unblocks reverting "Bought" shopping items |
+
+Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux-revamp`); dark-mode variant of the shopping list; remove unused `myClaimedUnloggedCount` if still unused.
+
 ## In progress
 
 ### Invite-code guessing surface — RPC grants still public (invite-code-rpc-hardening)
@@ -194,6 +208,12 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
   here — not by reopening ADR 0009's already-settled remediation choice.
 
 ## Planned
+
+### Invite by email via the organizer's own mail app (email-invites)
+- Status: implemented, awaiting ship (2026-10-12). Rescoped to the lighter mailto version; follow-up 2026-10-12: no name field, no placeholder, opens the mail app immediately; nothing stored. QA and compliance passed; counsel review of the Terms invite clause and anti-spam position pending
+- Requirements: [docs/features/email-invites/requirements.md](features/email-invites/requirements.md)
+- Docs: [planning.md](features/email-invites/planning.md)
+- Organizer taps "Invite by email" on the roster, types an email, and Splitiful immediately opens the organizer's own mail app with a prefilled mailto:. Splitiful sends no email and stores no invitee email. The link is the existing shared /join/[code] link; the join, code and first-time name-prompt flow is unchanged. Supersedes the earlier Splitiful-sent design (per-person tokens, Pending rows, suppression list, webhook, opt-out page, 30-day auto-removal), which was abandoned. Removes that work from the uncommitted tree (migration 0021 and its code). Ships together with migration 0020 (one display name per account), the standalone `/feedback` page, and home/trip UI tweaks. Ordered ahead of expense delete and the open security re-checks, as before.
 
 ### Vercel Analytics – Full Enable and Custom Event Tracking (vercel-analytics)
 - Status: planned

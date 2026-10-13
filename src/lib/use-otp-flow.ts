@@ -9,6 +9,15 @@ export const RESEND_COOLDOWN_SECONDS = 60;
 
 export type OtpPhase = "email" | "code";
 
+/** "0:59"-style resend countdown, shared by every OTP screen (was duplicated byte-for-byte). */
+export function formatCountdown(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+export type OtpFlow = ReturnType<typeof useOtpFlow>;
+
 /**
  * Shared OTP send/confirm logic (docs/features/simplified-onboarding/architecture.md, "Shared
  * OTP logic: extract a hook, don't duplicate the linking fork"). This is the ONE place the

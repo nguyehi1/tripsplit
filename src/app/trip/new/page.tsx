@@ -17,7 +17,6 @@ import {
   ScreenContent,
   TopBar,
 } from "@/components/ui";
-import { initialsFor } from "@/lib/avatar";
 import { createTrip } from "@/lib/data/trips";
 import { createClient } from "@/lib/supabase/client";
 
@@ -36,7 +35,6 @@ export default function NewTripPage() {
   const [location, setLocation] = useState("");
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,8 +48,8 @@ export default function NewTripPage() {
   );
 
   async function handleCreate() {
-    if (!name.trim() || !displayName.trim()) {
-      setError("Trip name and your name are both required.");
+    if (!name.trim()) {
+      setError("Give the trip a name first.");
       return;
     }
     setError(null);
@@ -73,7 +71,9 @@ export default function NewTripPage() {
       }
       const { tripId } = await createTrip(supabase, {
         name: name.trim(),
-        displayName: displayName.trim(),
+        // No name asked here (migration 0020): the organizer picks one when they confirm their
+        // email, or keeps the one their account already has.
+        displayName: "",
         location: location.trim() || undefined,
         startsOn: startsOn || undefined,
         endsOn: endsOn || undefined,
@@ -89,8 +89,8 @@ export default function NewTripPage() {
       // both free (AC 3); reaching invite now happens by tapping "Invite" from the dashboard,
       // itself one of the two mutation triggers (design.md section 3).
       router.push(`/trip/${tripId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't create the trip — try again.");
+    } catch {
+      setError("Couldn't create the trip — try again.");
     } finally {
       setSubmitting(false);
     }
@@ -174,21 +174,12 @@ export default function NewTripPage() {
         </Card>
         <div className="h-4" />
 
-        <Field
-          label="Your name"
-          hint="how others on the trip will see you"
-          placeholder="e.g. Alex"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-        />
-        <div className="h-4" />
-
         <div
           className="flex items-start gap-[11px] rounded-[18px] p-4"
           style={{ background: "var(--color-terracotta-soft)" }}
         >
           <Avatar
-            initials={displayName ? initialsFor(displayName) : "?"}
+            initials="?"
             color={{ bg: "var(--color-accent)", fg: "#fff" }}
             size={32}
           />

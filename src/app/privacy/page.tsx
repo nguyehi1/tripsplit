@@ -27,7 +27,12 @@ export default function PrivacyPage() {
 
       <h2>What we collect</h2>
       <ul>
-        <li>Display name you choose, on each trip you create or join.</li>
+        <li>
+          Display name. You have one display name per account, shown to the members of every trip you
+          belong to. When you join or create a trip we use the name you already have; if you change
+          it, it changes on all of your trips, including past ones. Your email is never shown to
+          other members.
+        </li>
         <li>
           Email address, only if you choose to confirm one (to sign back in and receive a trip link).
           It is never shown to other trip members.
@@ -39,9 +44,11 @@ export default function PrivacyPage() {
         <li>Expenses: descriptions, amounts, who paid, who shares them, and shopping-list items.</li>
         <li>
           Names of other people an organizer adds to a trip (for example someone without the app).
-          Please only add people who are fine with that.
+          Please only add people who are fine with that. If you use Invite by email, the address you
+          type is used only in your browser to open your own mail app; we do not receive or store
+          it, and nothing else you type there reaches us either.
         </li>
-        <li>Feedback you submit, if any (a rating and an optional comment), linked to your account.</li>
+        <li>Feedback you submit, if any (a rating and an optional comment), linked to your account and not to any particular trip.</li>
         <li>
           Technical data: your IP address (used for abuse rate limiting and present in standard
           hosting logs), and page-view, performance and usage-event data from Vercel Analytics and

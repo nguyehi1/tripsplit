@@ -34,6 +34,12 @@ export default function TermsPage() {
         <li>Don&rsquo;t use the app unlawfully, to harass others, or to probe, overload or break it.</li>
         <li>Don&rsquo;t scrape it, attempt to access other people&rsquo;s trips, or get around its limits.</li>
         <li>Only add other people&rsquo;s names if they&rsquo;re fine with it.</li>
+        <li>
+          Invite by email opens a message in your own email app. You send it, from your own account,
+          so only invite people you know who would expect to hear from you about the trip. Don&rsquo;t
+          use it to send spam or bulk or unsolicited messages. You are responsible for the messages
+          you send. Splitiful does not send the message and does not receive or keep the address.
+        </li>
         <li>Anyone with a trip&rsquo;s invite link can request to join it, so share links carefully.</li>
         <li>Keep your sign-in codes and any device you are signed in on to yourself.</li>
       </ul>

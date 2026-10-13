@@ -121,6 +121,14 @@ export type Database = {
         Args: { _invite_code: string; _display_name: string };
         Returns: string;
       };
+      get_my_display_name: {
+        Args: Record<string, never>;
+        Returns: string | null;
+      };
+      set_my_display_name: {
+        Args: { _name: string };
+        Returns: undefined;
+      };
       join_trip_by_id: {
         Args: { _trip_id: string; _display_name: string };
         Returns: string;

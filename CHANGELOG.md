@@ -10,8 +10,28 @@ a release moves that section under a dated version heading.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-12
+
 ### Added
 
+- **Invite by email (opens your own mail app).** On the roster (`/trip/[id]/invite`) the organizer
+  of an open trip can tap "Invite by email", type an email address, and Splitiful immediately opens
+  the organizer's own mail app with a prefilled `mailto:` message ("Hi there,") containing the
+  trip's existing shared join link. Splitiful sends no email, adds no roster row, and the invitee's
+  address never reaches the server or is stored; it exists only in the browser to build the
+  `mailto:`. Requires the organizer to have a real display name first. New event
+  `member_email_invite_open` (name only, no properties). Pure builder in `src/lib/mailto-invite.ts`.
+  No schema or API changes. Terms of Service gain an invite clause and the privacy policy notes
+  that the address is not received. Draft copy, not yet reviewed by counsel.
+- **One display name per account.** Migration 0020 adds `get_my_display_name`,
+  `set_my_display_name` and a `before insert` trigger on `trip_members` so an account keeps one
+  name across all its trips; renaming updates every trip, including past ones. Creating a trip no
+  longer asks for a name, and a first-time name prompt appears after sign-in or join when the
+  account has none. Privacy policy wording updated to match.
+- **Standalone feedback page.** `/feedback` replaces the trip-scoped feedback page, behind the same
+  session gate as `/trips`. New feedback is linked to the account, not a trip.
+- **Trip details "show all".** The member avatar stack caps at 5 with a "+N" bubble, and the trip
+  Details tab has a "show all" control.
 - **Rate-limit record cleanup.** Migration 0019 adds `purge_stale_rate_limit_buckets`, scheduled
   hourly via pg_cron, which deletes `rpc_rate_limits` rows (caller IPs / user ids) whose window
   ended over a day ago. Previously these were never deleted. The privacy policy's retention section
@@ -109,6 +129,22 @@ a release moves that section under a dated version heading.
   `expenses` rows, `trip_members`/`expenses` RLS policies, or the existing
   `remove_placeholder_member`/`add_placeholder_member`/
   `rename_placeholder_member` placeholder-management RPCs.
+
+### Changed
+
+- The old `/trip/[id]/feedback` URL now permanently redirects to `/feedback`.
+- The feedback icon and the new-trip "+" appear on the `/trips` home only (not inside a trip).
+- Trip-card layout restacked, with the "Locked" label at the right.
+- Account-deletion runbook: `feedback` added to the data export and to the soft-delete case, plus
+  an erasure path for people who exist only as an organizer-typed placeholder name.
+- Privacy policy and Terms "Last updated" date bumped to October 12, 2026.
+
+### Fixed
+
+- Roster and add-expense failures now show friendly messages instead of raw database text
+  (`src/lib/errors.ts`, `rosterErrorCopy`).
+- `isDbRateLimitError` now reads thrown Supabase error objects correctly via `errorMessage`
+  (string throws are still not treated as rate-limit errors).
 
 ### Added
 

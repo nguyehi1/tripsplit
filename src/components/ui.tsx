@@ -347,14 +347,21 @@ export function Avatar({
   );
 }
 
+const AVATAR_STACK_MAX = 5;
+
+/** Shows at most `max` avatars; any overflow collapses into a single "+N" chip. */
 export function AvatarStack({
   members,
+  max = AVATAR_STACK_MAX,
 }: {
   members: { id: string; initials: string; avatar: AvatarColor }[];
+  max?: number;
 }) {
+  const shown = members.slice(0, max);
+  const extra = members.length - shown.length;
   return (
     <div className="flex items-center">
-      {members.map((m, i) => (
+      {shown.map((m, i) => (
         <Avatar
           key={m.id}
           initials={m.initials}
@@ -363,6 +370,14 @@ export function AvatarStack({
           className={i > 0 ? "-ml-2" : ""}
         />
       ))}
+      {extra > 0 ? (
+        <Avatar
+          initials={`+${extra}`}
+          color={{ bg: "var(--color-avatar-placeholder)", fg: "var(--color-ink)" }}
+          ring
+          className="-ml-2"
+        />
+      ) : null}
     </div>
   );
 }
@@ -402,5 +417,98 @@ export function TabSwitch<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * The inline destructive confirm that flips a roster row in place (UX consistency review
+ * 2026-09-30 finding #5; email-invites design.md section 10 item 3) — previously hand-written
+ * once per row kind on the roster. Soft "keep" button + terracotta ghost confirm.
+ */
+export function ConfirmInlineAction({
+  title,
+  body,
+  bodyClassName = "mt-1 text-[13px] leading-[1.45] text-ink/[0.73]",
+  error,
+  cancelLabel,
+  confirmLabel,
+  pendingLabel,
+  submitting,
+  onCancel,
+  onConfirm,
+}: {
+  title?: ReactNode;
+  body?: ReactNode;
+  bodyClassName?: string;
+  error?: string | null;
+  cancelLabel: string;
+  confirmLabel: string;
+  pendingLabel: string;
+  submitting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div>
+      {title ? <p className="text-[14px] font-semibold">{title}</p> : null}
+      {body ? <p className={bodyClassName}>{body}</p> : null}
+      {error ? <p className="mt-1.5 text-[12.5px] text-terracotta">{error}</p> : null}
+      <div className="mt-2.5 flex gap-2">
+        <Button
+          variant="soft"
+          block={false}
+          className="h-[38px] flex-1 text-[13px]"
+          onClick={onCancel}
+          disabled={submitting}
+        >
+          {cancelLabel}
+        </Button>
+        <Button
+          variant="ghost"
+          block={false}
+          className="h-[38px] flex-1 text-[13px]"
+          style={{ color: "var(--color-terracotta)" }}
+          onClick={onConfirm}
+          disabled={submitting}
+        >
+          {submitting ? pendingLabel : confirmLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Centred dead-end screen (email-invites design.md section 10 item 5): round icon in the
+ * placeholder fill, display headline, body, then the caller's actions. Shared by the trip page's
+ * "You're no longer on this trip" (ADR 0012) and the removed email invite (AC19).
+ */
+export function DeadEndScreen({
+  icon,
+  title,
+  body,
+  children,
+}: {
+  icon: ReactNode;
+  title: ReactNode;
+  body: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <Screen glow texture>
+      <ScreenContent className="pt-14 text-center">
+        <div
+          className="mx-auto flex size-[52px] items-center justify-center rounded-full"
+          style={{ background: "var(--color-avatar-placeholder)", color: "var(--color-ink)" }}
+        >
+          {icon}
+        </div>
+        <div className="h-4" />
+        <h1 className="text-display text-[24px]">{title}</h1>
+        <div className="h-2.5" />
+        <p className="mx-auto max-w-[300px] text-[14px] leading-[1.5] text-ink/[0.73]">{body}</p>
+        {children}
+      </ScreenContent>
+    </Screen>
   );
 }

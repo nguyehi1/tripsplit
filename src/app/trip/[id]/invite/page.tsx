@@ -3,7 +3,20 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CheckIcon, CloseIcon, CopyIcon, PencilIcon, PlusIcon, ShareIcon } from "@/components/icons";
-import { Avatar, BottomBar, Button, Card, Kicker, LockedNoticeInline, Screen, ScreenContent, ScreenError, ScreenLoading } from "@/components/ui";
+import { NamePromptForm } from "@/components/name-prompt-form";
+import {
+  Avatar,
+  BottomBar,
+  Button,
+  Card,
+  ConfirmInlineAction,
+  Kicker,
+  LockedNoticeInline,
+  Screen,
+  ScreenContent,
+  ScreenError,
+  ScreenLoading,
+} from "@/components/ui";
 import { isUnverifiedOwner } from "@/lib/auth-gate";
 import { displayNameFor } from "@/lib/avatar";
 import {
@@ -13,13 +26,17 @@ import {
   removePlaceholderMember,
   removeTripMember,
   renamePlaceholderMember,
+  setMyDisplayName,
   type TripView,
 } from "@/lib/data/trips";
 import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
+import { errorMessage } from "@/lib/errors";
+import { buildInviteMailto, isPlausibleEmail } from "@/lib/mailto-invite";
 
 const MAX_PLACEHOLDERS = 20;
+const ROSTER_LOCKED_MEANWHILE = "This trip was just locked — the roster can't be changed anymore.";
 
 export default function TripInvitePage() {
   const router = useRouter();
@@ -53,6 +70,11 @@ export default function TripInvitePage() {
   const [confirmMemberId, setConfirmMemberId] = useState<string | null>(null);
   const [memberActionSubmitting, setMemberActionSubmitting] = useState(false);
   const [memberActionError, setMemberActionError] = useState<string | null>(null);
+
+  // Invite by email: opens the organizer's own mail app via mailto: (nothing is sent or stored by
+  // Splitiful).
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +110,21 @@ export default function TripInvitePage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, reloadKey]);
+
+  /**
+   * Error copy for a failed roster mutation. Never the database's own text (the RPCs raise
+   * multi-clause messages like "member not found, you are not the organizer, the trip is locked,
+   * or …"); instead, re-read the trip and say "just locked" when that's what happened.
+   */
+  async function rosterErrorCopy(generic: string): Promise<string> {
+    if (!userId) return generic;
+    try {
+      const latest = await getTripView(createClient(), id, userId);
+      return latest?.trip.isCompleted ? ROSTER_LOCKED_MEANWHILE : generic;
+    } catch {
+      return generic;
+    }
+  }
 
   async function refresh() {
     if (!userId) return;
@@ -147,14 +184,25 @@ export default function TripInvitePage() {
       setAddName("");
       await refresh();
     } catch (e) {
-      setAddError(e instanceof Error ? e.message : "Couldn't add that — try again.");
+      setAddError(
+        errorMessage(e).includes("20 placeholders")
+          ? `This trip already has ${MAX_PLACEHOLDERS} placeholders — remove one first.`
+          : await rosterErrorCopy("Couldn't add that — try again."),
+      );
     } finally {
       setAddSubmitting(false);
     }
   }
 
-  function startRename(memberId: string, currentName: string) {
+  /** Only one row can be in a confirm/rename state at a time, across all three sections. */
+  function clearRowStates() {
+    setRenamingId(null);
     setConfirmRemoveId(null);
+    setConfirmMemberId(null);
+  }
+
+  function startRename(memberId: string, currentName: string) {
+    clearRowStates();
     setRenamingId(memberId);
     setRenameValue(currentName);
     setRenameError(null);
@@ -180,15 +228,15 @@ export default function TripInvitePage() {
       setRenamingId(null);
       setRenameValue("");
       await refresh();
-    } catch (e) {
-      setRenameError(e instanceof Error ? e.message : "Couldn't save that name — try again.");
+    } catch {
+      setRenameError(await rosterErrorCopy("Couldn't save that name — try again."));
     } finally {
       setRenameSubmitting(false);
     }
   }
 
   function startRemove(memberId: string) {
-    setRenamingId(null);
+    clearRowStates();
     setConfirmRemoveId(memberId);
     setRemoveError(null);
   }
@@ -206,16 +254,15 @@ export default function TripInvitePage() {
       await removePlaceholderMember(supabase, memberId);
       setConfirmRemoveId(null);
       await refresh();
-    } catch (e) {
-      setRemoveError(e instanceof Error ? e.message : "Couldn't remove them — try again.");
+    } catch {
+      setRemoveError(await rosterErrorCopy("Couldn't remove them — try again."));
     } finally {
       setRemoveSubmitting(false);
     }
   }
 
   function startMemberAction(memberId: string) {
-    setRenamingId(null);
-    setConfirmRemoveId(null);
+    clearRowStates();
     setConfirmMemberId(memberId);
     setMemberActionError(null);
   }
@@ -242,12 +289,55 @@ export default function TripInvitePage() {
       await removeTripMember(supabase, memberId);
       setConfirmMemberId(null);
       await refresh();
-    } catch (e) {
+    } catch {
       const fallback = isSelf ? "Couldn't leave the trip — try again." : "Couldn't remove them — try again.";
-      setMemberActionError(e instanceof Error ? e.message : fallback);
+      setMemberActionError(await rosterErrorCopy(fallback));
     } finally {
       setMemberActionSubmitting(false);
     }
+  }
+
+  function clearInviteFeedback() {
+    setInviteError(null);
+  }
+
+  /**
+   * Opens the organizer's mail app with the prefilled message, synchronously inside the tap so
+   * the browser always treats it as user-initiated. The address never leaves the browser and
+   * nothing is stored.
+   */
+  function handleInvite() {
+    if (!view) return;
+    const email = inviteEmail.trim();
+    clearInviteFeedback();
+
+    if (!isPlausibleEmail(email)) {
+      setInviteError("That doesn't look like an email address.");
+      return;
+    }
+
+    let mailto: string;
+    try {
+      mailto = buildInviteMailto({
+        to: email,
+        organizerName: view.you?.displayName ?? "",
+        tripName: view.trip.name,
+        joinUrl: inviteUrl,
+      });
+    } catch {
+      setInviteError("Couldn't prepare that message — try again.");
+      return;
+    }
+
+    trackEvent("member_email_invite_open");
+    setInviteEmail("");
+    window.location.href = mailto;
+  }
+
+  async function handleSaveOrganizerName(name: string) {
+    await setMyDisplayName(createClient(), name);
+    clearInviteFeedback();
+    await refresh();
   }
 
   if (error) {
@@ -272,6 +362,10 @@ export default function TripInvitePage() {
   const locked = view.trip.isCompleted;
   const atCap = placeholders.length >= MAX_PLACEHOLDERS;
 
+  // The organizer's name goes in the mail's subject and signature, so a still-unchosen name
+  // (the 'Organizer' stand-in) must be set first.
+  const organizerNeedsName = view.you?.displayName === "Organizer";
+
   return (
     <Screen>
       <ScreenContent className="pt-5">
@@ -289,7 +383,9 @@ export default function TripInvitePage() {
         </h1>
         <div className="h-3" />
         <p className="max-w-[295px] text-[14.5px] leading-[1.5] text-ink/[0.73]">
-          Send this link to everyone coming. They add their name, and they&apos;re in.
+          {isOrganizer && !locked
+            ? "Share this link with everyone coming, or invite them by email."
+            : "Send this link to everyone coming. They add their name, and they're in."}
         </p>
         <div className="h-5" />
 
@@ -313,6 +409,64 @@ export default function TripInvitePage() {
         </Card>
         <div className="h-4" />
 
+        {isOrganizer && !locked ? (
+          <>
+            <Card className="p-4">
+              <Kicker>Invite by email</Kicker>
+              <div className="h-[9px]" />
+              {organizerNeedsName ? (
+                // The subject and signature use the organizer's name, so it must be a real one first.
+                <NamePromptForm
+                  variant="card"
+                  title={
+                    <span className="text-[13.5px] font-normal text-ink/80">
+                      Invites say who they&apos;re from. What should everyone call you?
+                    </span>
+                  }
+                  ctaLabel="Save name"
+                  onSubmit={handleSaveOrganizerName}
+                  inputClassName="bg-ink/[0.05]"
+                />
+              ) : (
+                <>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    autoComplete="off"
+                    enterKeyHint="send"
+                    placeholder="their@email.com"
+                    aria-label="Their email"
+                    value={inviteEmail}
+                    onChange={(e) => {
+                      setInviteEmail(e.target.value);
+                      clearInviteFeedback();
+                    }}
+                    onFocus={(e) => e.target.scrollIntoView({ block: "center" })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleInvite();
+                    }}
+                    className="h-[42px] w-full rounded-[12px] bg-ink/[0.05] px-3 text-[16px] font-medium outline-none placeholder:font-normal placeholder:text-ink/45"
+                  />
+                  <div className="h-3" />
+                  <Button
+                    variant="primary"
+                    className="h-[46px] text-[14.5px]"
+                    onClick={handleInvite}
+                    disabled={!inviteEmail.trim()}
+                  >
+                    Invite
+                  </Button>
+                  {inviteError ? <p className="mt-2 text-[12.5px] text-terracotta">{inviteError}</p> : null}
+                </>
+              )}
+            </Card>
+            <div className="h-4" />
+          </>
+        ) : null}
+
         <div className="flex items-baseline justify-between px-1">
           <Kicker>On the trip</Kicker>
           <Kicker>{realMembers.length === 1 ? "Just you" : `${realMembers.length} people`}</Kicker>
@@ -326,74 +480,42 @@ export default function TripInvitePage() {
               <Card className="p-[14px_18px]">
                 {confirmMemberId === member.id ? (
                   canLeave ? (
-                    <div>
-                      <p className="text-[14px] font-semibold">Leave {view.trip.name}?</p>
-                      <p className="mt-1 text-[13px] leading-[1.45] text-ink/[0.73]">
-                        You&apos;ll lose access to this trip&apos;s expenses and roster. Your past
-                        expenses stay in the trip exactly as they are. If you change your mind,
-                        you can rejoin using the same invite link.
-                      </p>
-                      {memberActionError ? (
-                        <p className="mt-1.5 text-[12.5px] text-terracotta">{memberActionError}</p>
-                      ) : null}
-                      <div className="mt-2.5 flex gap-2">
-                        <Button
-                          variant="soft"
-                          block={false}
-                          className="h-[38px] flex-1 text-[13px]"
-                          onClick={cancelMemberAction}
-                          disabled={memberActionSubmitting}
-                        >
-                          Stay
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          block={false}
-                          className="h-[38px] flex-1 text-[13px]"
-                          style={{ color: "var(--color-terracotta)" }}
-                          onClick={() => handleMemberActionConfirm(member.id)}
-                          disabled={memberActionSubmitting}
-                        >
-                          {memberActionSubmitting ? "Leaving…" : "Leave trip"}
-                        </Button>
-                      </div>
-                    </div>
+                    <ConfirmInlineAction
+                      title={<>Leave {view.trip.name}?</>}
+                      body={
+                        <>
+                          You&apos;ll lose access to this trip&apos;s expenses and roster. Your past
+                          expenses stay in the trip exactly as they are. If you change your mind,
+                          you can rejoin using the same invite link.
+                        </>
+                      }
+                      error={memberActionError}
+                      cancelLabel="Stay"
+                      confirmLabel="Leave trip"
+                      pendingLabel="Leaving…"
+                      submitting={memberActionSubmitting}
+                      onCancel={cancelMemberAction}
+                      onConfirm={() => handleMemberActionConfirm(member.id)}
+                    />
                   ) : (
-                    <div>
-                      <p className="text-[14px] font-semibold">
-                        Remove {member.displayName} from this trip?
-                      </p>
-                      <p className="mt-1 text-[13px] leading-[1.45] text-ink/[0.73]">
-                        They&apos;ll lose access to this trip&apos;s expenses and roster. Everyone
-                        else&apos;s split will update to cover the total without them. If they
-                        still have the invite link, they can rejoin the same way they joined —
-                        removing them doesn&apos;t cancel the link.
-                      </p>
-                      {memberActionError ? (
-                        <p className="mt-1.5 text-[12.5px] text-terracotta">{memberActionError}</p>
-                      ) : null}
-                      <div className="mt-2.5 flex gap-2">
-                        <Button
-                          variant="soft"
-                          block={false}
-                          className="h-[38px] flex-1 text-[13px]"
-                          onClick={cancelMemberAction}
-                          disabled={memberActionSubmitting}
-                        >
-                          Keep them
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          block={false}
-                          className="h-[38px] flex-1 text-[13px]"
-                          style={{ color: "var(--color-terracotta)" }}
-                          onClick={() => handleMemberActionConfirm(member.id)}
-                          disabled={memberActionSubmitting}
-                        >
-                          {memberActionSubmitting ? "Removing…" : "Remove"}
-                        </Button>
-                      </div>
-                    </div>
+                    <ConfirmInlineAction
+                      title={<>Remove {member.displayName} from this trip?</>}
+                      body={
+                        <>
+                          They&apos;ll lose access to this trip&apos;s expenses and roster. Everyone
+                          else&apos;s split will update to cover the total without them. If they
+                          still have the invite link, they can rejoin the same way they joined —
+                          removing them doesn&apos;t cancel the link.
+                        </>
+                      }
+                      error={memberActionError}
+                      cancelLabel="Keep them"
+                      confirmLabel="Remove"
+                      pendingLabel="Removing…"
+                      submitting={memberActionSubmitting}
+                      onCancel={cancelMemberAction}
+                      onConfirm={() => handleMemberActionConfirm(member.id)}
+                    />
                   )
                 ) : (
                   <div className="flex items-center gap-[11px]">
@@ -452,33 +574,17 @@ export default function TripInvitePage() {
               <div key={member.id} className="mb-2.5">
                 <Card className="p-[14px_18px]">
                   {confirmRemoveId === member.id ? (
-                    <div>
-                      <p className="text-[13.5px] leading-[1.4] text-ink/80">
-                        Remove {displayNameFor(member.displayName, true)}? This changes everyone&apos;s split.
-                      </p>
-                      {removeError ? <p className="mt-1.5 text-[12.5px] text-terracotta">{removeError}</p> : null}
-                      <div className="mt-2.5 flex gap-2">
-                        <Button
-                          variant="soft"
-                          block={false}
-                          className="h-[38px] flex-1 text-[13px]"
-                          onClick={cancelRemove}
-                          disabled={removeSubmitting}
-                        >
-                          Keep them
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          block={false}
-                          className="h-[38px] flex-1 text-[13px]"
-                          style={{ color: "var(--color-terracotta)" }}
-                          onClick={() => handleRemoveConfirm(member.id)}
-                          disabled={removeSubmitting}
-                        >
-                          {removeSubmitting ? "Removing…" : "Remove"}
-                        </Button>
-                      </div>
-                    </div>
+                    <ConfirmInlineAction
+                      body={<>Remove {displayNameFor(member.displayName, true)}? This changes everyone&apos;s split.</>}
+                      bodyClassName="text-[13.5px] leading-[1.4] text-ink/80"
+                      error={removeError}
+                      cancelLabel="Keep them"
+                      confirmLabel="Remove"
+                      pendingLabel="Removing…"
+                      submitting={removeSubmitting}
+                      onCancel={cancelRemove}
+                      onConfirm={() => handleRemoveConfirm(member.id)}
+                    />
                   ) : renamingId === member.id ? (
                     <div>
                       <div className="flex items-center gap-2">
@@ -492,7 +598,7 @@ export default function TripInvitePage() {
                             if (e.key === "Enter") handleRenameSave(member.id);
                             if (e.key === "Escape") cancelRename();
                           }}
-                          className="h-[42px] flex-1 rounded-[12px] bg-ink/[0.05] px-3 text-[15px] font-semibold outline-none"
+                          className="h-[42px] flex-1 rounded-[12px] bg-ink/[0.05] px-3 text-[16px] font-semibold outline-none"
                         />
                         <button
                           type="button"
@@ -579,7 +685,7 @@ export default function TripInvitePage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleAdd();
                       }}
-                      className="h-[42px] flex-1 rounded-[12px] bg-ink/[0.05] px-3 text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-ink/45"
+                      className="h-[42px] flex-1 rounded-[12px] bg-ink/[0.05] px-3 text-[16px] font-medium outline-none placeholder:font-normal placeholder:text-ink/45"
                     />
                     <Button
                       variant="primary"
