@@ -82,7 +82,8 @@ new case covers a person who exists only as a name an organizer typed.
    user sends one message at a time from their own address. Is Splitiful a "sender" or one who
    "causes or permits" the message under CAN-SPAM, CASL, UK PECR or EU rules, including any
    tell-a-friend case law? Is the Terms clause enough, or should the product add wording near the
-   button?
+   button? (An earlier design had Splitiful sending the email itself, with a postal address and
+   unsubscribe link. It was dropped to avoid exactly this exposure.)
 2. **Account-wide display name.** Is the policy sentence enough for a name that is shown across all
    of a user's trips and rewritten on past, completed trips? Existing users who today have different
    names on different trips keep them until they next join a trip (which applies their most recent
