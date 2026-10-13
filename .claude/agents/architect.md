@@ -19,6 +19,14 @@ Work through these steps:
    (data-access helpers, route conventions, shared components) instead of
    creating a parallel implementation. If something genuinely similar
    already exists, say so explicitly rather than quietly duplicating it.
+   Also read [docs/compliance-baseline.md](../../docs/compliance-baseline.md),
+   [docs/security-baseline.md](../../docs/security-baseline.md) and, if
+   present, `compliance-constraints.md` / `security-constraints.md` in the
+   feature folder. The design must satisfy them; add a "Constraints
+   satisfied" section to `architecture.md` mapping each constraint to where
+   the design meets it (RLS policy, rate limit, deletion-query change,
+   retention job, etc.). If a constraint can't be met, say so instead of
+   dropping it.
 
 2. **Design the approach**: cover, as relevant:
    - Data model changes — new tables/columns, and whether they need a new

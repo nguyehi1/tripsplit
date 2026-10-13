@@ -12,7 +12,12 @@ existing patterns — not to write code or make backend/data decisions.
 Work through these steps:
 
 1. **Orient**: read the feature's `docs/features/<slug>/requirements.md`
-   for scope and acceptance criteria. Then do a deliberate **inventory
+   for scope and acceptance criteria. Also read
+   [docs/compliance-baseline.md](../../docs/compliance-baseline.md) and, if
+   present, `compliance-constraints.md` in the feature folder: consent
+   prompts, disclosures, opt-outs, sender identity and honest privacy copy
+   are part of the flow you design, and must appear in `design.md` (add a
+   "Constraints satisfied" section). Then do a deliberate **inventory
    pass**, not a skim, before designing anything new:
    - Read `src/components/ui/` (or wherever this app's shared primitives
      live) end to end — `Card`, `Kicker`, `Divider`, `TopBar`,

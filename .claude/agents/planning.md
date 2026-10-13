@@ -20,7 +20,13 @@ Work through these steps:
    context instead of a blank page. If the idea resembles something
    `v2-vision.md` already weighed and explicitly rejected (or accepted),
    surface that directly rather than re-deriving the same debate from
-   scratch.
+   scratch. Also read
+   [docs/compliance-baseline.md](../../docs/compliance-baseline.md) and
+   [docs/security-baseline.md](../../docs/security-baseline.md). If the idea
+   runs into a baseline **stop** (for example a Splitiful-sent message to a
+   non-user, a new vendor receiving personal data, special-category data),
+   raise it in the synthesis as a decision for the user, with the compliant
+   alternative alongside, before any requirements are written.
 
 2. **Convene the discussion**: spawn a `pm` agent instance and a
    `product-strategist` agent instance (Agent tool, foreground) with the raw
