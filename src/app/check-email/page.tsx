@@ -4,9 +4,12 @@ import { Suspense, useLayoutEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRightIcon, ChevronLeftIcon, MailIcon } from "@/components/icons";
 import { LegalLinks } from "@/components/legal-page";
+import { NamePromptForm } from "@/components/name-prompt-form";
 import { BottomBar, Button, Field, IconButton, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { getMyDisplayName } from "@/lib/data/trips";
+import { createClient } from "@/lib/supabase/client";
 import { trackEvent } from "@/lib/tracking";
-import { useOtpFlow } from "@/lib/use-otp-flow";
+import { formatCountdown, useOtpFlow } from "@/lib/use-otp-flow";
 import { sanitizeInternalPath } from "@/lib/validation/redirect";
 
 // Contextual mutation triggers (simplified-onboarding): who's being asked to confirm, and what
@@ -41,12 +44,6 @@ function triggerHeadline(trigger: Trigger) {
   }
 }
 
-function formatCountdown(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
 function CheckEmailContent() {
   const router = useRouter();
   const params = useSearchParams();
@@ -73,11 +70,11 @@ function CheckEmailContent() {
   // docs/features/simplified-onboarding/architecture.md's "Shared OTP logic" section.
   const otp = useOtpFlow({ initialEmail: emailParam ?? "", skipToCode: Boolean(emailParam) });
 
-  // The invitee's display name — the redesigned `/join/[code]` summary view (design.md section
-  // 5) no longer collects it up front, so this contextual email-entry step collects it here
-  // instead, for an `invite`-flow visitor only. A caller can still pass `name` directly (kept
-  // for backward compatibility, unused by any current call site).
-  const [name, setName] = useState(params.get("name") ?? "");
+  // The invitee's display name. Not asked up front anymore (migration 0020): after the code is
+  // confirmed we look up the account's existing name and only show the name step if there is
+  // none. A caller can still pass `name` directly (unused by any current call site).
+  const nameParam = params.get("name") ?? "";
+  const [namePhase, setNamePhase] = useState(false);
 
   useLayoutEffect(() => {
     if (emailParam) return;
@@ -92,12 +89,41 @@ function CheckEmailContent() {
   const showClear = otp.remembered !== "" && otp.email === otp.remembered;
 
   async function handleSendCode() {
-    if ((invite || joinTripId) && !name.trim()) {
-      otp.setSendError("Your name and email are both required.");
-      return;
-    }
     trackEvent("sign_in_start");
     await otp.sendCode(otp.email);
+  }
+
+  async function finishJoin(displayName: string) {
+    if (invite) {
+      const res = await fetch("/api/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteCode: invite, displayName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        router.push(`/join/${invite}?error=join`);
+        return;
+      }
+      const welcomeUrl = new URL(`/join/${invite}/welcome`, window.location.origin);
+      welcomeUrl.searchParams.set("tripId", data.tripId);
+      if (next !== "/trips") welcomeUrl.searchParams.set("next", next);
+      router.push(`${welcomeUrl.pathname}${welcomeUrl.search}`);
+      return;
+    }
+    // joinTripId: no invite code to build a `/join/<code>/welcome` celebration screen around
+    // here, and this visitor already came from viewing the trip directly — land them straight
+    // back on it (`next`) rather than inventing a parallel welcome flow for this path only.
+    const res = await fetch("/api/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tripId: joinTripId, displayName }),
+    });
+    if (!res.ok) {
+      router.push(`${back}?error=join`);
+      return;
+    }
+    router.push(next);
   }
 
   async function handleConfirm() {
@@ -105,43 +131,32 @@ function CheckEmailContent() {
     if (!ok) return;
     try {
       trackEvent("sign_in_complete");
-      if (invite) {
-        const res = await fetch("/api/join", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ inviteCode: invite, displayName: name }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          router.push(`/join/${invite}?error=join`);
-          return;
+      if (invite || joinTripId) {
+        const existing = nameParam.trim() || (await getMyDisplayName(createClient()));
+        if (existing) {
+          await finishJoin(existing);
+        } else {
+          setNamePhase(true);
         }
-        const welcomeUrl = new URL(`/join/${invite}/welcome`, window.location.origin);
-        welcomeUrl.searchParams.set("tripId", data.tripId);
-        if (next !== "/trips") welcomeUrl.searchParams.set("next", next);
-        router.push(`${welcomeUrl.pathname}${welcomeUrl.search}`);
-        return;
-      }
-      if (joinTripId) {
-        // No invite code to build a `/join/<code>/welcome` celebration screen around here, and
-        // this visitor already came from viewing the trip directly — land them straight back on
-        // it (`next`) rather than inventing a parallel welcome flow for this path only.
-        const res = await fetch("/api/join", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tripId: joinTripId, displayName: name }),
-        });
-        if (!res.ok) {
-          router.push(`${back}?error=join`);
-          return;
-        }
-        router.push(next);
         return;
       }
       router.push(next);
     } catch {
       // Best-effort post-confirm navigation — the session is already verified either way.
     }
+  }
+
+  if (namePhase) {
+    return (
+      <NamePromptForm
+        variant="screen"
+        ctaLabel="Join trip"
+        pendingLabel="Joining…"
+        ctaIcon={<ArrowRightIcon size={18} strokeWidth={2.4} />}
+        onSubmit={finishJoin}
+        errorMessage={() => "Couldn't join the trip — try again."}
+      />
+    );
   }
 
   if (otp.phase === "email") {
@@ -168,18 +183,6 @@ function CheckEmailContent() {
             </>
           ) : null}
           <div className="h-7" />
-
-          {invite || joinTripId ? (
-            <>
-              <Field
-                label="Your name"
-                placeholder="e.g. Cleo"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <div className="h-4" />
-            </>
-          ) : null}
 
           <div className="relative">
             <Field

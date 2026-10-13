@@ -12,6 +12,9 @@ import { createClient } from "@/lib/supabase/client";
 import { ShoppingListTab } from "./shopping-list-tab";
 import { useTripTab } from "./trip-tab-context";
 
+/** Details tab lists at most this many people until the viewer expands it. */
+const DETAILS_COLLAPSED_COUNT = 5;
+
 export function TripTabs({
   tripId,
   members,
@@ -33,6 +36,9 @@ export function TripTabs({
   const { tab, setTab } = useTripTab();
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
   const [syncedShoppingList, setSyncedShoppingList] = useState(initialShoppingList);
+  const [showAllMembers, setShowAllMembers] = useState(false);
+  const visibleMembers = showAllMembers ? members : members.slice(0, DETAILS_COLLAPSED_COUNT);
+  const hiddenMemberCount = members.length - visibleMembers.length;
   const maxPaidCents = Math.max(1, ...members.map((m) => m.paidCents));
 
   // The add-item sheet lives on a separate route/component tree with no access to
@@ -132,7 +138,7 @@ export function TripTabs({
         )
       ) : tab === "details" ? (
         <Card className="px-[18px] py-4">
-          {members.map((member, i) => (
+          {visibleMembers.map((member, i) => (
             <div key={member.id}>
               {i > 0 ? (
                 <>
@@ -173,6 +179,20 @@ export function TripTabs({
               </span>
             </div>
           ))}
+          {hiddenMemberCount > 0 ? (
+            <>
+              <div className="h-4" />
+              <Divider className="bg-ink/[0.08]" />
+              <button
+                type="button"
+                onClick={() => setShowAllMembers(true)}
+                className="mt-3 w-full cursor-pointer text-center text-[13.5px] font-semibold"
+                style={{ color: "var(--color-accent-strong)" }}
+              >
+                +{hiddenMemberCount} more {hiddenMemberCount === 1 ? "person" : "people"} — show all
+              </button>
+            </>
+          ) : null}
         </Card>
       ) : (
         <ShoppingListTab

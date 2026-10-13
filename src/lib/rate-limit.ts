@@ -1,6 +1,7 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
+import { errorMessage } from "@/lib/errors";
 
 /**
  * Per-IP rate limiting for the invite-code endpoints flagged in
@@ -106,7 +107,7 @@ export async function enforceRateLimit(
  * generic 500, the same way `enforceRateLimit` does for the app-level limit.
  */
 export function isDbRateLimitError(e: unknown): boolean {
-  return e instanceof Error && e.message.startsWith("rate limited");
+  return errorMessage(e).startsWith("rate limited");
 }
 
 /**

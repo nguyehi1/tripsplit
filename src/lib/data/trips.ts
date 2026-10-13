@@ -75,6 +75,22 @@ export async function joinTripById(supabase: Client, input: { tripId: string; di
   return data as string;
 }
 
+/**
+ * The signed-in account's one display name (migration 0020), or null if they haven't chosen one
+ * yet. Callers use this right after sign-in to decide whether to prompt for a name at all.
+ */
+export async function getMyDisplayName(supabase: Client): Promise<string | null> {
+  const { data, error } = await supabase.rpc("get_my_display_name");
+  if (error) throw error;
+  return data ?? null;
+}
+
+/** Sets the account's name on every trip they're on — verified accounts only (enforced by the RPC). */
+export async function setMyDisplayName(supabase: Client, name: string) {
+  const { error } = await supabase.rpc("set_my_display_name", { _name: name });
+  if (error) throw error;
+}
+
 export async function completeTrip(supabase: Client, tripId: string) {
   const { error } = await supabase.rpc("complete_trip", { _trip_id: tripId });
   if (error) throw error;

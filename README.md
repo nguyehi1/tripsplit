@@ -11,7 +11,15 @@ Core v1 flow is implemented: Supabase schema/auth/RLS, trip dashboard (expenses 
 add-expense, edit-own-expense, and feedback. The trip organizer can also add name-only
 "placeholder" members — no account or invite needed — for people who won't use the app, so the
 equal split still accounts for everyone on the trip; the organizer can rename or remove them
-later.
+later. From the same roster, **Invite by email** opens the organizer's own mail app with a
+prefilled message containing the trip's shared join link (Splitiful sends no email, never
+receives the address and stores nothing). Full spec:
+[docs/features/email-invites/requirements.md](./docs/features/email-invites/requirements.md).
+
+Each account has **one display name** shared across all its trips (migration 0020). Creating a
+trip doesn't ask for a name; a first-time prompt appears after sign-in or join if the account has
+none. Feedback lives at the standalone `/feedback` page (session required; the old
+`/trip/[id]/feedback` URL redirects there).
 
 The organizer can also remove a real (non-placeholder) member from the trip's roster, and any
 non-organizer member can leave a trip themselves, from the roster screen

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { LockIcon, PlusIcon } from "@/components/icons";
+import { LockIcon, MessageSquareIcon, PlusIcon } from "@/components/icons";
 import { LegalLinks } from "@/components/legal-page";
 import { AvatarStack, Card, IconLinkButton, Kicker, LinkButton, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
@@ -51,30 +51,29 @@ function TripRow({ trip }: { trip: MyTrip }) {
         >
           Trip
         </span>
+        {formatDateRange(trip.startsOn, trip.endsOn) ? (
+          <span className="text-[12px] text-ink/[0.72]">{formatDateRange(trip.startsOn, trip.endsOn)}</span>
+        ) : null}
         {trip.isCompleted ? (
           <span
-            className="flex items-center gap-1 rounded-full px-[10px] py-[4px] text-[11px] font-semibold"
+            className="ml-auto flex items-center gap-1 rounded-full px-[10px] py-[4px] text-[11px] font-semibold"
             style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
           >
             <LockIcon size={10} strokeWidth={2.6} />
             Locked
           </span>
         ) : null}
-        {formatDateRange(trip.startsOn, trip.endsOn) ? (
-          <span className="text-[12px] text-ink/[0.72]">{formatDateRange(trip.startsOn, trip.endsOn)}</span>
-        ) : null}
       </div>
       <div className="h-2" />
       <div className="text-display text-[22px]">{trip.name}</div>
       <div className="h-2.5" />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          <AvatarStack members={trip.members} />
-          <span className="ml-2.5 text-[12px] text-ink/[0.72]">
-            {trip.members.length} {trip.members.length === 1 ? "person" : "people"} ·{" "}
-            {formatCents(trip.totalCents)}
-          </span>
-        </div>
+      <AvatarStack members={trip.members} />
+      <div className="h-2.5" />
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[12px] text-ink/[0.72]">
+          {trip.members.length} {trip.members.length === 1 ? "person" : "people"} ·{" "}
+          {formatCents(trip.totalCents)}
+        </span>
         <BalanceLabel netCents={trip.yourNetCents} hasExpenses={trip.totalCents > 0} />
       </div>
     </Link>
@@ -119,12 +118,19 @@ export default async function TripsDashboardPage({
   return (
     <Screen glow>
       <ScreenContent className="pt-0.5">
-        <TopBar title="Your trips" />
-        <div className="flex justify-end py-2">
-          <IconLinkButton title="New trip" href="/trip/new">
-            <PlusIcon size={19} strokeWidth={2.4} />
-          </IconLinkButton>
-        </div>
+        <TopBar
+          title="Your trips"
+          trailing={
+            <>
+              <IconLinkButton title="Send feedback" className="text-ink/[0.73]" href="/feedback">
+                <MessageSquareIcon size={19} strokeWidth={2.2} />
+              </IconLinkButton>
+              <IconLinkButton title="New trip" href="/trip/new">
+                <PlusIcon size={19} strokeWidth={2.4} />
+              </IconLinkButton>
+            </>
+          }
+        />
         {left ? (
           <>
             <div className="rounded-chip px-4 py-3 text-[13.5px] font-medium" style={{ background: "var(--color-accent-soft)" }}>

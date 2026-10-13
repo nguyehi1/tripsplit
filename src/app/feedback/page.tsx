@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ArrowRightIcon, CloseIcon, MehIcon, ThumbsDownIcon, ThumbsUpIcon } from "@/components/icons";
 import { BottomBar, Button, Card, IconButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { submitFeedback } from "@/lib/data/trips";
@@ -17,7 +17,6 @@ const MAX_LENGTH = 500;
 
 export default function FeedbackPage() {
   const router = useRouter();
-  const { id } = useParams<{ id: string }>();
   const [rating, setRating] = useState<(typeof RATINGS)[number]["value"] | null>(null);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -34,13 +33,12 @@ export default function FeedbackPage() {
       if (!user) throw new Error("Not signed in.");
       await submitFeedback(supabase, {
         userId: user.id,
-        tripId: id,
         rating: rating ?? undefined,
         comment: comment.trim() || undefined,
       });
-      router.push(`/trip/${id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't send feedback — try again.");
+      router.push("/trips");
+    } catch {
+      setError("Couldn't send feedback — try again.");
     } finally {
       setSubmitting(false);
     }
@@ -52,7 +50,7 @@ export default function FeedbackPage() {
         <TopBar
           title="Feedback"
           trailing={
-            <IconButton onClick={() => router.push(`/trip/${id}`)}>
+            <IconButton onClick={() => router.push("/trips")}>
               <CloseIcon size={18} strokeWidth={2.3} />
             </IconButton>
           }
