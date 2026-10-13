@@ -25,7 +25,7 @@ const sql = readFileSync(migrationPath, "utf8");
 
 describe("migration 0013 — throttle get_trip_by_invite_code and join_trip inside Postgres", () => {
   it("creates a rate-limit table with no public grants, RLS enabled", () => {
-    expect(sql).toContain("create table public.rpc_rate_limits");
+    expect(sql).toContain("create table if not exists public.rpc_rate_limits");
     expect(sql).toContain("alter table public.rpc_rate_limits enable row level security");
     expect(sql).not.toMatch(/grant .* on (table )?public\.rpc_rate_limits/);
   });
