@@ -30,7 +30,7 @@
 -- Both throttles are enforced inside the functions themselves (not a wrapping trigger or
 -- separate gate callers could route around), so there's no second door left open.
 
-create table public.rpc_rate_limits (
+create table if not exists public.rpc_rate_limits (
   bucket_key text primary key,
   window_start timestamptz not null,
   attempt_count integer not null
