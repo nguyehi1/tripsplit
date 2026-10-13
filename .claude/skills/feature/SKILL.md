@@ -25,42 +25,62 @@ skip stages, and do not silently continue past a checkpoint.
    `docs/features/<slug>/requirements.md` and appends to
    `docs/ROADMAP.md`.
 
-4. **Checkpoint 2 (required stop)** — present the requirements summary to
-   the user and wait for explicit approval or change requests before
-   continuing. Do not proceed to design/architecture on your own judgment
-   — this is a hard gate, not a formality to narrate past.
+4. **Early risk review** — read the "Risk surface" section of
+   requirements.md. If any item is not "none", invoke the `compliance` and
+   `security` agents in **requirements** mode in parallel (two Agent calls,
+   one turn). They write `compliance-constraints.md` /
+   `security-constraints.md`. Then re-invoke `pm` to fold every constraint
+   into the acceptance criteria and non-goals. If all items are "none", note
+   that you skipped it and why. A **stop** from either agent is surfaced to
+   the user at Checkpoint 2 as a decision, with the compliant alternative.
 
-5. **Architecture + UX** — once approved, invoke the `architect` and
+5. **Checkpoint 2 (required stop)** — present the requirements summary,
+   including the risk surface and the constraints that were added, and wait
+   for explicit approval or change requests before continuing. Do not
+   proceed to design/architecture on your own judgment — this is a hard
+   gate, not a formality to narrate past.
+
+6. **Architecture + UX** — once approved, invoke the `architect` and
    `ux-designer` agents (they only depend on requirements.md, so you may
    run them in parallel via two Agent tool calls in the same turn). They
    write `architecture.md` / `design.md` and the architect amends
    `docs/ARCHITECTURE.md` (and an ADR, if warranted).
 
-6. **Engineer** — invoke the `engineer` agent to implement against the
-   three docs above.
+7. **Design risk review** — if the early review ran, invoke `compliance` and
+   `security` in **design** mode in parallel. They check that each
+   constraint is actually carried into `architecture.md` and `design.md`
+   (data flow, RLS, throttles, consent/disclosure copy). Blocking gaps go
+   back to `architect` / `ux-designer` before any code is written.
 
-7. **QA** — invoke the `qa` agent. If it reports failures, go back to
-   step 6 (re-invoke `engineer` with the specific failures) rather than
+8. **Engineer** — invoke the `engineer` agent to implement against the
+   three docs above plus any `compliance-constraints.md` /
+   `security-constraints.md`.
+
+9. **QA** — invoke the `qa` agent. If it reports failures, go back to
+   step 8 (re-invoke `engineer` with the specific failures) rather than
    proceeding — do not let a failing QA report pass through silently.
-   Repeat 6→7 until QA passes.
+   Repeat 8→9 until QA passes.
 
-8. **Security + Compliance** — once QA passes, invoke the `security` and
-   `compliance` agents (they only depend on the implemented code and the
+10. **Security + Compliance** — once QA passes, invoke the `security` and
+   `compliance` agents in **final** mode (they depend on the implemented code and the
    docs above, so run them in parallel via two Agent tool calls in the same
-   turn). If either reports a blocking finding, go back to step 6
+   turn). If either reports a blocking finding, go back to step 8
    (re-invoke `engineer` with the specific findings) rather than
    proceeding — treat a blocking security or compliance finding exactly
-   like a QA failure. Repeat 6→8 until both pass.
+   like a QA failure. A new blocking finding here means an earlier stage
+   missed it: note that in the report and apply the feedback loop below.
+   Repeat 8→10 until both pass.
 
-9. **Docs** — invoke the `docs-engineer` agent to update docs/README and
+11. **Docs** — invoke the `docs-engineer` agent to update docs/README and
    propose a changelog entry + version bump.
 
-10. **Review** — invoke the built-in `pr-prep` agent (lint/typecheck/
+12. **Review** — invoke the built-in `pr-prep` agent (lint/typecheck/
     test/build + diff review + draft commit message).
 
-11. **Checkpoint 3 (required stop)** — present pr-prep's findings together
+13. **Checkpoint 3 (required stop)** — present pr-prep's findings together
     with the docs-engineer's proposed changelog entry, version bump, and
-    the security/compliance reports. Wait for explicit user approval before
+    the security/compliance reports, and any proposed baseline additions
+    (see Feedback loop). Wait for explicit user approval before
     treating this as done. Never commit, push, bump the version in
     `package.json`, or open a PR yourself — hand back the draft commit
     message and proposed version for the user to act on.
@@ -80,3 +100,13 @@ skip stages, and do not silently continue past a checkpoint.
 - Keep your own narration between stages short — one or two sentences on
   what just happened and what's next. The detail lives in each stage's
   report and the docs it wrote.
+
+## Feedback loop (baselines)
+
+`docs/compliance-baseline.md` and `docs/security-baseline.md` hold the
+standing rules the early stages design against. Whenever a compliance or
+security review (any mode) reports a "baseline gap", or finds a blocking
+issue after requirements were approved, the fix PR must also add the rule
+that would have caught it to the relevant baseline. At Checkpoint 3, list
+the baseline additions alongside the changelog entry; a late finding with no
+proposed baseline addition is not done.
