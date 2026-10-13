@@ -2,7 +2,7 @@
 export const PRIVACY_EMAIL = "Splitiful@gmail.com";
 export const LEGAL_EFFECTIVE_DATE = "October 1, 2026";
 /** Bump whenever the text of either page changes materially or otherwise. */
-export const LEGAL_LAST_UPDATED = "October 1, 2026";
+export const LEGAL_LAST_UPDATED = "October 12, 2026";
 /** Days of inactivity before an unverified anonymous account is auto-deleted (migration 0018). */
 export const ANON_RETENTION_DAYS = 90;
 /** Days we aim to answer privacy requests within (runbook: docs/runbooks/account-deletion-and-export.md). */

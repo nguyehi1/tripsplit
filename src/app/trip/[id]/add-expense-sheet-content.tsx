@@ -14,6 +14,7 @@ import { reportClientTiming, timeClient } from "@/lib/perf/timing";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
+import { errorCode } from "@/lib/errors";
 
 type ClaimedItem = { id: string; description: string };
 /** A pill's tracked, appended fragment — design.md section 6's merge algorithm. `itemId` (not
@@ -284,7 +285,13 @@ export function AddExpenseSheetContent({ tripId: id }: { tripId: string }) {
       router.push(`/trip/${id}`);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't add that expense — try again.");
+      // Our own copy only — never raw database text. 42501 here is RLS refusing the insert,
+      // i.e. the trip was locked (0005) while this sheet was open.
+      setError(
+        errorCode(e) === "42501"
+          ? "This trip was just locked — no more expenses can be added."
+          : "Couldn't add that expense — try again.",
+      );
     } finally {
       setSubmitting(false);
     }

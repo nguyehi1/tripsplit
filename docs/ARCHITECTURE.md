@@ -390,8 +390,29 @@ schema; summarized here as it stabilizes:
   for the full design (including the atomic
   `add_expense_and_log_shopping_items` RPC that links selected items to a
   new expense in the same transaction it's created in).
+- One display name per account (migration 0020,
+  `supabase/migrations/0020_one_display_name_per_account.sql`) — not a new
+  table; it changes how `trip_members.display_name` is set. A `before insert`
+  trigger on `trip_members` (`trip_members_apply_canonical_name`) overwrites
+  the name on every non-placeholder row with the account's canonical name
+  (the most recently joined real name, via the internal
+  `canonical_display_name(user)` helper), whichever RPC inserts the row
+  (`create_trip`, `join_trip`, `join_trip_by_id`). A blank name with no
+  canonical name is stored as `'Organizer'`, which is the "not chosen yet"
+  sentinel and is ignored by `canonical_display_name`. Two client RPCs:
+  `get_my_display_name()` (authenticated; null means prompt the user) and
+  `set_my_display_name(name)` (verified accounts only, 1-50 characters after
+  trim), which rewrites the name on all of the caller's non-placeholder rows,
+  including past and completed trips. Trip creation no longer asks for a
+  name; the first-time `NamePromptForm` appears after sign-in or join when
+  `get_my_display_name` returns null. Placeholders are untouched. The trigger
+  is insert-only, so admin updates (such as the "Former member" anonymization
+  in the deletion runbook) are not overridden.
 - `feedback` — free-standing, scoped to `user_id = auth.uid()` on both
-  read and write.
+  read and write. Submitted from the standalone `/feedback` page (no trip
+  context, so `trip_id` is null for new rows). The old
+  `/trip/[id]/feedback` URL is a permanent redirect to `/feedback`
+  (`next.config.ts`).
 
 **RLS on `expenses`** (the policy set most likely to need attention as
 future features touch expenses — see ADRs before changing further):
@@ -569,6 +590,17 @@ this before adding a parallel implementation.
   a reason to add a second pending-action shape; see
   `docs/features/shopping-list/architecture.md`. Revisit only if this proves
   to be real friction in practice.
+- `src/lib/mailto-invite.ts` (email-invites feature) — pure functions that
+  build the "Invite by email" `mailto:` (subject/body copy, control-character
+  stripping, `isPlausibleEmail`). The invitee's address exists only in the
+  browser: it is never sent to a server, stored, or logged, and no new
+  schema or API route backs the feature, and it adds no roster row. Any change that sends the
+  address anywhere (logging, analytics properties, a fetch) breaks a claim made
+  on `/privacy`; see `docs/features/email-invites/compliance.md`.
+- `src/lib/errors.ts` — `errorMessage`, `errorCode`:
+  normalize thrown values (Supabase errors are plain objects, not `Error`s).
+  User-facing roster failures go through `rosterErrorCopy` so raw database
+  text is never shown.
 - `src/lib/tracking.ts` — the one analytics event-tracking module
   (`trackEvent(eventName)`), a thin wrapper around `@vercel/analytics`'s
   `track()` with client-only guards and silent-failure error handling. All
@@ -644,7 +676,8 @@ this before adding a parallel implementation.
   token set rather than introducing a local literal, so a future theme
   (dark mode) stays a value swap in one place.
 - `src/proxy.ts` — the server-side session-existence gate. As of
-  simplified-onboarding, it gates **only** `/trips` (session required,
+  simplified-onboarding, it gates **only** `/trips` (and, since the feedback
+  move, `/feedback`; both need some session) (session required,
   redirecting to `/?next=...` when absent, unchanged from before) —
   `/trip/new` and `/trip/[id]*` are no longer in its gated set at all,
   since both now need to work with no session or with just an anonymous

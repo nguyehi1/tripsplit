@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { ChevronLeftIcon, LockIcon, MessageSquareIcon, PeopleIcon, PlusIcon } from "@/components/icons";
+import { ChevronLeftIcon, LockIcon, PeopleIcon } from "@/components/icons";
 import {
   AvatarStack,
   BottomBar,
   Card,
+  DeadEndScreen,
   Divider,
   IconLinkButton,
   Kicker,
@@ -182,31 +183,25 @@ function TripSummaryOnly({
  */
 function RemovedFromTripScreen({ id }: { id: string }) {
   return (
-    <Screen glow texture>
-      <ScreenContent className="pt-14 text-center">
-        <div
-          className="mx-auto flex size-[52px] items-center justify-center rounded-full"
-          style={{ background: "var(--color-avatar-placeholder)", color: "var(--color-ink)" }}
-        >
-          <PeopleIcon size={24} strokeWidth={2.2} />
-        </div>
-        <div className="h-4" />
-        <h1 className="text-display text-[24px]">You&apos;re no longer on this trip.</h1>
-        <div className="h-2.5" />
-        <p className="mx-auto max-w-[300px] text-[14px] leading-[1.5] text-ink/[0.73]">
+    <DeadEndScreen
+      icon={<PeopleIcon size={24} strokeWidth={2.2} />}
+      title={<>You&apos;re no longer on this trip.</>}
+      body={
+        <>
           The organizer removed you from this trip. Your past expenses are still part of the
           trip&apos;s record.
-        </p>
-        <div className="h-5" />
-        <div className="mx-auto max-w-[260px] text-left">
-          <JoinTripInline tripId={id} cta="Rejoin trip" />
-        </div>
-        <div className="h-2.5" />
-        <LinkButton href="/trips" variant="soft" block={false} className="mx-auto px-6">
-          Back to my trips
-        </LinkButton>
-      </ScreenContent>
-    </Screen>
+        </>
+      }
+    >
+      <div className="h-5" />
+      <div className="mx-auto max-w-[260px] text-left">
+        <JoinTripInline tripId={id} cta="Rejoin trip" />
+      </div>
+      <div className="h-2.5" />
+      <LinkButton href="/trips" variant="soft" block={false} className="mx-auto px-6">
+        Back to my trips
+      </LinkButton>
+    </DeadEndScreen>
   );
 }
 
@@ -321,7 +316,7 @@ export async function renderTripDashboard(
   const initialTab: TripTab = tab === "details" ? "details" : tab === "list" ? "list" : "expenses";
 
   return (
-    <TripVerificationProvider initialIsVerified={isVerified}>
+    <TripVerificationProvider initialIsVerified={isVerified} initialNeedsName={isVerified && you?.displayName === "Organizer"}>
       <TripTabProvider initialTab={initialTab}>
         <Screen glow texture>
           <ScreenContent className="pt-0.5">
@@ -336,13 +331,7 @@ export async function renderTripDashboard(
               }
               trailing={
                 <>
-                  <IconLinkButton title="New trip" className="text-ink/[0.73]" href="/trip/new">
-                    <PlusIcon size={19} strokeWidth={2.4} />
-                  </IconLinkButton>
                   <VerifiedActionIcons tripId={id} />
-                  <IconLinkButton title="Send feedback" className="text-ink/[0.73]" href={`/trip/${id}/feedback`}>
-                    <MessageSquareIcon size={19} strokeWidth={2.2} />
-                  </IconLinkButton>
                 </>
               }
             />
@@ -355,18 +344,18 @@ export async function renderTripDashboard(
                 >
                   Trip
                 </span>
+                {formatDateRange(trip.startsOn, trip.endsOn) ? (
+                  <span className="text-[12.5px] text-ink/[0.72]">
+                    {formatDateRange(trip.startsOn, trip.endsOn)}
+                  </span>
+                ) : null}
                 {trip.isCompleted ? (
                   <span
-                    className="flex items-center gap-1 rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
+                    className="ml-auto flex items-center gap-1 rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
                     style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
                   >
                     <LockIcon size={11} strokeWidth={2.6} />
                     Locked
-                  </span>
-                ) : null}
-                {formatDateRange(trip.startsOn, trip.endsOn) ? (
-                  <span className="text-[12.5px] text-ink/[0.72]">
-                    {formatDateRange(trip.startsOn, trip.endsOn)}
                   </span>
                 ) : null}
               </div>

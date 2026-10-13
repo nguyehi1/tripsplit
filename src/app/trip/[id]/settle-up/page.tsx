@@ -55,8 +55,8 @@ export default function SettleUpPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) setView(await getTripView(supabase, id, user.id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't lock the trip — try again.");
+    } catch {
+      setError("Couldn't lock the trip — try again.");
     } finally {
       setLocking(false);
     }
