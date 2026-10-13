@@ -19,7 +19,7 @@ _Last reviewed 2026-10-12. Summary only — the entries below are the source of 
 | 4 | Vercel Analytics + custom events | `vercel-analytics` | Planned | Not started |
 | 5 | Expense delete / undo | _(no entry yet)_ | Unscoped | Referenced as next after security/compliance; also unblocks reverting "Bought" shopping items |
 
-Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux-revamp`); dark-mode variant of the shopping list; remove unused `myClaimedUnloggedCount` if still unused.
+Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux-revamp`); dark-mode variant of the shopping list; remove unused `myClaimedUnloggedCount` if still unused; after a trip is settled there is no way to start a new trip or go back to the homepage directly (add a "Create new trip" / "Back to home" action on the settled state).
 
 ## In progress
 
