@@ -140,6 +140,10 @@ export default function PrivacyPage() {
           (subject to the exceptions above).
         </li>
         <li>
+          Rate-limiting records (which can include your IP address) are deleted within about a day.
+          Hosting logs are kept by our providers under their own retention schedules.
+        </li>
+        <li>
           After a deletion request, we remove or anonymize your data as described below. Backups and
           provider logs may keep copies for a limited time until they expire.
         </li>

@@ -12,6 +12,10 @@ a release moves that section under a dated version heading.
 
 ### Added
 
+- **Rate-limit record cleanup.** Migration 0019 adds `purge_stale_rate_limit_buckets`, scheduled
+  hourly via pg_cron, which deletes `rpc_rate_limits` rows (caller IPs / user ids) whose window
+  ended over a day ago. Previously these were never deleted. The privacy policy's retention section
+  now states this.
 - **Privacy policy, terms of service, and anonymous-account retention.** New `/privacy` and
   `/terms` pages (linked from the home and check-email screens) disclose what is collected, the
   processors (Supabase, Vercel, Resend, Upstash), and how to request export or deletion by email
