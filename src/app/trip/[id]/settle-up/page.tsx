@@ -174,7 +174,7 @@ export default function SettleUpPage() {
   return (
     <Screen>
       <ScreenContent className="pt-4">
-        <TopBar sticky title="Settle up" trailing={backButton} />
+        <TopBar title="Settle up" trailing={backButton} />
         <div className="h-3" />
 
         <div className="rounded-[22px] p-5 text-white" style={{ background: "var(--color-accent)" }}>
@@ -239,13 +239,17 @@ export default function SettleUpPage() {
             </p>
           </>
         ) : null}
-      </ScreenContent>
-      <BottomBar>
+        <div className="h-6" />
         <Button variant="muted" className="h-[50px] text-[14px]">
           <CheckIcon size={16} strokeWidth={2.6} />
           Trip completed
         </Button>
-      </BottomBar>
+        <div className="h-2" />
+        <Button variant="accent" className="text-[16px]" onClick={() => router.push("/trip/new")}>
+          Create a new trip
+          <ArrowRightIcon size={18} strokeWidth={2.4} />
+        </Button>
+      </ScreenContent>
     </Screen>
   );
 }

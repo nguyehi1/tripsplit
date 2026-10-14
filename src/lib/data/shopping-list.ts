@@ -42,7 +42,6 @@ export type ShoppingListView = {
   toGet: ShoppingListItem[];
   yourBag: ShoppingListItem[];
   bought: ShoppingListItem[];
-  myClaimedUnloggedCount: number;
   /** The caller's own `trip_members.id`, or null if they're not a current member (shouldn't
    *  normally happen for a caller who can reach this — detail-tier RLS already requires it). */
   yourMemberId: string | null;
@@ -95,7 +94,7 @@ export async function getShoppingListView(
   const yourBag = items.filter((i) => i.status === "claimed" && i.claimedBy?.id === yourMemberId);
   const bought = items.filter((i) => i.status === "logged");
 
-  return { items, toGet, yourBag, bought, myClaimedUnloggedCount: yourBag.length, yourMemberId };
+  return { items, toGet, yourBag, bought, yourMemberId };
 }
 
 /**

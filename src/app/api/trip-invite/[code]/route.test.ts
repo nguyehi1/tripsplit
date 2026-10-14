@@ -148,13 +148,13 @@ describe("GET /api/trip-invite/[code]", () => {
     expect(getTripByInviteCodeMock).not.toHaveBeenCalled();
   });
 
-  it("calls getTripByInviteCode with the service-role client, and getTripSummary with the normal session-bound client (migration 0017)", async () => {
+  it("calls both getTripByInviteCode and getTripSummary with the service-role client (migrations 0017, 0021)", async () => {
     getTripByInviteCodeMock.mockResolvedValue({ tripId: "trip-123" });
     getTripSummaryMock.mockResolvedValue(null);
     const { GET } = await importRoute();
     await GET(new Request("http://localhost/api/trip-invite/ABC12345"), paramsFor("ABC12345"));
     expect(getTripByInviteCodeMock).toHaveBeenCalledWith(serviceClient, "ABC12345");
-    expect(getTripSummaryMock).toHaveBeenCalledWith(regularClient, "trip-123");
+    expect(getTripSummaryMock).toHaveBeenCalledWith(serviceClient, "trip-123");
   });
 
   it("passes the rate limiter the correct key/limit/window", async () => {
