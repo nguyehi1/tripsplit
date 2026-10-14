@@ -3,7 +3,6 @@ import { getTripByInviteCode, getTripSummary } from "@/lib/data/trips";
 import { timeAsync } from "@/lib/perf/timing";
 import { dbRateLimitResponse, enforceRateLimit, isDbRateLimitError } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
-import { createClient } from "@/lib/supabase/server";
 
 /**
  * Server-side chokepoint for the invite preview shown at /join/[code] (design.md's
@@ -25,8 +24,8 @@ import { createClient } from "@/lib/supabase/server";
  * on every request (Supabase's API layer, unlike Vercel's edge, never overwrites that header with
  * the real connecting IP). The public anon/authenticated grant on that function is revoked, so
  * this route's own `enforceRateLimit` above — keyed on Vercel's actually-trustworthy IP — is now
- * the only gate left, and it's the real one. `getTripSummary` below is untouched (still on the
- * normal client, still separately anon-callable, still a separately tracked gap).
+ * the only gate left, and it's the real one. `getTripSummary` below also uses the service-role client
+ * as of migration 0021, which revokes its anon/authenticated grant too.
  *
  * Also returns the trip's public summary tier (`summary`, additive — performance-scaling
  * architecture.md's "Invite/join preview" fix): `/join/[code]/page.tsx` used to make a second,
@@ -51,7 +50,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     return NextResponse.json({ error: "Missing invite code." }, { status: 400 });
   }
 
-  const supabase = await createClient();
   const serviceClient = createServiceClient();
 
   try {
@@ -62,7 +60,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const summary = await timeAsync("invite-lookup", "getTripSummary", () =>
-      getTripSummary(supabase, invite.tripId),
+      getTripSummary(serviceClient, invite.tripId),
     );
     return NextResponse.json({ ...invite, summary });
   } catch (e) {

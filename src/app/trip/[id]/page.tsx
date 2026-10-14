@@ -18,6 +18,7 @@ import { getShoppingListView, type ShoppingListView } from "@/lib/data/shopping-
 import { getTripSummary, getTripView, wasRemovedFromTrip, type TripSummary, type TripView } from "@/lib/data/trips";
 import { formatDateRange } from "@/lib/dates";
 import { timeAsync } from "@/lib/perf/timing";
+import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { JoinTripInline } from "./join-trip-inline";
 import { TripBottomBarButton } from "./trip-bottom-bar-button";
@@ -231,7 +232,7 @@ export async function renderTripDashboard(
   // before). If this 404s/empties (bad id), there's nothing to show at all.
   async function fetchSummary(): Promise<TripSummary | null> {
     try {
-      return await timeAsync("trip-dashboard", "getTripSummary", () => getTripSummary(supabase, id));
+      return await timeAsync("trip-dashboard", "getTripSummary", () => getTripSummary(createServiceClient(), id));
     } catch {
       return null;
     }

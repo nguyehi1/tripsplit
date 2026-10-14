@@ -15,7 +15,7 @@ type Client = SupabaseClient<Database>;
 /**
  * QA coverage for shopping-list (docs/features/shopping-list) — `src/lib/data/shopping-list.ts`.
  * Focus areas per the QA brief:
- *  - getShoppingListView's open/yourBag/bought grouping and myClaimedUnloggedCount (AC1, AC2, AC9,
+ *  - getShoppingListView's open/yourBag/bought grouping (AC1, AC2, AC9,
  *    AC-badge)
  *  - a claim/add belonging to a member row no longer present (ADR 0013's accepted "ghost"
  *    null-out) degrades to a null ref rather than throwing
@@ -64,7 +64,7 @@ describe("getShoppingListView — grouping (To get / Your bag / Bought)", () => 
     expect(view.toGet.map((i) => i.id)).toEqual(["i1", "i2"]);
     expect(view.yourBag.map((i) => i.id)).toEqual(["i3"]);
     expect(view.bought).toEqual([]);
-    expect(view.myClaimedUnloggedCount).toBe(1);
+    expect(view.yourBag).toHaveLength(1);
     expect(view.yourMemberId).toBe("m1");
   });
 
@@ -79,18 +79,7 @@ describe("getShoppingListView — grouping (To get / Your bag / Bought)", () => 
     expect(view.bought.map((i) => i.id)).toEqual(["i1"]);
     expect(view.toGet).toEqual([]);
     expect(view.yourBag).toEqual([]);
-    expect(view.myClaimedUnloggedCount).toBe(0);
     expect(view.bought[0].expenseId).toBe("e1");
-  });
-
-  it("badge count is exactly the viewer's own claimed-unlogged count, 0 when they have none (AC: badge absent at 0)", async () => {
-    const members = [member("m1", "You"), member("m2", "Bob")];
-    const fake = makeItemsAndMembersFake({
-      members,
-      items: [{ id: "i1", trip_id: "t1", description: "Ice", added_by: "m2", claimed_by: "m2", status: "claimed", expense_id: null }],
-    });
-    const view = await getShoppingListView(fake, "t1", "user-m1");
-    expect(view.myClaimedUnloggedCount).toBe(0);
   });
 
   it("a viewer who isn't a current trip_members row (e.g. mid-removal race) gets yourMemberId null and nothing misclassified into yourBag", async () => {

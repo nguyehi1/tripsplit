@@ -9,17 +9,17 @@ Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
 
 ## Pending at a glance
 
-_Last reviewed 2026-10-12. Summary only — the entries below are the source of truth._
+_Last reviewed 2026-10-13. Summary only — the entries below are the source of truth._
 
 | # | Feature | Slug | Stage | What's left |
 |---|---------|------|-------|-------------|
-| 1 | Invite by email (mailto) | `email-invites` | Implemented, awaiting ship | Ship with migration 0020, `/feedback` page, UI tweaks; counsel review of Terms invite clause |
-| 2 | Invite-code RPC hardening | `invite-code-rpc-hardening` | In progress | Add `SUPABASE_SERVICE_ROLE_KEY` (`.env.local` + Vercel), apply migration 0017 live, test one invite preview end-to-end; throttle/lock down `get_trip_summary`; counsel sign-off + self-serve delete flow |
+| 1 | Invite by email (mailto) | `email-invites` | Shipped, counsel review pending | Counsel review of Terms invite clause and anti-spam position |
+| 2 | Invite-code RPC hardening | `invite-code-rpc-hardening` | In progress | Counsel sign-off + self-serve delete flow |
 | 3 | Performance & latency fix | `performance-scaling` | Implemented, measurement deferred | After deploy: capture p50/p95 via `npm run perf:baseline`, confirm ≥30% target, check invite-throttle latency; then remove temp instrumentation (ADR 0010) |
-| 4 | Vercel Analytics + custom events | `vercel-analytics` | Planned | Not started |
+| 4 | Vercel Analytics + custom events | `vercel-analytics` | Implemented | Verify events appear in the Vercel dashboard; then mark shipped |
 | 5 | Expense delete / undo | _(no entry yet)_ | Unscoped | Referenced as next after security/compliance; also unblocks reverting "Bought" shopping items |
 
-Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux-revamp`); dark-mode variant of the shopping list; remove unused `myClaimedUnloggedCount` if still unused; after a trip is settled there is no way to start a new trip or go back to the homepage directly (add a "Create new trip" / "Back to home" action on the settled state).
+Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux-revamp`); dark-mode variant of the shopping list. Done 2026-10-13: removed unused `myClaimedUnloggedCount`; the settled Settle-up screen now has a "Create a new trip" button.
 
 ## In progress
 
@@ -171,19 +171,15 @@ Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux
   throwaway local Postgres instance: `anon`/`authenticated` now get
   "permission denied," a privileged role (standing in for `service_role`)
   can still call it, and `join_trip` is unaffected.
-  **Not yet done**: this repo can't simulate Supabase's own `service_role`
-  bootstrap privileges locally, only vanilla Postgres grants — needs
-  `SUPABASE_SERVICE_ROLE_KEY` added to both `.env.local` and the Vercel
-  project's env vars, the migration applied live, and one real invite-link
-  preview tested end-to-end post-deploy to confirm the service-role path
-  actually works in production, not just that the grant revocation does.
-- **Still open, not part of today's fixes**: `get_trip_summary` (public,
-  zero-auth) is still called directly from the browser in places, same
-  unthrottled-RPC class of issue as `get_trip_by_invite_code` was — it has
-  no throttle at all (migration 0013 only added one to
-  `get_trip_by_invite_code`/`join_trip`). Worth the same live-bypass check
-  this entry just ran on `get_trip_by_invite_code`, and likely the same
-  service-role-route fix, once prioritized.
+  **Closed (2026-10-13, user-confirmed)**: `SUPABASE_SERVICE_ROLE_KEY` is set in
+  both `.env.local` and the Vercel project's env vars, migration 0017 is applied
+  live, and an invite-link preview was tested end-to-end against production.
+- **2026-10-13 fix (`get_trip_summary` public grant)**: migration
+  `0021_revoke_public_trip_summary_grant.sql` revokes the `anon`/`authenticated` execute grant,
+  same approach as 0017. Its two callers (`renderTripDashboard` in `src/app/trip/[id]/page.tsx`
+  and `src/app/api/trip-invite/[code]/route.ts`) now use the service-role client. Trip ids are
+  `gen_random_uuid()`, so this was never a brute-force surface; it keeps direct-to-Supabase callers
+  out. Migration 0021 applied live (user-confirmed 2026-10-13); smoke test of `/trip/[id]` and an invite preview passed (user-confirmed 2026-10-13). Closed.
 - **Explicitly out of scope for this item**: receipt-storage RLS still
   using bare `is_trip_member` pre-verification — deferred since receipt
   storage isn't a shipped feature yet.
@@ -195,7 +191,7 @@ Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux
   three need a decision from the user/legal, not just an engineering fix —
   see the compliance report for detail. **Update 2026-10-01**: privacy/terms pages, an
   email-request deletion/export runbook, and a 90-day anonymous-account purge (migration 0018)
-  shipped; counsel sign-off and a self-serve delete flow remain open.
+  shipped; hourly purge of stale `rpc_rate_limits` rows (migration 0019, PR #2/#4) also shipped; counsel sign-off and a self-serve delete flow remain open.
 - **2026-09-20 addition**: the still-pending live-deployment re-verification
   above (currently scoped to the `x-forwarded-for` trust caveat) should also
   confirm whether the Postgres-side throttle plus the added Upstash round
@@ -208,17 +204,6 @@ Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux
   here — not by reopening ADR 0009's already-settled remediation choice.
 
 ## Planned
-
-### Invite by email via the organizer's own mail app (email-invites)
-- Status: implemented, awaiting ship (2026-10-12). Rescoped to the lighter mailto version; follow-up 2026-10-12: no name field, no placeholder, opens the mail app immediately; nothing stored. QA and compliance passed; counsel review of the Terms invite clause and anti-spam position pending
-- Requirements: [docs/features/email-invites/requirements.md](features/email-invites/requirements.md)
-- Docs: [planning.md](features/email-invites/planning.md)
-- Organizer taps "Invite by email" on the roster, types an email, and Splitiful immediately opens the organizer's own mail app with a prefilled mailto:. Splitiful sends no email and stores no invitee email. The link is the existing shared /join/[code] link; the join, code and first-time name-prompt flow is unchanged. Supersedes the earlier Splitiful-sent design (per-person tokens, Pending rows, suppression list, webhook, opt-out page, 30-day auto-removal), which was abandoned. Removes that work from the uncommitted tree (migration 0021 and its code). Ships together with migration 0020 (one display name per account), the standalone `/feedback` page, and home/trip UI tweaks. Ordered ahead of expense delete and the open security re-checks, as before.
-
-### Vercel Analytics – Full Enable and Custom Event Tracking (vercel-analytics)
-- Status: planned
-- Requirements: [docs/features/vercel-analytics/requirements.md](features/vercel-analytics/requirements.md)
-- Enable all Vercel Analytics capabilities (Web Vitals) and add custom event tracking for key user flows (trip creation, expenses, invites, settlement) to measure product engagement and performance; include privacy safeguards and dashboard-accessible documentation.
 
 ### Performance & latency fix — three core surfaces (performance-scaling)
 - Status: implemented — QA passed on code correctness; **baseline/after
@@ -296,6 +281,17 @@ Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux
     is explicitly temporary (see ADR 0010).
 
 ## Shipped
+
+### Vercel Analytics – Full Enable and Custom Event Tracking (vercel-analytics)
+- Status: implemented (user-confirmed 2026-10-13; `@vercel/analytics` and `@vercel/speed-insights` in `src/app/layout.tsx`, custom events via `src/lib/tracking.ts`). Dashboard verification of events not yet confirmed
+- Requirements: [docs/features/vercel-analytics/requirements.md](features/vercel-analytics/requirements.md)
+- Enable all Vercel Analytics capabilities (Web Vitals) and add custom event tracking for key user flows (trip creation, expenses, invites, settlement) to measure product engagement and performance; include privacy safeguards and dashboard-accessible documentation.
+
+### Invite by email via the organizer's own mail app (email-invites)
+- Status: shipped to `main` (PR #3, 2026-10-12/13). Rescoped to the lighter mailto version; follow-up 2026-10-12: no name field, no placeholder, opens the mail app immediately; nothing stored. QA and compliance passed. **Still open**: counsel review of the Terms invite clause and anti-spam position ([counsel-review.md](features/email-invites/counsel-review.md)). Migration 0020 is applied live (user-confirmed 2026-10-13)
+- Requirements: [docs/features/email-invites/requirements.md](features/email-invites/requirements.md)
+- Docs: [planning.md](features/email-invites/planning.md)
+- Organizer taps "Invite by email" on the roster, types an email, and Splitiful immediately opens the organizer's own mail app with a prefilled mailto:. Splitiful sends no email and stores no invitee email. The link is the existing shared /join/[code] link; the join, code and first-time name-prompt flow is unchanged. Supersedes the earlier Splitiful-sent design (per-person tokens, Pending rows, suppression list, webhook, opt-out page, 30-day auto-removal), which was abandoned. Shipped together with migration 0020 (one display name per account), the standalone `/feedback` page, and home/trip UI tweaks.
 
 ### Shared shopping list with per-item claiming (shopping-list)
 - Status: shipped — QA/security/compliance passed

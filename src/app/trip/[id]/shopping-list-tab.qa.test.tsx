@@ -97,7 +97,7 @@ function makeView(items: ShoppingListItem[], yourMemberId = "m1"): ShoppingListV
   const toGet = items.filter((i) => i.status === "open" || (i.status === "claimed" && i.claimedBy?.id !== yourMemberId));
   const yourBag = items.filter((i) => i.status === "claimed" && i.claimedBy?.id === yourMemberId);
   const bought = items.filter((i) => i.status === "logged");
-  return { items, toGet, yourBag, bought, myClaimedUnloggedCount: yourBag.length, yourMemberId };
+  return { items, toGet, yourBag, bought, yourMemberId };
 }
 
 async function renderTab(opts: {

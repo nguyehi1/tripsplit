@@ -25,6 +25,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({ kind: "service-role-client" }),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: "user-1" } } })) },
