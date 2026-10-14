@@ -14,7 +14,7 @@ _Last reviewed 2026-10-13. Summary only — the entries below are the source of 
 | # | Feature | Slug | Stage | What's left |
 |---|---------|------|-------|-------------|
 | 1 | Invite by email (mailto) | `email-invites` | Shipped, counsel review pending | Counsel review of Terms invite clause and anti-spam position |
-| 2 | Invite-code RPC hardening | `invite-code-rpc-hardening` | In progress | Apply migration 0021 live and smoke-test `/trip/[id]` + an invite preview (`get_trip_summary` grant revoked, code done); counsel sign-off + self-serve delete flow |
+| 2 | Invite-code RPC hardening | `invite-code-rpc-hardening` | In progress | Counsel sign-off + self-serve delete flow; smoke-test `/trip/[id]` and an invite preview after migration 0021 |
 | 3 | Performance & latency fix | `performance-scaling` | Implemented, measurement deferred | After deploy: capture p50/p95 via `npm run perf:baseline`, confirm ≥30% target, check invite-throttle latency; then remove temp instrumentation (ADR 0010) |
 | 4 | Vercel Analytics + custom events | `vercel-analytics` | Implemented | Verify events appear in the Vercel dashboard; then mark shipped |
 | 5 | Expense delete / undo | _(no entry yet)_ | Unscoped | Referenced as next after security/compliance; also unblocks reverting "Bought" shopping items |
@@ -179,7 +179,7 @@ Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux
   same approach as 0017. Its two callers (`renderTripDashboard` in `src/app/trip/[id]/page.tsx`
   and `src/app/api/trip-invite/[code]/route.ts`) now use the service-role client. Trip ids are
   `gen_random_uuid()`, so this was never a brute-force surface; it keeps direct-to-Supabase callers
-  out. **Not yet applied live or smoke-tested.**
+  out. Migration 0021 applied live (user-confirmed 2026-10-13); smoke test of `/trip/[id]` and an invite preview not yet confirmed.
 - **Explicitly out of scope for this item**: receipt-storage RLS still
   using bare `is_trip_member` pre-verification — deferred since receipt
   storage isn't a shipped feature yet.
