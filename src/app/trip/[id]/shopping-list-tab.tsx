@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CloseIcon } from "@/components/icons";
 import { Avatar, Button, Card, Kicker } from "@/components/ui";
 import { redirectToVerify, requireVerifiedSession } from "@/lib/auth-gate";
 import {
+  addShoppingListItems,
   claimShoppingListItem,
   deleteShoppingListItem,
   unclaimShoppingListItem,
@@ -14,7 +15,10 @@ import {
   type ShoppingListView,
 } from "@/lib/data/shopping-list";
 import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
+import { deriveSuggestions, suggestionKey, SUGGESTION_ADD_EVENT } from "@/lib/starter-suggestions";
 import { createClient } from "@/lib/supabase/client";
+import { trackEvent } from "@/lib/tracking";
+import { SuggestedCard } from "./suggested-card";
 import { useTripVerification } from "./verify-inline";
 
 const UNEXPECTED_COPY = "Couldn't do that — try refreshing the page.";
@@ -225,14 +229,18 @@ export function ShoppingListTab({
   isCompleted,
   shoppingList,
   onRefresh,
+  tripTypes = [],
 }: {
   tripId: string;
   isCompleted: boolean;
   shoppingList: ShoppingListView | null;
   onRefresh: () => Promise<ShoppingListView | null>;
+  /** The trip's catalog types in pick order; empty for older trips and Other-only trips. */
+  tripTypes?: readonly string[];
 }) {
   const router = useRouter();
-  const { verified } = useTripVerification();
+  const { verified, pendingItem, setPendingItem, cancelPendingItem, takePendingItem, requestVerification } =
+    useTripVerification();
 
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [raceMessage, setRaceMessage] = useState<string | null>(null);
@@ -240,6 +248,70 @@ export function ShoppingListTab({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Suggested card state. `pendingItem` (the tap waiting for email verification) lives in the
+  // verification provider, not here, because the inline widget above the tabs must read it too.
+  const [addingName, setAddingName] = useState<string | null>(null);
+  const [addedName, setAddedName] = useState<string | null>(null);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const cardAreaRef = useRef<HTMLDivElement>(null);
+  const toGetHeadingRef = useRef<HTMLDivElement>(null);
+  // Which suggestion to focus after the card re-renders (the tapped button unmounts).
+  const focusAfterAddRef = useRef<string | "heading" | null>(null);
+
+  // Leaving the List tab (this component unmounting) drops a waiting add.
+  const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      cancelPendingItem?.();
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Replay: once the organizer is fully verified, add the one item they tapped. See ADR 0015.
+  useEffect(() => {
+    if (!verified) return;
+    const slot = takePendingItem?.();
+    if (!slot) return;
+    void (async () => {
+      // Every drop below is silent: nothing is added unless every check passes.
+      if (isCompleted) return;
+      const fresh = await onRefresh();
+      if (!fresh?.yourMemberId) return;
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      // Same account that tapped, and verified: signing in to a different existing account swaps
+      // the session without a SIGNED_OUT, so the item must not be added under it.
+      if (!user || user.id !== slot.userId || !(await requireVerifiedSession(supabase, user))) return;
+      // Still a current suggestion? Another member or tab may have added it meanwhile. This also
+      // means the inserted text is always a catalog name, never an arbitrary in-memory string.
+      const target = deriveSuggestions(
+        tripTypes,
+        fresh.items.map((i) => i.description),
+      ).find((s) => suggestionKey(s.name) === suggestionKey(slot.name));
+      if (!target) return;
+      await addSuggestion(target.name, fresh.yourMemberId, supabase, true);
+    })();
+    // Runs only when `verified` flips; the slot is read-and-cleared above so this fires once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verified]);
+
+  useEffect(() => {
+    const target = focusAfterAddRef.current;
+    // Wait until the add has finished: every "+" is disabled while one is in flight, and a
+    // disabled button cannot take focus.
+    if (!target || addingName) return;
+    focusAfterAddRef.current = null;
+    if (target === "heading") {
+      toGetHeadingRef.current?.focus();
+    } else {
+      Array.from(cardAreaRef.current?.querySelectorAll<HTMLButtonElement>("button[data-suggestion]") ?? [])
+        .find((b) => b.dataset.suggestion === target)
+        ?.focus();
+    }
+  });
 
   if (!shoppingList) {
     return <p className="px-1 text-[13.5px] text-ink/60">Couldn&apos;t load the list — try again in a moment.</p>;
@@ -247,6 +319,83 @@ export function ShoppingListTab({
 
   const { toGet, yourBag, bought, yourMemberId } = shoppingList;
   const allEmpty = shoppingList.items.length === 0;
+  // Derived on every render from the trip's types and what is already on the list (any status);
+  // nothing is stored per suggestion. Hidden on a completed trip, where the list is frozen.
+  const suggestions = isCompleted
+    ? []
+    : deriveSuggestions(
+        tripTypes,
+        shoppingList.items.map((i) => i.description),
+      );
+
+  /** Inserts one catalog name through the normal add path; the insert policy is the real gate. */
+  async function addSuggestion(
+    name: string,
+    addedBy: string,
+    supabase: ReturnType<typeof createClient>,
+    replayed = false,
+  ) {
+    setAddingName(name);
+    setAddedName(null);
+    setSuggestionError(null);
+    try {
+      await addShoppingListItems(supabase, { tripId, addedBy, descriptions: [name] });
+      trackEvent(SUGGESTION_ADD_EVENT);
+      await onRefresh();
+      // markVerified started a server refresh a moment earlier; a later one makes sure its result
+      // cannot overwrite the post-insert list with a stale one.
+      if (replayed) {
+        router.refresh();
+        // The widget is at the top of the page; bring the card (now without the added row) back.
+        setTimeout(() => cardAreaRef.current?.scrollIntoView?.({ block: "nearest" }), 0);
+      }
+      setAddedName(name);
+      // One timer: a second add within 4s restarts it instead of the first hiding the new notice.
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+      addedTimerRef.current = setTimeout(() => setAddedName(null), 4000);
+    } catch {
+      focusAfterAddRef.current = null;
+      await onRefresh();
+      setSuggestionError(
+        isCompleted
+          ? LOCKED_TRIP_COPY.items.long
+          : typeof navigator !== "undefined" && navigator.onLine === false
+            ? `Couldn't add '${name}' — check your connection and try again.`
+            : `Couldn't add '${name}' — try again.`,
+      );
+    } finally {
+      setAddingName(null);
+    }
+  }
+
+  async function handleSuggestionAdd(name: string) {
+    if (addingName) return;
+    setSuggestionError(null);
+    // Move focus to the neighbouring "+" (or the "To get" heading if the card empties) once the
+    // tapped row has gone.
+    const index = suggestions.findIndex((s) => s.name === name);
+    focusAfterAddRef.current =
+      suggestions.length <= 1 ? "heading" : (suggestions[index + 1] ?? suggestions[index - 1]).name;
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!(await requireVerifiedSession(supabase, user))) {
+      // The organizer, before verifying (an unverified non-owner never reaches this tab). No
+      // database call and no redirect: remember the one tapped name in memory and open the
+      // inline verification widget; it is added after they confirm their email.
+      focusAfterAddRef.current = null;
+      setPendingItem?.(name);
+      requestVerification?.();
+      return;
+    }
+    if (!shoppingList?.yourMemberId) {
+      focusAfterAddRef.current = null;
+      setSuggestionError(`Couldn't add '${name}' — try again.`);
+      return;
+    }
+    await addSuggestion(name, shoppingList.yourMemberId, supabase);
+  }
 
   async function withGate(itemId: string, kind: "claim" | "unclaim", run: () => Promise<void>) {
     if (pendingId) return;
@@ -324,16 +473,65 @@ export function ShoppingListTab({
     }
   }
 
+  const card =
+    suggestions.length > 0 ? (
+      <div ref={cardAreaRef} className="pb-0.5">
+        {/* 18px above the card (canvas C spacer): after the last list card, or after "Nothing on the
+            list yet." on an empty list. */}
+        <div className="h-[18px]" />
+        {suggestionError ? (
+          <>
+            <p className="text-[13px] text-terracotta">{suggestionError}</p>
+            <div className="h-3" />
+          </>
+        ) : null}
+        <SuggestedCard
+          suggestions={suggestions}
+          unverified={!verified}
+          addingName={addingName}
+          waitingName={pendingItem}
+          onAdd={handleSuggestionAdd}
+          onCancelWaiting={() => cancelPendingItem?.()}
+        />
+      </div>
+    ) : null;
+  // The success notice floats above the bottom bar instead of sitting inline: the card is now at
+  // the bottom of the page, and an inline pill above it would push every row down under the
+  // thumb at the moment of the next "+" tap (design.md 16.2). The polite status line announces it.
+  const floatingNotice = addedName ? (
+    <div className="pointer-events-none fixed bottom-[106px] left-1/2 z-10 w-full max-w-md -translate-x-1/2 px-5" aria-hidden="true">
+      <p
+        className="mx-auto w-fit max-w-full rounded-[14px] px-3.5 py-2.5 text-[13px] font-medium text-white"
+        style={{ background: "color-mix(in srgb, var(--color-ink) 90%, transparent)" }}
+      >
+        Added &apos;{addedName}&apos; — everyone on the trip can see it.
+      </p>
+    </div>
+  ) : null;
+  // Screen-reader confirmation of an add (the visible notice is aria-hidden to avoid a double announce).
+  const addAnnouncement = (
+    <div role="status" className="sr-only">
+      {addingName ? `Adding ${addingName}…` : addedName ? `Added ${addedName} to the list.` : ""}
+    </div>
+  );
+
   if (allEmpty) {
     return (
-      <div className="px-1">
-        <p className="text-[13px] text-ink/60">Nothing on the list yet.</p>
-      </div>
+      <>
+        {addAnnouncement}
+        {floatingNotice}
+        <div className="px-1">
+          <p className="text-[13px] text-ink/60">Nothing on the list yet.</p>
+        </div>
+        {card}
+      </>
     );
   }
 
   return (
     <>
+      {addAnnouncement}
+      {floatingNotice}
       {raceMessage ? (
         <>
           <p className="rounded-[14px] bg-ink/[0.06] px-3.5 py-2.5 text-[13px] font-medium text-ink/80">
@@ -373,7 +571,9 @@ export function ShoppingListTab({
       ) : null}
 
       <div className="flex items-baseline justify-between px-1">
-        <Kicker>To get</Kicker>
+        <div ref={toGetHeadingRef} tabIndex={-1} className="outline-none">
+          <Kicker>To get</Kicker>
+        </div>
         <Kicker>tap a circle to grab it</Kicker>
       </div>
       <div className="h-2" />
@@ -416,6 +616,8 @@ export function ShoppingListTab({
           </Card>
         </>
       ) : null}
+
+      {card}
     </>
   );
 }

@@ -51,6 +51,19 @@ glass visual variant was designed but deferred — not built in this pass, see
 [docs/ROADMAP.md](./docs/ROADMAP.md). Full spec:
 [docs/features/shopping-list/requirements.md](./docs/features/shopping-list/requirements.md).
 
+New trips can optionally be tagged with trip types (Camping, Airbnb stay, International, and/or a
+short typed "Other", up to 30 characters; not editable after creation yet). The List tab then shows
+a "Suggested for this trip" card at the end of the list, built on the device from a bundled catalog
+(`src/lib/starter-catalog.ts`), with a "+" per item that adds it to the shared list. Home (`/` and
+`/trips`) has a "Start from a template" shelf that opens New trip with a type pre-checked. Apply
+the fixed migration 0022 (not 0021, which is the unrelated summary-grant revoke) before deploying;
+the owner's ordered steps are in
+[docs/features/starter-list-exploration/release-checklist.md](./docs/features/starter-list-exploration/release-checklist.md)
+and release checks are in
+[docs/runbooks/account-deletion-and-export.md](./docs/runbooks/account-deletion-and-export.md)
+section 5. Full spec:
+[docs/features/starter-list-exploration/requirements.md](./docs/features/starter-list-exploration/requirements.md).
+
 **Onboarding** is a two-track model (see
 [docs/features/simplified-onboarding/requirements.md](./docs/features/simplified-onboarding/requirements.md)
 for the full spec):
@@ -172,7 +185,7 @@ onboarding flow to work:
 Splitiful uses **Vercel Analytics** to measure performance and understand user behavior. The app automatically tracks:
 
 - **Web Vitals** — page performance metrics (Largest Contentful Paint, Interaction to Next Paint, Cumulative Layout Shift)
-- **Custom events** — 14 key user actions (trip creation, expense logging, member invites, sign-in, settlement)
+- **Custom events** — name-only key user actions (trip creation, trip types, expense logging, member invites, sign-in, settlement, suggestions)
 
 All events are privacy-first: no personally identifiable information (names, emails, trip IDs, amounts) is collected. Data is retained for 30+ days on Vercel and is not shared with third parties.
 
@@ -189,7 +202,9 @@ Deployed on Vercel from this repo:
 3. Confirm Project Settings → Node.js Version is set to 22.x, matching `engines.node` in
    `package.json` — `@supabase/supabase-js` drops support for older Node versions.
 4. Push migrations to the linked Supabase project (`supabase db push`) before or alongside the
-   deploy — the app assumes the schema in `supabase/migrations` is already applied.
+   deploy — the app assumes the schema in `supabase/migrations` is already applied. For migration
+   0022 this is a hard ordering: apply it **before** deploying, then run the live checks in the
+   [runbook](./docs/runbooks/account-deletion-and-export.md) section 5.
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and a production build on every push
 and pull request to `main`.

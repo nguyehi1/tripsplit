@@ -1,11 +1,15 @@
 import Link from "next/link";
+import { createElement } from "react";
 import { redirect } from "next/navigation";
-import { LockIcon, MessageSquareIcon, PlusIcon } from "@/components/icons";
+import { LockIcon, MapPinIcon, MessageSquareIcon, PlusIcon } from "@/components/icons";
 import { LegalLinks } from "@/components/legal-page";
-import { AvatarStack, Card, IconLinkButton, Kicker, LinkButton, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { TemplateShelf } from "@/components/template-shelf";
+import { iconForTripType } from "@/components/trip-type-icons";
+import { Card, FabBar, IconLinkButton, Kicker, LinkButton, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
+import { TRIP_LIST_COLUMNS } from "@/lib/data/trip-columns";
 import { getMyTrips, type MyTrip } from "@/lib/data/trips";
-import { formatDateRange } from "@/lib/dates";
+import { formatDateRangeCompact } from "@/lib/dates";
 import { timeAsync } from "@/lib/perf/timing";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,58 +28,82 @@ import { createClient } from "@/lib/supabase/server";
  */
 export const dynamic = "force-dynamic";
 
+/** The right-hand balance. Null when the trip has no expenses ("No expenses yet" is in the subtitle). */
 function BalanceLabel({ netCents, hasExpenses }: { netCents: number; hasExpenses: boolean }) {
-  if (!hasExpenses) return <span className="text-[12.5px] text-ink/[0.72]">No expenses yet</span>;
-  if (netCents === 0) return <span className="text-[12.5px] text-ink/[0.72]">Settled up</span>;
+  if (!hasExpenses) return null;
+  if (netCents === 0) return <span className="text-[12.5px] leading-[15px] text-ink/[0.72]">Settled up</span>;
   if (netCents > 0) {
     return (
-      <span className="text-[12.5px] font-semibold" style={{ color: "oklch(0.38 0.08 80)" }}>
+      <span className="text-[12.5px] font-semibold leading-[15px]" style={{ color: "oklch(0.38 0.08 80)" }}>
         You&apos;re owed {formatCents(netCents)}
       </span>
     );
   }
   return (
-    <span className="text-[12.5px] font-semibold" style={{ color: "var(--color-terracotta)" }}>
+    <span className="text-[12.5px] font-semibold leading-[15px]" style={{ color: "var(--color-terracotta)" }}>
       You owe {formatCents(-netCents)}
     </span>
   );
 }
 
-function TripRow({ trip }: { trip: MyTrip }) {
+/**
+ * One trip row, board A's anatomy (design.md 16.1): 40px icon square, 15px/600 name, 12px subtitle
+ * ("date · people · total", parts skipped when absent), the balance at the right end of the name
+ * line, or the Locked pill there on a completed trip (with the balance on a third line). Below
+ * 360px the balance is a third line for every row. The divider is drawn by the caller on every
+ * row but the last.
+ */
+function TripRow({ trip, isLast }: { trip: MyTrip; isLast: boolean }) {
+  const icon = trip.types[0] ? iconForTripType(trip.types[0]) : MapPinIcon;
+  const subtitle = [
+    formatDateRangeCompact(trip.startsOn, trip.endsOn),
+    `${trip.members.length} ${trip.members.length === 1 ? "person" : "people"}`,
+    trip.totalCents > 0 ? formatCents(trip.totalCents) : "No expenses yet",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const balance = <BalanceLabel netCents={trip.yourNetCents} hasExpenses={trip.totalCents > 0} />;
+  const hasBalance = trip.totalCents > 0;
   return (
-    <Link href={`/trip/${trip.id}`} className="block w-full cursor-pointer p-[18px] text-left">
-      <div className="flex items-center gap-2">
-        <span
-          className="rounded-full px-[10px] py-[4px] text-[11px] font-semibold"
-          style={{ background: "oklch(0.95 0.04 88)", color: "oklch(0.38 0.08 80)" }}
-        >
-          Trip
+    <Link
+      href={`/trip/${trip.id}`}
+      className={`flex w-full cursor-pointer items-center gap-3 py-3.5 text-left ${isLast ? "" : "border-b border-ink/[0.15]"}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`flex size-10 flex-none items-center justify-center rounded-[14px] ${
+          trip.isCompleted ? "bg-ink/[0.05] text-ink/[0.74]" : ""
+        }`}
+        style={trip.isCompleted ? undefined : { background: "var(--color-accent-soft)", color: "var(--color-accent-ink)" }}
+      >
+        {createElement(icon, { size: 20, strokeWidth: 2 })}
+      </span>
+      <span className="block min-w-0 flex-1">
+        {/* The name line carries the right-hand item (balance, or the Locked pill), so the subtitle
+            below keeps the full text width and stays on one line at 390px. */}
+        <span className="flex items-start gap-2">
+          <span className="block min-w-0 flex-1 text-[15px] font-semibold leading-5 [overflow-wrap:anywhere]">{trip.name}</span>
+          {trip.isCompleted ? (
+            <span
+              className="flex flex-none items-center gap-1 rounded-full px-[9px] py-1 text-[11px] font-semibold leading-3"
+              style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
+            >
+              <LockIcon size={10} strokeWidth={2.6} />
+              Locked
+            </span>
+          ) : hasBalance ? (
+            <span className="hidden flex-none text-right text-[12.5px] leading-5 min-[360px]:block">{balance}</span>
+          ) : null}
         </span>
-        {formatDateRange(trip.startsOn, trip.endsOn) ? (
-          <span className="text-[12px] text-ink/[0.72]">{formatDateRange(trip.startsOn, trip.endsOn)}</span>
-        ) : null}
-        {trip.isCompleted ? (
-          <span
-            className="ml-auto flex items-center gap-1 rounded-full px-[10px] py-[4px] text-[11px] font-semibold"
-            style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
-          >
-            <LockIcon size={10} strokeWidth={2.6} />
-            Locked
+        <span className="block text-[12px] leading-[15px] text-ink/[0.72]">{subtitle}</span>
+        {/* Third line: below 360px for every row, and always on a completed row (its name line is
+            taken by the Locked pill). */}
+        {hasBalance ? (
+          <span className={`mt-0.5 block text-[12.5px] leading-[15px] ${trip.isCompleted ? "" : "min-[360px]:hidden"}`}>
+            {balance}
           </span>
         ) : null}
-      </div>
-      <div className="h-2" />
-      <div className="text-display text-[22px]">{trip.name}</div>
-      <div className="h-2.5" />
-      <AvatarStack members={trip.members} />
-      <div className="h-2.5" />
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[12px] text-ink/[0.72]">
-          {trip.members.length} {trip.members.length === 1 ? "person" : "people"} ·{" "}
-          {formatCents(trip.totalCents)}
-        </span>
-        <BalanceLabel netCents={trip.yourNetCents} hasExpenses={trip.totalCents > 0} />
-      </div>
+      </span>
     </Link>
   );
 }
@@ -97,7 +125,7 @@ export default async function TripsDashboardPage({
   // 0005) is unchanged — see ADR 0011 for that contingent, not-done-here follow-up.
   const [{ data: { user } }, tripsRowsResult] = await Promise.all([
     supabase.auth.getUser(),
-    timeAsync("my-trips", "trips", () => supabase.from("trips").select("*").order("created_at", { ascending: false })),
+    timeAsync("my-trips", "trips", () => supabase.from("trips").select(TRIP_LIST_COLUMNS).order("created_at", { ascending: false })),
   ]);
   // Defensive fallback only — src/proxy.ts already redirects unauthenticated visitors before
   // this page renders; this isn't a duplicate of that gate (see ADR 0005).
@@ -116,17 +144,15 @@ export default async function TripsDashboardPage({
   const completedTrips = trips?.filter((trip) => trip.isCompleted) ?? [];
 
   return (
-    <Screen glow>
+    <Screen glow texture>
       <ScreenContent className="pt-0.5">
         <TopBar
-          title="Your trips"
+          title={<h1 className="text-display text-[36px] leading-none">Trips</h1>}
+          titleClassName=""
           trailing={
             <>
               <IconLinkButton title="Send feedback" className="text-ink/[0.73]" href="/feedback">
                 <MessageSquareIcon size={19} strokeWidth={2.2} />
-              </IconLinkButton>
-              <IconLinkButton title="New trip" href="/trip/new">
-                <PlusIcon size={19} strokeWidth={2.4} />
               </IconLinkButton>
             </>
           }
@@ -139,39 +165,51 @@ export default async function TripsDashboardPage({
             <div className="h-3" />
           </>
         ) : null}
-        <div className="h-2" />
+        {/* 22px, not the design's 24: with the 40px Feedback button making the top bar taller than
+            the 36px title, 22px lands the kicker 62px below the h1 top, as on board A. */}
+        <div className="h-[22px]" />
+
+        <TemplateShelf />
+        <div className="h-[26px]" />
 
         {error ? (
           <p className="px-1 text-[13px] text-terracotta">{error}</p>
         ) : !trips || trips.length === 0 ? (
-          <div className="pt-8 text-center">
-            <p className="text-[15px] text-ink/70">You&apos;re not on any trips yet.</p>
-            <div className="h-4" />
-            <LinkButton href="/trip/new" variant="accent" block={false} className="mx-auto px-6">
-              Start a trip
-            </LinkButton>
-          </div>
+          <>
+            <Kicker canvas className="px-1">Your trips</Kicker>
+            <div className="h-2.5" />
+            <Card className="px-5 py-7 text-center">
+              <span className="block text-[15px] font-semibold">No trips yet</span>
+              <span className="mt-1.5 block text-[13px] leading-[1.45] text-ink/[0.74]">
+                Pick a template above and your list starts with the basics. Your trips will show up here.
+              </span>
+            </Card>
+          </>
         ) : (
           <>
             {ongoingTrips.length > 0 ? (
               <>
-                <Kicker className="px-1">Ongoing</Kicker>
-                <div className="h-2" />
-                <Card className="divide-y divide-ink/[0.07] p-0">
-                  {ongoingTrips.map((trip) => (
-                    <TripRow key={trip.id} trip={trip} />
+                <Kicker canvas className="px-1">
+                  Ongoing
+                </Kicker>
+                <div className="h-2.5" />
+                <Card className="px-4 py-1">
+                  {ongoingTrips.map((trip, i) => (
+                    <TripRow key={trip.id} trip={trip} isLast={i === ongoingTrips.length - 1} />
                   ))}
                 </Card>
               </>
             ) : null}
             {completedTrips.length > 0 ? (
               <>
-                {ongoingTrips.length > 0 ? <div className="h-5" /> : null}
-                <Kicker className="px-1">Completed</Kicker>
-                <div className="h-2" />
-                <Card className="divide-y divide-ink/[0.07] p-0">
-                  {completedTrips.map((trip) => (
-                    <TripRow key={trip.id} trip={trip} />
+                {ongoingTrips.length > 0 ? <div className="h-[26px]" /> : null}
+                <Kicker canvas className="px-1">
+                  Completed
+                </Kicker>
+                <div className="h-2.5" />
+                <Card className="px-4 py-1">
+                  {completedTrips.map((trip, i) => (
+                    <TripRow key={trip.id} trip={trip} isLast={i === completedTrips.length - 1} />
                   ))}
                 </Card>
               </>
@@ -179,7 +217,15 @@ export default async function TripsDashboardPage({
           </>
         )}
         <LegalLinks />
+        {/* With ScreenContent's pb-10 this leaves about 92px below the legal links, so they clear the fixed pill (56px high, 18px up). */}
+        <div aria-hidden className="h-[52px]" />
       </ScreenContent>
+      <FabBar>
+        <LinkButton href="/trip/new" variant="fab" className="text-[16px]">
+          <PlusIcon size={19} strokeWidth={2.6} aria-hidden />
+          New trip
+        </LinkButton>
+      </FabBar>
     </Screen>
   );
 }

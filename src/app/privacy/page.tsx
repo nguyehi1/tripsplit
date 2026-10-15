@@ -39,7 +39,8 @@ export default function PrivacyPage() {
         </li>
         <li>
           Trip details: name, location (text you type, such as a destination; we do not read your
-          device&rsquo;s location), dates, and members.
+          device&rsquo;s location), dates, members, the kinds of trip you pick, and, if you choose
+          Other, a short trip type you type (up to 30 characters).
         </li>
         <li>Expenses: descriptions, amounts, who paid, who shares them, and shopping-list items.</li>
         <li>
@@ -57,8 +58,8 @@ export default function PrivacyPage() {
       </ul>
       <p>
         We do not ask for payment details, government IDs, precise location, or other sensitive
-        categories of data, and ask you not to put them into trip names, expense descriptions or
-        comments.
+        categories of data, and ask you not to put them into trip names, trip types, expense
+        descriptions or comments.
       </p>
 
       <h2>Accounts without an email</h2>
@@ -80,8 +81,9 @@ export default function PrivacyPage() {
         </li>
         <li>
           Our legitimate interests: keeping the service secure and preventing abuse (IP-based rate
-          limiting), and understanding and improving performance and usage (analytics). You can
-          object to this, see &ldquo;Your rights&rdquo;.
+          limiting), understanding and improving performance and usage (analytics), and deciding which
+          trip types to add to Splitiful&rsquo;s suggestions (from the short trip type some people
+          type, read by us in aggregate). You can object to this, see &ldquo;Your rights&rdquo;.
         </li>
         <li>Legal obligations: where the law requires us to keep or disclose something.</li>
         <li>Consent: where we ask for it, and you can withdraw it at any time.</li>

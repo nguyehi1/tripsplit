@@ -1,5 +1,5 @@
 import Link, { type LinkProps } from "next/link";
-import type { AnchorHTMLAttributes, ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from "react";
 import { LockIcon } from "@/components/icons";
 import { DelayedLoadingLine } from "@/components/delayed-loading-line";
 import type { AvatarColor } from "@/lib/avatar";
@@ -16,12 +16,15 @@ export function Screen({
    *  decorative only, opt-in so screens outside this feature's scope don't pick it up. */
   texture?: boolean;
 }) {
+  // `overflow-clip`, not `overflow-hidden`: it clips the glow blobs to the screen the same way, but
+  // does not make this box a scroll container, so `position: sticky` descendants (the top bar and
+  // `BottomBar`) stick to the viewport instead of to a box that never scrolls.
   const decorated = glow || texture;
   return (
     <div
       className={
         decorated
-          ? "relative isolate mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-paper text-ink"
+          ? "relative isolate mx-auto flex min-h-screen w-full max-w-md flex-col overflow-clip bg-paper text-ink"
           : "mx-auto flex min-h-screen w-full max-w-md flex-col bg-paper text-ink"
       }
     >
@@ -70,7 +73,20 @@ export function ScreenContent({
 
 export function BottomBar({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky bottom-0 flex-none bg-gradient-to-t from-paper from-60% to-transparent px-4 pt-3 pb-6">
+    <div className="sticky bottom-0 flex-none bg-gradient-to-t from-paper from-60% to-transparent px-4 pt-3 pb-[max(24px,env(safe-area-inset-bottom))]">
+      {children}
+    </div>
+  );
+}
+
+/** The floating "New trip" pill's bar: fixed to the bottom of the viewport, centred and capped at
+ *  the app's `max-w-md` column, so `px-3.5` is 14px from the screen edge (not the 20px content
+ *  gutter). Transparent, with no background or gradient (the canvas has none). It is `fixed`, so
+ *  the wrapper ignores pointer events (only the pill is tappable) and the page must leave room at
+ *  the bottom of its content (see /trips). */
+export function FabBar({ children }: { children: ReactNode }) {
+  return (
+    <div className="pointer-events-none fixed bottom-0 left-1/2 z-10 w-full max-w-md -translate-x-1/2 px-3.5 pb-[max(18px,env(safe-area-inset-bottom))] [&>*]:pointer-events-auto">
       {children}
     </div>
   );
@@ -152,7 +168,7 @@ export function IconLinkButton({
   );
 }
 
-type ButtonVariant = "primary" | "accent" | "soft" | "muted" | "ghost" | "capsule" | "capsuleMuted";
+type ButtonVariant = "primary" | "accent" | "soft" | "muted" | "ghost" | "capsule" | "capsuleMuted" | "fab";
 
 /** Shared by `Button` and `LinkButton` — `capsule`/`capsuleMuted` are the floating primary-action
  *  material (design.md section 1): dark ink-translucent fill, blur, elevated shadow, springs up
@@ -167,6 +183,9 @@ const buttonVariantClasses: Record<ButtonVariant, string> = {
   capsule: "text-white backdrop-blur-xl [background:var(--surface-capsule)] [box-shadow:var(--shadow-capsule)] animate-capsule-in",
   capsuleMuted:
     "text-ink/70 backdrop-blur-xl [background:var(--surface-capsule-muted)] [box-shadow:var(--shadow-capsule-sm)] cursor-default animate-capsule-in",
+  // The flat "New trip" pill from the canvas (boards A and L): ink at 90%, no blur, no entrance
+  // animation. Used with `FabBar` on /trips only; `capsule` and `BottomBar` are unchanged.
+  fab: "text-white [background:color-mix(in_srgb,var(--color-ink)_90%,transparent)] [box-shadow:0_10px_30px_rgba(35,28,18,.28)]",
 };
 
 export function Button({
@@ -219,8 +238,18 @@ export function Divider({ className = "" }: { className?: string }) {
   return <div className={`h-px bg-ink/10 ${className}`} />;
 }
 
-export function Kicker({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`text-kicker ${className}`}>{children}</div>;
+export function Kicker({
+  children,
+  className = "",
+  canvas = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Canvas-exact tone and leading (ink 74%, 13px line box) for the home shelf, New trip picker,
+   *  Suggested card and first-run kickers. Off by default so other screens are unchanged. */
+  canvas?: boolean;
+}) {
+  return <div className={`text-kicker ${canvas ? "text-kicker-canvas" : ""} ${className}`}>{children}</div>;
 }
 
 /**
@@ -307,7 +336,13 @@ export function Field({
   className = "",
   inputClassName = "",
   ...props
-}: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string; inputClassName?: string }) {
+}: InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  hint?: string;
+  inputClassName?: string;
+  /** React 19 passes `ref` as a prop; it lands on the input through the spread below. */
+  ref?: Ref<HTMLInputElement>;
+}) {
   return (
     <label className={`block ${className}`}>
       <span className="mb-1.5 block text-[12px] text-ink/70">

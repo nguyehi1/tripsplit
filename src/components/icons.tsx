@@ -215,3 +215,43 @@ export function ClockIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function TentIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.5 21 14 3" />
+      <path d="M20.5 21 10 3" />
+      <path d="M15.5 21 12 15l-3.5 6" />
+      <path d="M2 21h20" />
+    </Icon>
+  );
+}
+
+export function HouseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+      <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </Icon>
+  );
+}
+
+export function GlobeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </Icon>
+  );
+}
+
+/** A neutral outline map pin: the /trips row icon for a trip with no catalog type. */
+export function MapPinIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </Icon>
+  );
+}

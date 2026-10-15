@@ -10,6 +10,63 @@ a release moves that section under a dated version heading.
 
 ## [Unreleased]
 
+Proposed version: 0.8.0 (backward-compatible feature; package.json not yet bumped).
+
+### Added
+
+- **Trip types on New trip.** The organizer can optionally pick up to three of Camping, Airbnb stay
+  and International, and/or "Other" with a short typed trip type (1-30 characters, no emoji or
+  control/invisible characters). Migration 0022 adds `trips.types` and `trips.other_type` with
+  database-side CHECK constraints, revokes direct `UPDATE` on `trips` (the app never updated it),
+  and adds a 7-argument `create_trip` overload alongside the unchanged 5-argument one. The app
+  falls back to the old call only when the new function is not found, never on a constraint
+  error. Trip types cannot be edited after creation yet. The typed text is member-readable through
+  the API but shown nowhere in the app, and is read by the operator only in aggregate.
+- **"Suggested for this trip" card on the List tab.** A client-computed, merged and deduplicated
+  set of suggestions from a bundled catalog (`src/lib/starter-catalog.ts`, one easy-to-edit file),
+  with a "+" per item that uses the existing item insert (no new RPC). A guest organizer's first
+  "+" goes through the existing email confirmation, then the single tapped item is added
+  automatically from an in-memory slot (10 minute TTL, bound to the user, never stored in the
+  browser; ADR 0015). Light mode only.
+- **"Start from a template" shelf on Home.** `/trips` and the welcome page (`/`) show one tile per
+  trip type plus "Blank trip". Tapping a tile opens `/trip/new?type=<code>` with that type already
+  checked (an unknown value is ignored; the raw query value is never echoed). A first-run "No trips
+  yet" card is shown on `/trips` when the account has no trips, and the small + is replaced by a
+  canvas-style "New trip" pill pinned above the bottom edge.
+- **Name-only analytics.** `trip_type_selected_camping`, `_airbnb`, `_international`, `_other`,
+  `suggestion_add_complete`, and the four Home events `home_template_tapped_camping`, `_airbnb`,
+  `_international` and `home_blank_trip_tapped`, no properties (see `docs/ANALYTICS.md`).
+- **Privacy policy.** `/privacy` now lists trip types and the typed trip type, adds the
+  legitimate-interest purpose (deciding which trip types to suggest, read in aggregate) and
+  `LEGAL_LAST_UPDATED` moves to October 13, 2026. Draft copy, not yet reviewed by counsel.
+  Runbook updated for export, erasure and the operator aggregate query.
+
+### Changed
+
+- **Home trip rows are restyled and compact.** Each trip on `/trips` is one 68px row (40px icon
+  square for the trip's first type, name, "date · people · total", balance on the right, the Locked
+  pill on completed trips). The "Trip" pill and the avatar stack are gone, the divider is clearer,
+  and "No expenses yet" replaces "$0.00".
+- **The Suggested card is the last block of the List tab** (at the END of the list), with its
+  success notice floating above the bottom bar so rows do not jump. New trip asks for the trip type
+  in a picker right below the trip name.
+- **Sticky bars work.** The top bar and the "Add an expense" / "Add an item" bar now stay pinned
+  while the page scrolls (the screen wrapper clipped with `overflow: hidden`, which stopped
+  `position: sticky`; it now uses `overflow: clip`). This was broken before this feature too.
+- Trip reads use explicit column lists (`src/lib/data/trip-columns.ts`) instead of `select *`, so
+  `other_type` is never returned to ordinary trip views. `select('*')` is removed from trips reads.
+- Deploy order: apply migration 0022 **before** deploying the app (the trip page now selects
+  `trips.types`). Apply the FIXED 0022 file: the `trips_types_check` constraint bug found in review
+  was corrected inside 0022 itself (0022 is unreleased, so there is no separate fix migration).
+  Live verification is required before release (see
+  `docs/runbooks/account-deletion-and-export.md` section 5 and
+  `docs/features/starter-list-exploration/release-checklist.md`).
+
+### Fixed
+
+- **Sticky top and bottom bars** (see Changed above): the `Screen` container now clips with
+  `overflow: clip` instead of `hidden`. Pre-existing bug, fixed in passing.
+
 ## [0.7.0] - 2026-10-12
 
 ### Added

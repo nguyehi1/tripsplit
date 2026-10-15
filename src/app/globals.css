@@ -10,6 +10,7 @@
   --color-accent-strong: oklch(0.4 0.085 80);
   --color-accent-soft: oklch(0.95 0.04 88);
   --color-accent-deep: oklch(0.38 0.08 80);
+  --color-accent-ink: oklch(0.42 0.08 80);
 
   --color-terracotta: oklch(0.42 0.09 44);
   --color-terracotta-soft: oklch(0.95 0.035 44);
@@ -65,6 +66,7 @@
   --color-accent-strong: var(--color-accent-strong);
   --color-accent-soft: var(--color-accent-soft);
   --color-accent-deep: var(--color-accent-deep);
+  --color-accent-ink: var(--color-accent-ink);
   --color-terracotta: var(--color-terracotta);
   --color-terracotta-soft: var(--color-terracotta-soft);
   --color-balance-positive: var(--color-balance-positive);
@@ -81,6 +83,13 @@
   --ease-spring: var(--ease-spring);
   --font-display: var(--font-display);
   --font-sans: var(--font-body);
+}
+
+/* Keeps a focused or scrolled-to element clear of the two sticky bars (top bar about 64px, bottom
+   bar about 90px plus 14px): used by focus(), scrollIntoView and keyboard focus movement. */
+html {
+  scroll-padding-top: 64px;
+  scroll-padding-bottom: 104px;
 }
 
 body {
@@ -102,6 +111,12 @@ body {
     text-transform: uppercase;
     font-weight: 600;
     color: color-mix(in srgb, var(--color-ink) 70%, transparent);
+  }
+  /* The canvas kicker (boards A, B, C, L): ink 74% and a 13px line box. Opt-in via
+     `<Kicker canvas>` so the shared kicker on every other screen is unchanged. */
+  .text-kicker-canvas {
+    color: color-mix(in srgb, var(--color-ink) 74%, transparent);
+    line-height: 13px;
   }
   /* Floating capsule primary action's entrance (design.md section 1 — "springs up on first
      paint"). Pure CSS, no animation library (ADR 0008 point 6). */

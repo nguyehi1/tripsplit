@@ -18,6 +18,12 @@ same PR adds the rule that would have caught it to this file. See
 - Every table has RLS enabled, with policies matching the real access rule
   (members see only their trips' rows). The service-role key is never
   reachable from a client path.
+- Add a column CHECK, not only RPC validation, when a direct-write RLS policy
+  exists (anonymous sessions use the `authenticated` role).
+- Pending-action replay after an auth gate: closed-set identifier only, memory
+  by default, bound to the tapping user id and a short TTL, cleared on
+  use/unmount/sign-out, re-authorized server-side and re-validated against
+  current data; never in URLs or logs. Storage needs its own review.
 - The trip invite/join link is a bearer secret. New features must not expose
   it to non-members, log it, or put it in analytics.
 
@@ -31,10 +37,18 @@ same PR adds the rule that would have caught it to this file. See
   per-user cap.
 - Design the abuse case at requirements time: what does an attacker with a
   free anonymous account do with this?
+- A throttle on one RPC entry point is not a limit when a direct-write policy
+  or a second overload exists.
 
 ## Data exposure
 
 - Return only the columns the caller needs. No `select *` into responses.
+- Adding a column that must not reach other members: audit every `select("*")`,
+  `t.*` and `returns setof <table>`, and state read access accurately (RLS is
+  row-level, so a member can read any column of a row they can see).
+- A Postgres constraint-violation `details` contains the whole failing row;
+  never log, forward or display raw write errors. Wrap them in a code-only
+  error.
 - Error responses don't leak internals, SQL, or whether a trip/user exists
   beyond what the feature requires.
 - No PII or free text in logs, analytics properties, or URLs.
@@ -45,6 +59,27 @@ same PR adds the rule that would have caught it to this file. See
   only.
 - No string-built queries; no unsanitized input in email templates, redirects,
   file paths or shell commands.
+- User free text in a stored column: charset and length CHECK with a code-point
+  allowlist (not collation-dependent classes); reject control, bidi, zero-width
+  and format characters including U+034F; decide emoji explicitly; test live
+  including NFD; share the class string with the client and keep a drift test.
+- A query parameter that selects UI state must be validated server-side against
+  a fixed set (exact, case-sensitive, single string; arrays and unknown values
+  ignored, never "first element"), passed to client components only as the
+  validated typed value, never echoed, never used as a redirect target, and
+  never copied into the proxy's `next` redirect (the proxy sets `next` to the
+  pathname only).
+- Analytics event names built from a code must go through a helper that
+  returns `undefined` for anything outside the closed set, and the code must
+  come from the bundled config, never from the URL or DOM. `trackEvent` stays
+  name-only.
+- Splitting a client page into server wrapper plus client form: do not pass raw
+  `searchParams` or request data to the client; pass only validated typed
+  props.
+- A page that turns a query parameter into UI state must have a test that sends
+  the real encoded URL (including malformed percent-encoding and repeated keys)
+  and checks the response body, including the framework payload, for the raw
+  value, not only a unit test of the parser.
 
 ## Secrets
 
@@ -59,6 +94,19 @@ same PR adds the rule that would have caught it to this file. See
   column name).
 - Schema and code deploys are not atomic: the change must be safe with old
   code + new schema and new code + old schema, or ship together by design.
+- Function overloads: no defaults on new parameters; give the new signature its
+  own revoke from public/anon and grant to authenticated; keep the old
+  signature; fall back to it only on function-not-found codes (PGRST202,
+  42883), never on constraint errors.
+- CHECK constraints must be exercised on a real Postgres (single-element,
+  empty, boundary and invalid cases) before QA passes; NULL IS DISTINCT FROM
+  NULL is false, so padding comparisons with NULL slots silently reject short
+  arrays. Text-shape tests of the SQL do not catch this.
+
+## Design documents
+
+- Design documents must not specify behaviour an ADR rejected for security
+  reasons. Cross-check before the engineer starts.
 
 ## Dependencies
 

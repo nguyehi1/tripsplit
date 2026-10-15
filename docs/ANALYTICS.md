@@ -17,6 +17,29 @@ All events listed below are custom events tracked by Splitiful. Vercel Analytics
 | `trip_join_start` | User lands on invite link or enters join code | `/join/[code]` page load | Measure invite link click-through rate | `{ event: "trip_join_start" }` |
 | `trip_join_complete` | User successfully added to trip members after auth | `src/app/join/[code]/page.tsx` after `joinTrip()` returns | Measure join-flow conversion; identify auth/membership drop-off | `{ event: "trip_join_complete" }` |
 
+### Starter Lists
+
+Name-only, like every other event: no properties, and never the trip type text, a trip id or an item name. The `trip_type_selected_*` events fire once per stored type right after `trip_create_complete`, and only if the types were really stored.
+
+| Event | Trigger | Route/Component | Why Track | Payload Example |
+|-------|---------|-----------------|-----------|-----------------|
+| `trip_type_selected_camping` | Trip created with Camping picked | `src/app/trip/new/page.tsx` after `createTrip()` returns | Measure how often each trip type is picked | `{ event: "trip_type_selected_camping" }` |
+| `trip_type_selected_airbnb` | Trip created with Airbnb stay picked | `src/app/trip/new/page.tsx` after `createTrip()` returns | Measure how often each trip type is picked | `{ event: "trip_type_selected_airbnb" }` |
+| `trip_type_selected_international` | Trip created with International picked | `src/app/trip/new/page.tsx` after `createTrip()` returns | Measure how often each trip type is picked | `{ event: "trip_type_selected_international" }` |
+| `trip_type_selected_other` | Trip created with Other picked and a trip type saved | `src/app/trip/new/page.tsx` after `createTrip()` returns | Measure how often people need a type we do not offer; carries no text, length or other property | `{ event: "trip_type_selected_other" }` |
+| `suggestion_add_complete` | A Suggested-card "+" add succeeded (including the one completed after email confirmation) | `src/app/trip/[id]/shopping-list-tab.tsx` after `addShoppingListItems()` returns | Measure whether suggestions get used | `{ event: "suggestion_add_complete" }` |
+
+### Home and templates
+
+Fired **on the tap, before navigation, with no account**: the visitor may be signed out and nothing is created, stored or sent to the database. The `home_template_tapped_*` names are a closed set built only from the bundled catalog codes (there is no `home_template_tapped_other`), carry no properties, and are distinct from `trip_type_selected_*`, which means "stored on a created trip". The "New trip" pill on `/trips` and "Create your first trip" on `/` fire nothing.
+
+| Event | Trigger | Route/Component | Why Track | Payload Example |
+|-------|---------|-----------------|-----------|-----------------|
+| `home_template_tapped_camping` | Camping tile tapped on the home shelf | `src/components/template-tile.tsx`, on `/trips` and `/` | See which templates attract taps before a trip exists | `{ event: "home_template_tapped_camping" }` |
+| `home_template_tapped_airbnb` | Airbnb stay tile tapped on the home shelf | `src/components/template-tile.tsx`, on `/trips` and `/` | See which templates attract taps before a trip exists | `{ event: "home_template_tapped_airbnb" }` |
+| `home_template_tapped_international` | International tile tapped on the home shelf | `src/components/template-tile.tsx`, on `/trips` and `/` | See which templates attract taps before a trip exists | `{ event: "home_template_tapped_international" }` |
+| `home_blank_trip_tapped` | "Blank trip" link tapped on the shelf | `src/components/template-tile.tsx` (`BlankTripLink`), on `/trips` and `/` | Compare templated and blank starts | `{ event: "home_blank_trip_tapped" }` |
+
 ### Expense Management
 
 | Event | Trigger | Route/Component | Why Track | Payload Example |
@@ -113,6 +136,7 @@ To measure a conversion funnel (e.g., "how many people who start creating a trip
 - Email addresses
 - User names
 - Trip IDs or expense IDs
+- Trip type text (the short label typed under "Other"), item names, or the number of types picked
 - Expense amounts
 - Any other personally identifiable information (PII)
 
