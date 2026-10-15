@@ -4,25 +4,82 @@ import { centsToDollars, dollarsToCents } from "@/lib/currency";
 import { formatDayDate, todayIso } from "@/lib/dates";
 import { timeAsync } from "@/lib/perf/timing";
 import { computeBalances, simplifyDebts } from "@/lib/settlement";
+import { isTripType } from "@/lib/starter-suggestions";
+import type { TripType } from "@/lib/starter-catalog";
 import type { Database } from "@/lib/supabase/types";
+import { TRIP_LIST_COLUMNS, TRIP_VIEW_COLUMNS } from "./trip-columns";
 
 type Client = SupabaseClient<Database>;
 
+/**
+ * What `createTrip` throws. Carries only a SQLSTATE or PostgREST code, never the original
+ * error's `message`, `details` or `hint`: a CHECK violation's `details` contains the whole failing
+ * row (trip name, location, the typed Other text). Callers show fixed copy and must not log it.
+ */
+export class CreateTripError extends Error {
+  readonly code: string | undefined;
+  constructor(code?: string) {
+    super("create_trip failed");
+    this.name = "CreateTripError";
+    this.code = code;
+  }
+}
+
+/** PostgREST PGRST202 / Postgres 42883: the function (overload) does not exist. */
+function isFunctionNotFound(code: string | undefined) {
+  return code === "PGRST202" || code === "42883";
+}
+
+function errorCode(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code : undefined;
+}
+
 export async function createTrip(
   supabase: Client,
-  input: { name: string; displayName: string; location?: string; startsOn?: string; endsOn?: string },
+  input: {
+    name: string;
+    displayName: string;
+    location?: string;
+    startsOn?: string;
+    endsOn?: string;
+    /** Catalog types in pick order. */
+    types?: TripType[];
+    /** The "Other" text, already normalized and validated by the caller. */
+    otherType?: string;
+  },
 ) {
-  const { data, error } = await supabase.rpc("create_trip", {
+  const base = {
     _name: input.name,
     _display_name: input.displayName,
     _location: input.location ?? null,
     _starts_on: input.startsOn ?? null,
     _ends_on: input.endsOn ?? null,
-  });
-  if (error) throw error;
-  const row = data?.[0];
-  if (!row) throw new Error("create_trip returned no row");
-  return { tripId: row.trip_id, inviteCode: row.invite_code };
+  };
+  const types = input.types ?? [];
+  const otherType = input.otherType ?? null;
+
+  // Nothing picked: the original five-argument call, exactly as before this feature. It works
+  // with or without migration 0022.
+  const wantsTypes = types.length > 0 || otherType !== null;
+  let typesStored = false;
+  let result = wantsTypes
+    ? await supabase.rpc("create_trip", { ...base, _types: types, _other_type: otherType })
+    : await supabase.rpc("create_trip", base);
+  if (wantsTypes) {
+    if (!result.error) {
+      typesStored = true;
+    } else if (isFunctionNotFound(errorCode(result.error))) {
+      // Migration not applied yet (or PostgREST's schema cache not reloaded): still create the
+      // trip, minus the types and the Other text. Never retried on a check violation (23514) or
+      // any other error, so a rejected Other text cannot silently become a trip without it.
+      result = await supabase.rpc("create_trip", base);
+    }
+  }
+  if (result.error) throw new CreateTripError(errorCode(result.error));
+  const row = result.data?.[0];
+  if (!row) throw new CreateTripError();
+  return { tripId: row.trip_id, inviteCode: row.invite_code, typesStored };
 }
 
 export async function getTripByInviteCode(supabase: Client, code: string) {
@@ -204,7 +261,12 @@ export async function updateExpense(
   return data;
 }
 
-type TripRow = Database["public"]["Tables"]["trips"]["Row"];
+type TripRow = Pick<
+  Database["public"]["Tables"]["trips"]["Row"],
+  "id" | "name" | "location" | "starts_on" | "ends_on" | "created_by" | "completed_at" | "created_at"
+> &
+  // Optional so older fixtures and callers without the column stay valid; read with `?? []`.
+  Partial<Pick<Database["public"]["Tables"]["trips"]["Row"], "types">>;
 
 /**
  * Fetches every trip the current user belongs to (RLS already scopes `trips` and `trip_members`
@@ -224,7 +286,7 @@ export async function getMyTrips(supabase: Client, currentUserId: string, prefet
     tripRows = prefetchedTripRows;
   } else {
     const tripsResult = await timeAsync("my-trips", "trips", () =>
-      supabase.from("trips").select("*").order("created_at", { ascending: false }),
+      supabase.from("trips").select(TRIP_LIST_COLUMNS).order("created_at", { ascending: false }),
     );
     if (tripsResult.error) throw tripsResult.error;
     tripRows = tripsResult.data ?? [];
@@ -289,6 +351,8 @@ export async function getMyTrips(supabase: Client, currentUserId: string, prefet
       endsOn: tripRow.ends_on,
       isCompleted: tripRow.completed_at !== null,
       createdAt: tripRow.created_at,
+      // Catalog types in pick order, for the /trips row icon. `?? []` keeps old fixtures valid.
+      types: (tripRow.types ?? []).filter(isTripType),
       members,
       totalCents,
       yourNetCents: yourBalance?.netCents ?? 0,
@@ -304,7 +368,7 @@ export type MyTrip = Awaited<ReturnType<typeof getMyTrips>>[number];
  */
 export async function getTripView(supabase: Client, tripId: string, currentUserId: string) {
   const [tripResult, membersResult, expensesResult] = await Promise.all([
-    timeAsync("trip-view", "trips", () => supabase.from("trips").select("*").eq("id", tripId).single()),
+    timeAsync("trip-view", "trips", () => supabase.from("trips").select(TRIP_VIEW_COLUMNS).eq("id", tripId).single()),
     timeAsync("trip-view", "trip_members", () =>
       supabase.from("trip_members").select("*").eq("trip_id", tripId).order("joined_at", { ascending: true }),
     ),
@@ -433,6 +497,8 @@ export async function getTripView(supabase: Client, tripId: string, currentUserI
       endsOn: tripRow.ends_on,
       inviteCode: tripRow.invite_code,
       isCompleted: tripRow.completed_at !== null,
+      // Catalog types in pick order. `?? []` keeps old fixtures and pre-0.8.0 rows valid.
+      types: (tripRow.types ?? []).filter(isTripType),
     },
     members,
     expenses,

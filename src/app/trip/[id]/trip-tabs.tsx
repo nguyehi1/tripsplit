@@ -22,6 +22,7 @@ export function TripTabs({
   you,
   isCompleted,
   shoppingList: initialShoppingList,
+  tripTypes = [],
 }: {
   tripId: string;
   members: TripView["members"];
@@ -32,6 +33,8 @@ export function TripTabs({
    *  client state (not just a read-only prop) so claim/unclaim/delete mutations on the List tab
    *  can refresh in place without needing a full page reload. */
   shoppingList: ShoppingListView | null;
+  /** The trip's catalog types in pick order, for the Suggested card on the List tab. */
+  tripTypes?: readonly string[];
 }) {
   const { tab, setTab } = useTripTab();
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
@@ -200,6 +203,7 @@ export function TripTabs({
           isCompleted={isCompleted}
           shoppingList={shoppingList}
           onRefresh={refreshShoppingList}
+          tripTypes={tripTypes}
         />
       )}
     </>

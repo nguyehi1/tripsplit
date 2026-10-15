@@ -15,7 +15,15 @@ import { InlineVerifyWidget, TripVerificationProvider } from "./verify-inline";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: refreshMock }) }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser: vi.fn() } }) }));
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({
+    auth: {
+      getUser: vi.fn(),
+      // TripVerificationProvider subscribes to auth changes (pending Suggested-card add).
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    },
+  }),
+}));
 const setMyDisplayNameMock = vi.fn();
 vi.mock("@/lib/data/trips", () => ({
   getMyDisplayName: vi.fn(),

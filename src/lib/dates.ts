@@ -26,6 +26,27 @@ export function formatDayDate(iso: string) {
   return `${weekday}, ${date}`;
 }
 
+/**
+ * The compact range on a /trips row (design.md 16.1): "Feb 14–17" when both ends share a month
+ * (en dash, no spaces), "Dec 28 – Jan 2" when they differ, one date alone otherwise, and null
+ * when the trip has no dates. `formatDateRange` below is unchanged for every other screen.
+ */
+export function formatDateRangeCompact(startsOn: string | null, endsOn: string | null) {
+  if (!startsOn && !endsOn) return null;
+  if (startsOn && endsOn) {
+    const startLabel = formatDate(startsOn);
+    if (startsOn === endsOn) return startLabel;
+    const start = new Date(`${startsOn}T00:00:00Z`);
+    const end = new Date(`${endsOn}T00:00:00Z`);
+    const sameMonth =
+      start.getUTCMonth() === end.getUTCMonth() && start.getUTCFullYear() === end.getUTCFullYear();
+    return sameMonth
+      ? `${startLabel}–${end.toLocaleDateString("en-US", { day: "numeric", timeZone: "UTC" })}`
+      : `${startLabel} – ${formatDate(endsOn)}`;
+  }
+  return formatDate(startsOn ?? endsOn!);
+}
+
 export function formatDateRange(startsOn: string | null, endsOn: string | null) {
   if (!startsOn && !endsOn) return null;
   if (startsOn && endsOn) {

@@ -414,6 +414,7 @@ export async function renderTripDashboard(
               you={you}
               isCompleted={trip.isCompleted}
               shoppingList={shoppingList}
+              tripTypes={trip.types}
             />
           </ScreenContent>
           <BottomBar>

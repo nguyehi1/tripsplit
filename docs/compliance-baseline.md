@@ -26,6 +26,20 @@ it to this file. See `.claude/skills/feature/SKILL.md`, "Feedback loop".
   `rpc_rate_limits`.
 - Special-category data (health, religion, precise location, etc.) is a stop:
   raise it to the user before designing.
+- Any new column that accepts user-controlled values needs database-side
+  validation (allowed set, length, charset), since anonymous accounts can write
+  to it directly.
+- User-typed free text is treated as potentially personal data. It needs a
+  stated narrow purpose, a retention rule, an export and erasure entry in the
+  runbook (including the retained-trip case, where it is cleared), and a
+  privacy-page line, in the same PR.
+- Fields collected for a future use, with no reader in the current release,
+  need a concrete stated purpose before they are stored.
+- A URL query parameter is allowed only if it carries a closed-set code, is
+  validated on the server, is ignored when invalid, is never echoed, and is not
+  forwarded into later URLs, logs or events.
+- Trip or entity previews served to non-members (invite and join pages) must
+  not return user-typed free text beyond fields already disclosed there.
 
 ## Processors and analytics
 
@@ -35,6 +49,21 @@ it to this file. See `.claude/skills/feature/SKILL.md`, "Feedback loop".
   architecture is approved.
 - Analytics events carry the event name only, never PII or free text. Every
   event is listed in `docs/ANALYTICS.md`.
+- Events that encode a user choice in the event name are allowed only for a
+  closed, code-defined set; never user-entered text, its length or its presence
+  as a property.
+- Events on public or pre-sign-in pages follow the same rules as in-app
+  events: name only, closed set, no properties, no device storage written, and
+  no network call or sign-in triggered by the tap. Adding any cookie,
+  local/session storage or non-cookieless analytics to a public page needs a
+  consent-basis decision first.
+- A check that a click or tap "makes no network request" means no
+  application-initiated request (fetch, data-layer or Supabase call, sign-in,
+  storage write) from the handler. Framework link prefetch and the navigation
+  itself are not counted, and are not a reason to skip the check.
+- Live or manual test suites that create accounts in a real environment use
+  non-routable addresses (`@example.invalid`) and no real personal data, delete
+  their fixtures, and prefer a non-production project.
 
 ## Outbound communications (anti-spam)
 
@@ -68,7 +97,19 @@ push, share sheets, prefilled `mailto:`/`sms:` links, notifications.
   Each such claim is tied to a code fact; if code could break the claim
   (logging, analytics properties, a server call), name the test that guards it.
 - Any change to data handling updates `/privacy` and `/terms` and bumps
-  `LEGAL_LAST_UPDATED` in the same PR.
+  `LEGAL_LAST_UPDATED` in the same PR (`src/lib/legal.test.ts` fails on a known
+  stale date; move its list forward when you bump).
+- Helper text may state facts and instructions (do not enter personal details),
+  not privacy or security claims or purposes the privacy page does not state.
+- A page edited for a new feature is checked for older claims on the same
+  screen (stat chips, taglines, badges). The review notes any that are not true
+  in the sense a visitor will read them; it does not need to block the feature
+  if the claim predates it.
+- A new catalog type with a sensitive subject (health, religion, sexuality,
+  finances of a named person) needs its own compliance review before it ships.
+- Data members can read through the API but the UI never shows is still visible
+  to members. Describe it as visible to trip members, or say nothing, never as
+  private to its author.
 
 ## Open positions awaiting counsel
 

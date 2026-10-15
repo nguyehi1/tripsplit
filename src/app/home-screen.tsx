@@ -4,6 +4,7 @@ import { useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightIcon } from "@/components/icons";
 import { LegalLinks } from "@/components/legal-page";
+import { TemplateShelf } from "@/components/template-shelf";
 import { Button, Field, ScreenContent } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/auth-errors";
 import { clearRememberedEmail, getRememberedEmail, setRememberedEmail } from "@/lib/remembered-email";
@@ -176,6 +177,9 @@ function WelcomeContent() {
         Add what you spend. Miso works out who owes who — no account needed to start.
       </p>
       <div className="h-7" />
+
+      <TemplateShelf />
+      <div className="h-[26px]" />
 
       <Button variant="accent" className="text-[16px]" onClick={() => router.push("/trip/new")}>
         Create your first trip

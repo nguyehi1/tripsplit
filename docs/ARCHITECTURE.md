@@ -31,7 +31,15 @@ trigger — see [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-membe
 for why RLS's `using`/`with check` split can't express the needed
 old-row/new-row correlation on its own, and why a trigger (not a second RLS
 policy or an app-level cleanup job) was the right, narrowly-scoped escape
-hatch — not a new default for future features to reach for casually.
+hatch — not a new default for future features to reach for casually. **As of
+the starter-list feature**, `create_trip` has a second, seven-argument
+overload (no parameter defaults) that also stores the trip's types and an
+optional typed "Other" trip type; the five-argument function is untouched.
+Validation of those values lives in CHECK constraints on the `trips` columns,
+not only in the RPC, because the direct-INSERT policy on `trips` is reachable
+by every session (anonymous included). See
+[ADR 0014](adr/0014-trip-types-column-checks-and-create-trip-overload.md)
+and `docs/features/starter-list-exploration/architecture.md`.
 
 **Read/render pattern**: data-fetch-then-render pages default to **Server
 Components** that fetch via `src/lib/supabase/server.ts`'s `createClient()`
@@ -191,7 +199,17 @@ additive to the existing `Trigger` union); this feature deliberately does
 **not** add a `pending-action.ts`-style resume mechanism for these
 one-tap mutations (accepted, documented tradeoff — see
 `docs/features/shopping-list/architecture.md`), unlike the multi-field
-expense draft that mechanism exists for.
+expense draft that mechanism exists for. **As of the starter-list feature**,
+one narrow exception is made for the Suggested card's "+" on the List tab:
+an unverified organizer can see that tab (the shopping-list read policy
+admits the owner on any session), and tapping "+" does not redirect — it
+parks that single item name in an in-memory slot, scrolls to and focuses the
+inline verification widget (`requestVerification` on
+`TripVerificationContext`), and adds exactly that item automatically once
+`verified` flips true. Memory only, never URL or storage, cleared on use,
+unmount and sign-out, re-authorized by the unchanged RLS insert policy; see
+[ADR 0015](adr/0015-in-memory-single-item-replay-after-inline-verification.md).
+`pending-action.ts` itself is still not extended.
 
 **Locking**: a trip can be marked completed (`trips.completed_at`, set by the
 `complete_trip` RPC, organizer-only, one-way — no "reopen" RPC exists). Once
@@ -238,7 +256,12 @@ mutations (like `trip_create_complete`). See
 for the full event list, placement, and privacy safeguards. `@vercel/speed-insights`
 is also installed and mounted alongside `<Analytics />` in the root layout,
 giving real-user, per-route Web Vitals (TTFB/LCP/etc.) in the Vercel
-dashboard — page-level only, no per-call/per-query breakdown.
+dashboard — page-level only, no per-call/per-query breakdown. **As of the
+starter-list feature**, one rule is made explicit: an event name may encode a
+user choice only when it comes from a closed, code-defined set (the starter
+catalog's type codes, plus fixed names such as `trip_type_selected_other`);
+user-typed text, its length, or its presence is never an event name or
+property.
 
 **Performance instrumentation (interim)**: as of the performance-scaling
 feature, `src/lib/perf/timing.ts` provides `timeAsync` (server-side) and
@@ -268,6 +291,12 @@ succeeding until the new frontend is live. The *reverse* direction —
 loosening an existing `not null` column to nullable, or adding a new nullable
 column with an always-correct default — needs no such phasing; see
 `supabase/migrations/0008_add_placeholder_members.sql` for that simpler case.
+**As of the starter-list feature** (migration 0022), the same reasoning has a
+second half worth stating: *new app code against the old schema* is the
+dangerous direction when the new code selects a new column (`trips.types`),
+because a missing column fails the whole read. Release rule: apply the
+migration (preferably as its own earlier merge), confirm it, then deploy the
+app. Rollback is "redeploy the previous build"; the columns are left in place.
 
 ## Data model
 
@@ -276,7 +305,24 @@ edited after merge). See migration files for the authoritative current
 schema; summarized here as it stabilizes:
 
 - `trips` — one row per trip; `completed_at` (nullable) is the lock; unique
-  `invite_code` is how joining works.
+  `invite_code` is how joining works. As of the starter-list feature
+  (migration 0022), two more columns:
+  `types text[] not null default '{}'` (the trip's catalog types in pick
+  order, a closed set of `camping`/`airbnb`/`international`, at most 3, no
+  duplicates) and `other_type text null` (a short typed trip type, 1-30
+  characters). Both have **column CHECK constraints** (`trips_types_check`,
+  `trips_other_type_check`), not only RPC validation, because the direct
+  INSERT policy lets any session, anonymous included, write the table.
+  "Other" exists only as `other_type` being non-null; there is no `other`
+  code in `types`. The `other_type` check is a locale-independent
+  code-point allowlist (BMP only, no emoji, no control, invisible or markup
+  characters). Neither column has an UPDATE path (no policy; table-level
+  update revoked), so both are fixed after create. `other_type` is readable
+  by any trip member through the API (RLS is row-level), so no public RPC
+  and no `select("*")` may return it; the app never selects it. It is free
+  text and treated as potentially personal data (runbook covers export and
+  the clear-on-erasure case). See ADR 0014 and
+  `docs/features/starter-list-exploration/architecture.md`.
 - `trip_members` — join table (`trip_id`, `user_id`, `display_name`); no
   direct `insert` RLS policy — the only way a row is created is through the
   `create_trip`/`join_trip` RPCs (`security definer`), so a client can't
@@ -389,7 +435,11 @@ schema; summarized here as it stabilizes:
   for why RLS alone can't express this and `docs/features/shopping-list/architecture.md`
   for the full design (including the atomic
   `add_expense_and_log_shopping_items` RPC that links selected items to a
-  new expense in the same transaction it's created in).
+  new expense in the same transaction it's created in). As of the
+  starter-list feature, the Suggested card's "+" adds an item through this
+  same plain insert (name only); suggestions themselves are never stored —
+  they are derived client-side from `trips.types` and a bundled catalog, so
+  a deleted suggested item simply reappears as a suggestion.
 - One display name per account (migration 0020,
   `supabase/migrations/0020_one_display_name_per_account.sql`) — not a new
   table; it changes how `trip_members.display_name` is set. A `before insert`
@@ -478,6 +528,16 @@ See `docs/features/shopping-list/architecture.md` section 1b for the full
 policy text and reasoning, and [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)
 for the related member-removal trigger.
 
+**RLS on `trips`**: `select` is `is_trip_member(id) or created_by = auth.uid()`
+and `insert` is `created_by = auth.uid()` (migration 0001); there is no
+`update` or `delete` policy. Because `select` is row-level, any member
+(including an anonymous joiner) can read every column of a trip row they can
+see, which is why a column such as `other_type` must be kept out of every
+public RPC and every `select("*")`. As of the starter-list feature, table-level
+`update` on `trips` is also revoked from `anon` and `authenticated`
+(defense in depth; completion goes through the `security definer`
+`complete_trip`).
+
 ## Known integration points / shared code
 
 Track anything with more than one consumer here, so future features check
@@ -526,7 +586,54 @@ this before adding a parallel implementation.
   resolving to any current member, the same way `getTripView` now does.
   **As of the shopping-list feature, this module is deliberately not where
   the new entity's data access lives** — see the new
-  `src/lib/data/shopping-list.ts` entry below for why.
+  `src/lib/data/shopping-list.ts` entry below for why. **As of the
+  starter-list feature**, `createTrip` takes optional `types`/`otherType` and
+  returns `typesStored`: with neither it calls the unchanged five-argument
+  RPC; otherwise the new seven-argument overload, falling back to the
+  five-argument one **only** on `PGRST202`/`42883` (function not found),
+  never on a check violation, and it rethrows a code-only error so a CHECK
+  failure's row dump (name, location, Other text) can never reach UI,
+  logs or analytics. `getMyTrips`/`getTripView` no longer use `select("*")`
+  on `trips`: they use the explicit column lists in
+  `src/lib/data/trip-columns.ts` (kept out of this module so tests that mock
+  `@/lib/data/trips` do not strip them), and `getTripView` returns
+  `trip.types`. `other_type` is never selected. Any new read of `trips` must
+  use an explicit column list.
+- `src/lib/starter-catalog.ts`, `src/lib/starter-suggestions.ts`,
+  `src/lib/validation/trip-type.ts` (new, starter-list feature) — the
+  catalog is the **one** editable config file (type codes, labels, phrases,
+  item names; header carries the special-category editing note) and
+  everything else (tiles, card, sentence, analytics event names, the
+  `TripType` union) reads from it; `starter-suggestions.ts` is the pure
+  derive/merge/dedupe logic; `trip-type.ts` normalizes and validates the
+  typed Other text and exports the character class that is kept identical to
+  the one inside migration 0022's CHECK (a test enforces the match). Adding a
+  catalog type also needs a migration re-adding `trips_types_check` and a row
+  in `docs/ANALYTICS.md`. There is no `other` code anywhere.
+- **Revision 3 (starter-list feature, home shelf)**: `src/components/template-shelf.tsx`
+  (server-renderable, no state or data imports) renders one link tile per
+  catalog type plus "Blank trip" on `/trips` and in `WelcomeContent` on `/`; its
+  two `"use client"` leaves in `template-tile.tsx` exist only to fire the
+  closed-set `home_template_tapped_<code>` / `home_blank_trip_tapped` events
+  (`homeTemplateTappedEvent` in `starter-suggestions.ts` returns `undefined`
+  outside the catalog; name only, on the tap, no account). `/trip/new` is now a
+  thin async server wrapper (`page.tsx`) that validates `?type=` with
+  `parseTypeParam` and passes only the typed result to the client
+  `new-trip-form.tsx` (`initialType`), so the tile is checked on first paint; the
+  raw query value is never echoed, redirected on or forwarded, and the proxy is
+  unchanged. `ui.tsx` gains a flat `fab` button variant and `FabBar` (the canvas
+  "New trip" pill on `/trips`); `BottomBar` and the capsule variants are
+  untouched. Icons for the picker and the shelf share `trip-type-icons.ts`; the
+  `--color-accent-ink` token backs "Blank trip", the checked tile icon and the
+  "+" glyph. No database, API or migration change. See
+  `docs/features/starter-list-exploration/architecture.md` section 17.
+- **Revision 4 (starter-list feature, layout fixes)**: `Screen` in `ui.tsx` now
+  clips with `overflow: clip` instead of `hidden`; `hidden` creates a scroll
+  container, which silently disabled `position: sticky` on the top bar and on
+  `BottomBar`/`FabBar` (a pre-existing bug). Do not change it back. `FabBar` is
+  fixed to the viewport bottom. Home trip rows are compact (68px, no "Trip"
+  pill, no avatar stack). The Suggested card renders last in the List tab, with
+  its notice floating above the bottom bar. No database or API change.
 - `src/lib/data/shopping-list.ts` (new, shopping-list feature) — the data-
   access module for `shopping_list_items`, split out from `trips.ts` rather
   than added to it (same "distinct bounded entity gets its own file"
@@ -539,7 +646,9 @@ this before adding a parallel implementation.
   `deleteShoppingListItem` (plain RLS-scoped `.delete()`), and thin wrappers
   around the three RPCs (`claimShoppingListItem`, `unclaimShoppingListItem`,
   `addExpenseWithShoppingItems`). See
-  `docs/features/shopping-list/architecture.md` for the full design.
+  `docs/features/shopping-list/architecture.md` for the full design. The
+  starter-list Suggested card's "+" reuses `addShoppingListItems` with a
+  single description.
 - Amount/description validation for an expense (positive amount, non-empty
   description) lives in `src/lib/validation/expense.ts`
   (`isValidExpenseInput`), shared by `src/app/trip/[id]/add-expense/page.tsx`
@@ -589,7 +698,9 @@ this before adding a parallel implementation.
   across an OTP redirect is an accepted, documented UX papercut rather than
   a reason to add a second pending-action shape; see
   `docs/features/shopping-list/architecture.md`. Revisit only if this proves
-  to be real friction in practice.
+  to be real friction in practice. **As of the starter-list feature, still
+  not extended**: the Suggested card's first-"+" replay uses a one-item
+  in-memory slot and the inline verification widget instead (ADR 0015).
 - `src/lib/mailto-invite.ts` (email-invites feature) — pure functions that
   build the "Invite by email" `mailto:` (subject/body copy, control-character
   stripping, `isPlausibleEmail`). The invitee's address exists only in the
@@ -700,7 +811,9 @@ this before adding a parallel implementation.
   resolves) alongside `expenses`/`members`, fails soft to an empty list on
   error (mirroring `getTripSummary`'s own try/catch-to-null handling), and
   extends its `tab` query-param branch to a third `"list"` value — see
-  `docs/features/shopping-list/architecture.md`.
+  `docs/features/shopping-list/architecture.md`. **As of the starter-list
+  feature**, it also passes `trip.types` down to the List tab, and a trip
+  created with a catalog type lands on `?tab=list`.
 - `src/lib/rate-limit.ts` — the app's one rate-limiting module, added to
   close docs/security-review-2026-09-17.md's blocking finding (invite codes
   are low-entropy and every consuming RPC was unthrottled). Wraps
@@ -736,6 +849,11 @@ this before adding a parallel implementation.
   section for why this was considered and explicitly rejected (it would
   change when the Postgres-side bucket fills, since a request the app-level
   limiter would have rejected would still reach and count against it).
+  **As of the starter-list feature**, trip creation itself (direct INSERT on
+  `trips`, and both `create_trip` overloads) is knowingly unthrottled; the
+  new CHECKs bound row size only. The real fix (revoke direct INSERT on
+  `trips` and throttle both overloads together) is recorded as backlog, not
+  done.
 - `GET /api/trip-invite/[code]` — as of the performance-scaling feature,
   this route's response also carries the trip's public `summary`
   (`get_trip_summary`, fetched server-side in parallel with the existing
@@ -763,3 +881,5 @@ List notable ones here as they're added:
 - [0011](adr/0011-forward-verified-user-id-header-for-trips-page.md) — Proposed (contingent, not yet executed): forward `proxy.ts`'s verified user id to `/trips` via a trusted request header to eliminate the page's duplicate `getUser()` call, over keeping both calls or switching to `getSession()`/`getClaims()`
 - [0012](adr/0012-post-removal-detection-and-ghost-payer-rendering.md) — Detecting "you were removed from this trip" on a later visit by reconstructing it from existing `expenses.paid_by` rows (no new column/table), and synthesizing an in-memory "ghost payer" for a removed member's historical expenses in `getTripView`, over soft-delete, a new tombstone table, or a `localStorage` marker
 - [0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md) — A `before delete` trigger on `trip_members` (the app's first trigger) to release an in-flight shopping-list claim and clear `added_by`/`claimed_by` when a member is removed, over a declarative `on delete set null`/`restrict`, a relaxed shape-check constraint, read-time reconstruction (ADR 0012's pattern), or an app-level cleanup job
+- [0014](adr/0014-trip-types-column-checks-and-create-trip-overload.md) — Trip types and the typed "Other" trip type stored as two `trips` columns validated by column CHECKs (inline, locale-independent code-point allowlist, no validator function), a seven-argument `create_trip` overload with no parameter defaults and a not-found-only client fallback, and client-side derived suggestions, over RPC-only validation, defaults on the existing function, a second-step update, an `other` code in `types`, or a separate custom-types table
+- [0015](adr/0015-in-memory-single-item-replay-after-inline-verification.md) — A one-item in-memory pending slot (held in TripVerificationProvider, bound to the tapping user, 10-minute TTL) plus the inline verification widget to add the first tapped suggestion automatically after an unverified organizer verifies, over `pending-action.ts`/sessionStorage with a `/check-email` redirect, loosening RLS for the organizer, or hiding the card until verification

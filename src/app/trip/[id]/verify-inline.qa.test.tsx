@@ -37,6 +37,8 @@ vi.mock("@/lib/supabase/client", () => ({
       updateUser: updateUserMock,
       verifyOtp: verifyOtpMock,
       signInAnonymously: signInAnonymouslyMock,
+      // TripVerificationProvider subscribes to auth changes (pending Suggested-card add).
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
     },
   }),
 }));

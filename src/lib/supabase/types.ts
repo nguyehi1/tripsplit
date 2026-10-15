@@ -18,6 +18,10 @@ export type Database = {
           invite_code: string;
           completed_at: string | null;
           created_at: string;
+          /** Catalog trip types in pick order (migration 0022); '{}' for older trips. */
+          types: string[];
+          /** The typed "Other" trip type (migration 0022). Write-only from the app: in no select list. */
+          other_type: string | null;
         };
         Insert: Partial<Database["public"]["Tables"]["trips"]["Row"]> & { name: string; created_by: string };
         Update: Partial<Database["public"]["Tables"]["trips"]["Row"]>;
@@ -108,13 +112,25 @@ export type Database = {
         }[];
       };
       create_trip: {
-        Args: {
-          _name: string;
-          _display_name: string;
-          _location?: string | null;
-          _starts_on?: string | null;
-          _ends_on?: string | null;
-        };
+        // Two overloads, as `supabase gen types` emits them. The seven-argument form (migration
+        // 0022) has no defaults on purpose, so a five-argument call can only match the old one.
+        Args:
+          | {
+              _name: string;
+              _display_name: string;
+              _location?: string | null;
+              _starts_on?: string | null;
+              _ends_on?: string | null;
+            }
+          | {
+              _name: string;
+              _display_name: string;
+              _location: string | null;
+              _starts_on: string | null;
+              _ends_on: string | null;
+              _types: string[];
+              _other_type: string | null;
+            };
         Returns: { trip_id: string; invite_code: string }[];
       };
       join_trip: {

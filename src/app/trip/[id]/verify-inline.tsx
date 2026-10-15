@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowsLeftRightIcon, CheckIcon, PeopleIcon } from "@/components/icons";
 import { InlineOtpPanel } from "@/components/inline-otp-panel";
@@ -24,14 +24,40 @@ import { useOtpFlow } from "@/lib/use-otp-flow";
  * its own prop-drilled copy.
  */
 
+/**
+ * The one Suggested-card "+" tap waiting for the organizer to finish verifying (ADR 0015). Exactly
+ * these three fields: never the trip id, a member id, an invite code or the Other text.
+ */
+type PendingItem = { name: string; tappedAt: number; userId: string };
+
+/** A pending add older than this is dropped, never replayed. */
+const PENDING_ITEM_TTL_MS = 10 * 60 * 1000;
+
 type TripVerificationContextValue = {
   verified: boolean;
   markVerified: () => void;
   /** Verified, but the organizer never picked a name (closed the tab mid-flow) — migration 0020. */
   initialNeedsName: boolean;
+  /*
+   * The pending Suggested-card add (starter lists). In memory only: never a URL, storage or log.
+   * All optional so a test that mocks `useTripVerification` with just `verified`/`markVerified`
+   * keeps working; callers use `x?.()` and treat `pendingItem` as possibly undefined.
+   */
+  /** The waiting item's catalog name (for the widget headline and the waiting row), if any. */
+  pendingItem?: string;
+  /** Records the tap (name, time, and the current session's user id); replaces any waiting item. */
+  setPendingItem?: (name: string) => void;
+  cancelPendingItem?: () => void;
+  /** Reads and clears the slot in one step; undefined if empty, cancelled or expired. */
+  takePendingItem?: () => PendingItem | undefined;
+  /** Scrolls the inline verification widget into view and focuses its first input. */
+  requestVerification?: () => void;
 };
 
 const TripVerificationContext = createContext<TripVerificationContextValue | null>(null);
+// Lets `InlineVerifyWidget` register its element for `requestVerification` without putting a ref
+// on the public context value.
+const AnchorContext = createContext<{ current: HTMLDivElement | null } | null>(null);
 
 /**
  * Exported (shopping-list) so a descendant client component that isn't itself one of the three
@@ -59,6 +85,78 @@ export function TripVerificationProvider({
   const router = useRouter();
   const [verified, setVerified] = useState(initialIsVerified);
 
+  // The pending slot. `slotRef` is the source of truth for the synchronous read-and-clear in
+  // `takePendingItem` (so it runs once even under StrictMode's double effects); `pendingName`
+  // mirrors just the name into state so the widget headline and the waiting row re-render.
+  const slotRef = useRef<PendingItem | null>(null);
+  // Identifies the latest tap, so a stale async session lookup cannot resurrect a cancelled slot.
+  const pendingTokenRef = useRef<object | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingName, setPendingName] = useState<string | undefined>(undefined);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+
+  function clearSlot() {
+    slotRef.current = null;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setPendingName(undefined);
+  }
+
+  function setPendingItem(name: string) {
+    // Replaces any existing slot. The user id comes from the local session (no network), and a
+    // cancel or a second tap that lands while this resolves wins over this stale write.
+    clearSlot();
+    const token = {} as object;
+    pendingTokenRef.current = token;
+    createClient()
+      .auth.getSession()
+      .then(({ data }) => {
+        const userId = data.session?.user.id;
+        if (!userId || pendingTokenRef.current !== token) return;
+        slotRef.current = { name, tappedAt: Date.now(), userId };
+        setPendingName(name);
+        // TTL: the timer clears the state at expiry so nothing keeps promising an add that will
+        // not happen; `takePendingItem` also checks the age on read.
+        timerRef.current = setTimeout(clearSlot, PENDING_ITEM_TTL_MS);
+      })
+      .catch(() => {});
+  }
+
+  function cancelPendingItem() {
+    pendingTokenRef.current = null;
+    clearSlot();
+  }
+
+  function takePendingItem(): PendingItem | undefined {
+    const slot = slotRef.current;
+    pendingTokenRef.current = null;
+    clearSlot();
+    if (!slot || Date.now() - slot.tappedAt > PENDING_ITEM_TTL_MS) return undefined;
+    return slot;
+  }
+
+  function requestVerification() {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    anchor.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    anchor.querySelector<HTMLInputElement>("input")?.focus();
+  }
+
+  // Sign-out ends any pending add. (Signing in to a different existing account does not emit
+  // SIGNED_OUT; the replay's user-id check covers that.)
+  useEffect(() => {
+    const { data } = createClient().auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        pendingTokenRef.current = null;
+        clearSlot();
+      }
+    });
+    return () => {
+      data.subscription.unsubscribe();
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
   function markVerified() {
     // Flip local state immediately so the buttons reappear with no perceptible delay (the RLS
     // predicates are already satisfied the instant verifyOtp resolves — this isn't a client
@@ -70,8 +168,19 @@ export function TripVerificationProvider({
   }
 
   return (
-    <TripVerificationContext.Provider value={{ verified, markVerified, initialNeedsName }}>
-      {children}
+    <TripVerificationContext.Provider
+      value={{
+        verified,
+        markVerified,
+        initialNeedsName,
+        pendingItem: pendingName,
+        setPendingItem,
+        cancelPendingItem,
+        takePendingItem,
+        requestVerification,
+      }}
+    >
+      <AnchorContext.Provider value={anchorRef}>{children}</AnchorContext.Provider>
     </TripVerificationContext.Provider>
   );
 }
@@ -119,7 +228,8 @@ const CTA_BACKGROUND = "var(--color-accent-soft)";
  * state, then unmounts itself (via `markVerified`) so the icons/BottomBar reappear.
  */
 export function InlineVerifyWidget() {
-  const { verified, markVerified, initialNeedsName } = useTripVerification();
+  const { verified, markVerified, initialNeedsName, pendingItem, cancelPendingItem } = useTripVerification();
+  const anchorRef = useContext(AnchorContext);
   const router = useRouter();
   const otp = useOtpFlow();
   const [justVerified, setJustVerified] = useState(false);
@@ -205,17 +315,29 @@ export function InlineVerifyWidget() {
   return (
     <>
       <div className="h-3.5" />
-      <div className="rounded-[20px] p-4" style={{ background: CTA_BACKGROUND }}>
+      <div ref={anchorRef} className="rounded-[20px] p-4" style={{ background: CTA_BACKGROUND }}>
         <InlineOtpPanel
           otp={otp}
           emailInputId="verify-email"
           emailIntro={
             <div className="text-[15px] font-semibold leading-[1.35]">
-              Confirm your email to start adding expenses or inviting others.
+              {/* The name is catalog text from the Suggested card, never the Other text. */}
+              {pendingItem
+                ? `Confirm your email to add '${pendingItem}' to the list.`
+                : "Confirm your email to start adding expenses or inviting others."}
             </div>
           }
           onConfirm={handleConfirm}
         />
+        {pendingItem ? (
+          <button
+            type="button"
+            onClick={() => cancelPendingItem?.()}
+            className="mt-1 flex h-11 w-full cursor-pointer items-center justify-center text-[13px] font-medium text-ink/60"
+          >
+            Cancel adding &apos;{pendingItem}&apos;
+          </button>
+        ) : null}
       </div>
     </>
   );
