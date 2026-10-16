@@ -13,7 +13,7 @@ build anything.
 
 Work through these steps:
 
-1. **Orient**: read [docs/v2-vision.md](../../docs/v2-vision.md) — the
+1. **Orient**: read [Product principles](../../docs/ROADMAP.md#product-principles-and-scope) — the
    product thesis to weigh every feature against — and, if it exists yet,
    the feature's `docs/features/<slug>/requirements.md` (written by the
    `pm` agent); at the planning stage there may be no requirements.md yet,

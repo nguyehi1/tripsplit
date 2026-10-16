@@ -6,7 +6,7 @@ screens (Welcome, Create a trip, The trip, Add an expense), a new "warm paper"
 visual theme, the first appearance of the Miso mascot, and add-expense's
 conversion from a page to an overlay sheet. Reviewed against
 `docs/ARCHITECTURE.md`'s data model to assess the delta only, and against the
-existing whole-app findings in `docs/compliance-review-2026-09-17.md` to
+existing whole-app findings in `docs/reviews/security-compliance/project/compliance-review-2026-09-17.md` to
 confirm this feature doesn't newly touch or worsen them.
 
 I'm flagging exposure, not redesigning the feature. This is not legal advice
@@ -43,7 +43,7 @@ unaffected** (AC10/AC16, confirmed in architecture.md's "Data model impact"
 section: no schema/RLS/API changes; add-expense's validation/submit logic is
 relocated, not rewritten). The pre-existing whole-app gaps (no privacy
 policy/ToS, no deletion/export flow, no retention policy for abandoned
-anonymous accounts — `docs/compliance-review-2026-09-17.md` §1-3) are
+anonymous accounts — `docs/reviews/security-compliance/project/compliance-review-2026-09-17.md` §1-3) are
 correctly out of scope per this feature's non-goals and are neither resolved
 nor worsened by it.
 
@@ -362,7 +362,7 @@ existing hide-until-verified organizer gating and the three-tier
 read-access model (`docs/ARCHITECTURE.md`'s auth-model section) are
 explicitly preserved as-is (AC6, AC16) — pre-verification visibility of
 trip/expense data is unchanged by the sheet conversion or the restyle. The
-whole-app gaps already tracked in `docs/compliance-review-2026-09-17.md`
+whole-app gaps already tracked in `docs/reviews/security-compliance/project/compliance-review-2026-09-17.md`
 (no privacy policy, no deletion/export path, no retention policy for
 abandoned anonymous accounts) are unaffected — this feature adds no new
 personal data for those gaps to cover, so it doesn't widen them, and
@@ -428,7 +428,7 @@ on non-functional/regression grounds, which is the right place for it.
 - The Miso-attributed welcome headline copy does not create a new
   consumer-facing claim or liability exposure beyond the prior copy (§3).
 - No new personal data, processor, or retention gap introduced; existing
-  whole-app compliance gaps from `docs/compliance-review-2026-09-17.md` are
+  whole-app compliance gaps from `docs/reviews/security-compliance/project/compliance-review-2026-09-17.md` are
   untouched, not worsened (§4).
 - Financial recordkeeping (expense validation/submit/immutability) is
   unaffected by the sheet conversion (§5).
@@ -460,5 +460,5 @@ item, and confirms the rest of the concern is product/brand-quality, which
 is the user's call to make and has already been made. No other concern in
 this review rises above advisory. This verdict covers this feature's scope
 only — it does not clear the pre-existing whole-app gaps tracked in
-`docs/compliance-review-2026-09-17.md`, which remain open and out of scope
+`docs/reviews/security-compliance/project/compliance-review-2026-09-17.md`, which remain open and out of scope
 here.

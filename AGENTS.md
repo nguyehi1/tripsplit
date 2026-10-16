@@ -7,3 +7,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+# Shared agent workflow
+
+Follow [`docs/agent-workflow.md`](docs/agent-workflow.md) for the portable
+team roles, feature stages, review gates, and documentation ownership. Tool-
+specific files (such as `CLAUDE.md` and `.claude/skills/feature/`) are entry
+points; keep shared workflow policy in that document rather than duplicating it.

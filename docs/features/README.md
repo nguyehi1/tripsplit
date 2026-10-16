@@ -11,8 +11,16 @@ docs/features/<slug>/
   qa-report.md       # written by the qa agent — what was tested, pass/fail, regressions found
 ```
 
-These are point-in-time deep-dives for one feature. For the current
-system-wide picture, see [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and
-[`../ROADMAP.md`](../ROADMAP.md), which get updated (not replaced) as each
-feature ships. Architecture decisions that outlive a single feature belong in
-[`../adr/`](../adr/), not here.
+Security and compliance constraints and review reports are stored in
+[`../reviews/security-compliance/features/`](../reviews/security-compliance/features/),
+under the matching feature slug. Standing review policies remain at
+[`../reviews/security-compliance/project/security-baseline.md`](../reviews/security-compliance/project/security-baseline.md) and
+[`../reviews/security-compliance/project/compliance-baseline.md`](../reviews/security-compliance/project/compliance-baseline.md).
+
+These are point-in-time records for one feature. Planning and requirements
+may preserve proposals that changed or were dropped; a status line inside an
+older feature document is not necessarily current. For shipped behavior and
+open release work, use [`../ROADMAP.md`](../ROADMAP.md). For the current
+technical design, use [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and the code.
+Architecture decisions that outlive a single feature belong in
+[`../adr/`](../adr/); a superseded ADR is decision history, not current policy.

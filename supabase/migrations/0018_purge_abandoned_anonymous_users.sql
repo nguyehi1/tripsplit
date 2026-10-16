@@ -1,4 +1,4 @@
--- Retention policy for abandoned anonymous accounts (docs/compliance-review-2026-09-17.md #3,
+-- Retention policy for abandoned anonymous accounts (docs/reviews/security-compliance/project/compliance-review-2026-09-17.md #3,
 -- ADR 0006 "Consequences"; policy text lives on /privacy, constant in src/lib/legal.ts).
 --
 -- Deletes anonymous (never email-verified) auth.users rows inactive for `_days` days (default

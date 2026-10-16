@@ -3,15 +3,19 @@
 Date: 2026-10-08
 > Historical proposal (2026-10-08). The shipped scope is in [requirements.md](requirements.md), which wins on any difference.
 
+Current status: the mailto-based invite flow is shipped; counsel follow-up is
+tracked in the [roadmap](../../ROADMAP.md) and its
+linked review record. The proposal below preserves the earlier design debate.
+
 Stage: planning. This doc proposes a direction only. After the user picks one, the `pm` agent writes the requirements.
 
 ## Raw idea (user, verbatim)
 
 > "allow organizer to add people using their emails. Once their email is added, they will receive a notification to join the trip. Once they click on the link, they are automatically added. but there should be a way to prompt and ask for their name if it's their first time."
 
-## Vision check
+## Product-principles check (at the time of planning)
 
-`docs/v2-vision.md` never weighed this idea. It neither accepted nor rejected it. The feature doesn't make either core moment faster or clearer (logging an expense, seeing the final split). Its best argument is that it gets people onto the trip, which happens before both moments. Under the vision's sequencing, it comes after two things:
+the product principles in the roadmap never weighed this idea. It neither accepted nor rejected it. The feature doesn't make either core moment faster or clearer (logging an expense, seeing the final split). Its best argument is that it gets people onto the trip, which happens before both moments. Under the September 2026 sequencing snapshot in the roadmap, it comes after two things:
 - the open security and compliance items: live service-role verification for `get_trip_by_invite_code`, the unthrottled `get_trip_summary`, and counsel sign-off on the privacy policy;
 - expense delete.
 

@@ -122,7 +122,7 @@ original attempt-then-redirect-then-resume pattern unchanged.
 8. Opening an invite link lets the visitor view the trip's **summary**
    with zero auth — no email, no code, no session of any kind required.
    "Summary" means the final-answer-style numbers (overall totals,
-   who-owes-whom), per `docs/v2-vision.md`'s "final answer" framing — not
+   who-owes-whom), per the roadmap's product-principles framing of a clear final answer — not
    the detailed expense list/line items. This is a plain public-read RLS
    policy scoped to the trip/invite id, not something gated by session
    state.

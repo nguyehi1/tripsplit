@@ -23,7 +23,7 @@ This doc scopes that fix. It does not reopen the debate in planning.md about
 
 ## Problem statement
 
-Splitiful's whole pitch (`docs/v2-vision.md`) rests on two moments being
+Splitiful's whole pitch (the product principles in the roadmap) rests on two moments being
 fast: logging an expense, and seeing the final split. Users are currently
 experiencing the opposite on exactly those moments, plus the join flow that
 gets them into a trip in the first place:
@@ -131,7 +131,7 @@ a baseline without a fix doesn't solve the reported problem.
    verified invalidation guarantee that a viewer can never see a stale
    total/balance/expense list. If no such guarantee can be made, caching is
    not an acceptable fix for that surface, full stop — this is a hard
-   constraint from `docs/v2-vision.md` ("the final answer should never
+   constraint from the product principles in the roadmap ("the final answer should never
    require interpretation"), not a preference.
 9. Add/edit-expense fix (if any) does not change split-calculation
    semantics, validation, or the existing payer-only-edit rule
@@ -222,7 +222,7 @@ own tracking. The instrumentation needed to actually capture this data
 - **No general performance audit** of the whole app, or of RPCs/pages
   outside the three named surfaces.
 - **No new caching layer that risks split-total/balance staleness or
-  ambiguity** — a hard constraint from `docs/v2-vision.md`, not just a
+  ambiguity** — a hard constraint from the product principles in the roadmap, not just a
   preference to weigh against speed.
 - **No change to invite-code length/entropy**, rate-limit thresholds, or the
   RLS/anonymous-verification trust model — those are separately-settled
@@ -236,7 +236,7 @@ own tracking. The instrumentation needed to actually capture this data
   compute tier) — a separate axis from latency per planning.md; not touched
   here.
 - **Does not itself reprioritize** the security/compliance items or expense
-  delete already sequenced ahead of this in `docs/v2-vision.md` — see open
+  delete that were sequenced ahead of this in the September 2026 priority snapshot — see open
   question 2 below; the default assumption is this still comes after them.
 
 ## Open questions (need a user/product decision — not guessed here)
@@ -245,12 +245,12 @@ own tracking. The instrumentation needed to actually capture this data
    slow; this doc scopes measuring and fixing all three, but doesn't assume
    they're built in parallel by the same engineer at the same time. Is
    there a preferred order (e.g., add/edit-expense first since it's the
-   single most frequent action per the vision doc's "two moments"), or
+   single most frequent action in the roadmap's two core moments), or
    should sequencing be left to whoever picks this up based on what Phase 1
    finds?
 2. **Does this change the security/compliance-first, then-expense-delete
-   sequencing** in `docs/v2-vision.md`? This doc's default assumption,
-   consistent with the vision doc's own sequencing (item 3: "whatever
+   sequencing** in the September 2026 priority snapshot? This doc's default assumption,
+   consistent with the historical priority snapshot in the roadmap (item 3: "whatever
    friction real usage surfaces on the two core moments"), is **no** —
    performance work happens after those, in its already-designated slot —
    but the user should confirm given this is now a confirmed felt problem

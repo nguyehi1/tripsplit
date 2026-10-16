@@ -6,6 +6,21 @@ on:
   pull_request:
 
 jobs:
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.99.0
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Apply all migrations to a clean database
+        run: supabase db reset --local
+
   ci:
     runs-on: ubuntu-latest
     steps:

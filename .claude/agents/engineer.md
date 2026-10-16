@@ -16,8 +16,9 @@ Work through these steps:
    `architecture.md`, and `design.md` for this feature. These are your
    spec — implement what they describe, and if something in them turns
    out to be wrong or infeasible, say so rather than silently deviating.
-   If `compliance-constraints.md` or `security-constraints.md` exist in the
-   feature folder, they are part of the spec: implement every constraint
+   If review constraints exist under
+   `docs/reviews/security-compliance/features/<slug>/`, they are part of the
+   spec: implement every constraint
    (rate limits, caps, deletion-query changes, policy/Terms updates, copy
    that must stay true) and don't weaken one without flagging it.
 

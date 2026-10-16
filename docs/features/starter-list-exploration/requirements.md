@@ -1,6 +1,6 @@
 # Requirements: Starter lists, version 0.8.0 (starter-list-exploration)
 
-Scope: this doc covers **0.8.0 only**. Sources: [brief.md](brief.md), [planning.md](planning.md), [breakdown.md](breakdown.md) items #1, #2, #5, #6 and the 0.8.0 part of #7. Light mode only. Review constraints folded in: [compliance-constraints.md](compliance-constraints.md) (cited as Comp C# for the first pass, Comp O# for the "Other" re-review and Comp C-R3-# for Revision 3) and [security-constraints.md](security-constraints.md) (cited as Sec C#, Sec D# for the first pass, Sec O# for the "Other" re-review and Sec R# for Revision 3).
+Scope: this doc covers **0.8.0 only**. Sources: [brief.md](brief.md), [planning.md](planning.md), [breakdown.md](breakdown.md) items #1, #2, #5, #6 and the 0.8.0 part of #7. Light mode only. Review constraints folded in: [compliance-constraints.md](../../reviews/security-compliance/features/starter-list-exploration/compliance-constraints.md) (cited as Comp C# for the first pass, Comp O# for the "Other" re-review and Comp C-R3-# for Revision 3) and [security-constraints.md](../../reviews/security-compliance/features/starter-list-exploration/security-constraints.md) (cited as Sec C#, Sec D# for the first pass, Sec O# for the "Other" re-review and Sec R# for Revision 3).
 
 **Revision 1 (Checkpoint 2, 2026-10-13):** the user added an "Other" trip type with typed-in text, stored on the trip.
 

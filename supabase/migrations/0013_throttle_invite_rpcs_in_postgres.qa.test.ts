@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 /**
  * QA coverage for the invite-code-rpc-hardening follow-up
- * (docs/security-review-2026-09-17-followup.md finding #1 / docs/ROADMAP.md's
+ * (docs/reviews/security-compliance/project/security-review-2026-09-17-followup.md finding #1 / docs/ROADMAP.md's
  * invite-code-rpc-hardening entry, remediation option (b)). Same constraint as migrations
  * 0010/0011/0012's tests -- no live/staging Supabase project available to this repo, so this
  * proves the migration file's shape rather than running the SQL.

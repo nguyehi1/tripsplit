@@ -11,10 +11,10 @@ import { createServiceClient } from "@/lib/supabase/service";
  * directly to Supabase's PostgREST endpoint with the public anon key — completely outside
  * Next.js/Vercel's reach, so no rate limiting here could ever protect it. Routing the lookup
  * through this route instead means `enforceRateLimit` actually sits in front of every request
- * for it. See docs/security-review-2026-09-17.md finding #1.
+ * for it. See docs/reviews/security-compliance/project/security-review-2026-09-17.md finding #1.
  *
  * That alone doesn't stop a caller who skips this route and hits Supabase's PostgREST endpoint
- * directly (docs/security-review-2026-09-17-followup.md finding #1) — `get_trip_by_invite_code`
+ * directly (docs/reviews/security-compliance/project/security-review-2026-09-17-followup.md finding #1) — `get_trip_by_invite_code`
  * now also throttles itself from inside Postgres (migration 0013), so `isDbRateLimitError` below
  * catches that path's rejection too, not just this route's own `enforceRateLimit`.
  *

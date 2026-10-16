@@ -7,7 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
- * QA coverage for the invite-preview rework (docs/security-fix-2026-09-17-qa-report.md):
+ * QA coverage for the invite-preview rework (docs/reviews/security-compliance/project/security-fix-2026-09-17-qa-report.md):
  * /join/[code] now fetches from the server-side, rate-limited /api/trip-invite/[code] route
  * instead of calling `get_trip_by_invite_code` straight from the browser via supabase.rpc.
  * Covers the loading/success/error/retry states driven by `loadError`/`reloadKey`.

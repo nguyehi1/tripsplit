@@ -17,7 +17,7 @@ between "we agreed someone would get this" and "the expense that resulted." This
 feature gives a trip a shared, always-visible list of needed items that any member can
 add to and claim, and lets a claimer's claimed items pre-fill the description of the
 expense they log for it — removing retyping, not changing who owes what. Per
-`docs/v2-vision.md`'s carve-out condition, claiming must never become a new place the
+the roadmap's optional-list guardrail, claiming must never become a new place the
 settlement number can be wrong or unclear, and skipping the list entirely must remain
 a fully valid way to log an expense.
 
@@ -87,7 +87,7 @@ since expense-delete is expected to need exactly that when it ships.
   expense via `expense_id` after the claimer submits that expense).
 - Claim races: two members attempting to claim the same open item concurrently must
   result in exactly one successful claim, enforced at the data layer (not just in the
-  UI) — this is the vision doc's own guardrail against claiming becoming a new
+  UI) — this is the roadmap's guardrail against claiming becoming a new
   disputed/unclear state.
 - Unclaim moves a claimed item back to open (available for anyone to claim again),
   performed via the × control by the item's current claimer only (decision 2 above).
@@ -200,5 +200,5 @@ new table/RPCs, and one new conditionally-rendered block in the existing add-exp
 sheet that only appears when the current user has claimed-unlogged items. No existing
 route, schema field, or default UI behavior changes for a user who never touches this
 feature — the "skip it entirely" path is required to keep working identically per the
-vision doc's own carve-out condition and is asserted directly in the acceptance
+roadmap's optional-list guardrail and is asserted directly in the acceptance
 criteria above.

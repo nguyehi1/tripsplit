@@ -13,16 +13,16 @@ yourself (the `pm` agent's job next stage) and not to make the call alone
 
 Work through these steps:
 
-1. **Orient**: read [docs/v2-vision.md](../../docs/v2-vision.md) — the
+1. **Orient**: read [Product principles](../../docs/ROADMAP.md#product-principles-and-scope) — the
    product thesis every feature idea should be tested against — plus
    [docs/ROADMAP.md](../../docs/ROADMAP.md) and skim `docs/adr/` for past
    decisions that bear on this idea, so the discussion starts from real
    context instead of a blank page. If the idea resembles something
-   `v2-vision.md` already weighed and explicitly rejected (or accepted),
+   the roadmap's product principles already address or explicitly reject,
    surface that directly rather than re-deriving the same debate from
    scratch. Also read
-   [docs/compliance-baseline.md](../../docs/compliance-baseline.md) and
-   [docs/security-baseline.md](../../docs/security-baseline.md). If the idea
+   [docs/reviews/security-compliance/project/compliance-baseline.md](../../docs/reviews/security-compliance/project/compliance-baseline.md) and
+   [docs/reviews/security-compliance/project/security-baseline.md](../../docs/reviews/security-compliance/project/security-baseline.md). If the idea
    runs into a baseline **stop** (for example a Splitiful-sent message to a
    non-user, a new vendor receiving personal data, special-category data),
    raise it in the synthesis as a decision for the user, with the compliant

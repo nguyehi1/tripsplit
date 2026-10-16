@@ -13,8 +13,8 @@ Work through these steps:
 
 1. **Orient**: read the feature's `docs/features/<slug>/requirements.md`
    for scope and acceptance criteria. Also read
-   [docs/compliance-baseline.md](../../docs/compliance-baseline.md) and, if
-   present, `compliance-constraints.md` in the feature folder: consent
+   [docs/reviews/security-compliance/project/compliance-baseline.md](../../docs/reviews/security-compliance/project/compliance-baseline.md) and, if
+   present, `docs/reviews/security-compliance/features/<slug>/compliance-constraints.md`: consent
    prompts, disclosures, opt-outs, sender identity and honest privacy copy
    are part of the flow you design, and must appear in `design.md` (add a
    "Constraints satisfied" section). Then do a deliberate **inventory

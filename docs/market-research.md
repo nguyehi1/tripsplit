@@ -2,6 +2,11 @@
 
 Date: 2026-09-09
 
+Status: historical research. Competitor features, prices, and review data have
+not been re-verified since this date. Current product direction and priorities
+are in [Product principles](ROADMAP.md#product-principles-and-scope); this document
+records research context, not current market facts or commitments.
+
 Note: several sources below are SEO comparison blogs written by competing indie apps to rank for
 "X alternative" searches — treat exact pricing/numbers as directional, not verified fact. The
 overall pattern is corroborated across multiple independent sources, so the conclusions hold even
@@ -44,8 +49,9 @@ if individual figures don't.
 
 ## Decision
 
-First rollout target: **personal friend group trips** (dogfooding with our own trips before wider
-launch). Positioning to be revisited once we have real usage.
+Initial rollout target at the time of this research: **personal friend group
+trips**, with dogfooding before wider launch. This is historical context; see
+the README and roadmap for the current product description and status.
 
 ## Sources
 
