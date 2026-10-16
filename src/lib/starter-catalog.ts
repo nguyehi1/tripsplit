@@ -46,7 +46,7 @@ export const STARTER_TYPES = [
       "Paper towels",
       "Toilet paper",
       "Bug spray",
-      "sunscreen",
+      "Sunscreen",
       "Parking and park entry",
       "Gas for the drive",
     ],
@@ -56,6 +56,8 @@ export const STARTER_TYPES = [
     label: "Airbnb stay",
     phrase: "an Airbnb stay",
     items: [
+      "Airbnb fee",
+      "Pet fee", 
       "Toilet paper",
       "Paper towels",
       "Dish soap",
@@ -72,6 +74,7 @@ export const STARTER_TYPES = [
       "Cleaning fee",
       "Parking",
       "Group dinner",
+      "Gas for the drive",
     ],
   },
   {
@@ -86,6 +89,7 @@ export const STARTER_TYPES = [
       "Rental car",
       "Fuel and tolls",
       "Group dinners",
+      "Hotel/Airbnb fees",
       "Tours and activities",
       "Entry tickets",
       "Groceries",

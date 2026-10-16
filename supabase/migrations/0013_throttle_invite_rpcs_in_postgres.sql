@@ -1,4 +1,4 @@
--- Closes the blocking gap in docs/security-review-2026-09-17-followup.md finding #1: the
+-- Closes the blocking gap in docs/reviews/security-compliance/project/security-review-2026-09-17-followup.md finding #1: the
 -- Upstash-backed rate limiter in src/lib/rate-limit.ts only sits in front of this app's own
 -- /api/* routes. A caller who skips splitiful.app and hits Supabase's own PostgREST endpoint
 -- directly with the public anon/publishable key -- verified live in that report -- reaches
@@ -21,7 +21,7 @@
 --     see docs/features/simplified-onboarding) -- there is no session to key off, so this one
 --     falls back to the same x-forwarded-for signal src/lib/rate-limit.ts already trusts, read
 --     here from PostgREST's `request.headers` GUC. That carries the same caveat
---     docs/security-review-2026-09-17-followup.md finding #3 raises for the app-level limiter
+--     docs/reviews/security-compliance/project/security-review-2026-09-17-followup.md finding #3 raises for the app-level limiter
 --     (spoofable if whatever sits in front of PostgREST ever appends rather than overwrites the
 --     header) -- not a guarantee, but it closes the gap finding #1 actually named: today this
 --     path has *zero* throttling of any kind, not "the same imperfect throttling the app path

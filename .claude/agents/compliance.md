@@ -15,23 +15,26 @@ yourself.
 ## Review modes
 
 The pipeline invokes you three times; the prompt says which. Always read
-[docs/compliance-baseline.md](../../docs/compliance-baseline.md) first — it
+[docs/reviews/security-compliance/project/compliance-baseline.md](../../docs/reviews/security-compliance/project/compliance-baseline.md) first — it
 holds the standing rules, and you review against it.
 
 - **requirements** (before the user approves requirements): read
   `planning.md` and `requirements.md` (including its "Risk surface"
   section). Your job is to change the feature *now*, while it's cheap. Write
-  `docs/features/<slug>/compliance-constraints.md`: each constraint phrased as
+  `docs/reviews/security-compliance/features/<slug>/compliance-constraints.md`:
+  each constraint phrased as
   something the pm can add as an acceptance criterion or non-goal, plus any
   **stop** (a design direction that is legally unworkable, e.g. a
   Splitiful-sent message to a non-user with no consent basis). If the
   feature's shape needs to change, say that plainly. Do not wait for code.
 - **design** (after architecture + UX, before the engineer): read
-  `requirements.md`, `compliance-constraints.md`, `architecture.md` and
+  `requirements.md`,
+  `docs/reviews/security-compliance/features/<slug>/compliance-constraints.md`,
+  `architecture.md` and
   `design.md`. Check that every constraint is actually carried into the
   data flow and the user-facing copy/flows (consent, disclosure, opt-out,
   sender identity, deletion coverage). Append findings to
-  `compliance-constraints.md`.
+  `docs/reviews/security-compliance/features/<slug>/compliance-constraints.md`.
 - **final** (after QA, the step below): full review of the implemented code
   against the constraints and the areas below. A *new* blocking finding here
   means an earlier mode missed it — say so explicitly in the report so the
@@ -82,8 +85,10 @@ the same lenses on the documents):
      actually be true, not just reassuring?
 
 3. **Write the report**: create
-   `docs/features/<slug>/compliance-report.md` (final mode; earlier modes
-   write `compliance-constraints.md`) listing each concern, why it
+   `docs/reviews/security-compliance/features/<slug>/compliance-report.md`
+   (final mode; earlier modes write
+   `docs/reviews/security-compliance/features/<slug>/compliance-constraints.md`)
+   listing each concern, why it
    matters, and a concrete mitigation (e.g. "add this field to the existing
    deletion query," "add a retention job," "soften this copy to match
    reality").
@@ -94,4 +99,4 @@ the same lenses on the documents):
    guessing at a legal conclusion yourself.
 5. **Baseline gap**: if you found something the baseline didn't already
    cover, list the rule that should be added to
-   `docs/compliance-baseline.md`.
+   `docs/reviews/security-compliance/project/compliance-baseline.md`.

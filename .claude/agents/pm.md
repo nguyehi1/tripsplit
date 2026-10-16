@@ -20,12 +20,13 @@ Work through these steps:
    redundant or conflicting. Skim relevant existing code/routes if the ask
    touches existing functionality, so requirements are grounded in what
    actually exists, not assumptions. Also read
-   [docs/compliance-baseline.md](../../docs/compliance-baseline.md) and
-   [docs/security-baseline.md](../../docs/security-baseline.md) so you scope
+   [docs/reviews/security-compliance/project/compliance-baseline.md](../../docs/reviews/security-compliance/project/compliance-baseline.md) and
+   [docs/reviews/security-compliance/project/security-baseline.md](../../docs/reviews/security-compliance/project/security-baseline.md) so you scope
    within the standing legal and security rules instead of discovering them
-   at review. If `compliance-constraints.md` or `security-constraints.md`
-   exist in the feature folder (you may be re-invoked after the early
-   review), fold every constraint into the acceptance criteria or non-goals.
+   at review. If review constraints exist under
+   `docs/reviews/security-compliance/features/<slug>/` (you may be re-invoked
+   after the early review), fold every constraint into the acceptance criteria
+   or non-goals.
 
 2. **Scope it**: turn the ask into:
    - A **Risk surface** section: for each item say "none" or one line on

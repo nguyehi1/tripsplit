@@ -177,7 +177,7 @@ block doesn't pop in and shift the amount/description fields below it.
 **No claimed-unlogged items**: block is omitted entirely — already specified in
 requirements/design-reference, restated here for completeness of the state inventory.
 
-**Fetch of claimed items fails**: per the vision doc's own carve-out ("skipping the
+**Fetch of claimed items fails**: per the roadmap's optional-list guardrail ("skipping the
 shopping list entirely must remain a fully valid way to log an expense"), this must
 never block the primary add-expense flow. **Decision**: don't silently omit the block
 (a user who knows they have claimed items and sees nothing would reasonably think the
@@ -325,7 +325,7 @@ steps aren't atomic at the data layer): since an item never carries an amount, t
 can't produce a wrong balance — only a stale item status (it'd still show as
 claimed-unlogged after its expense already exists). **Decision**: never roll back or
 block the expense on this secondary failure — the expense succeeding is what matters for
-the vision doc's carve-out condition. No user-facing message; next time the List tab
+the optional-list guardrail in the roadmap's product principles. No user-facing message; next time the List tab
 loads it shows whatever the actual DB state is. **Flag to architecture**: this is exactly
 the failure mode a single-transaction RPC (create expense + mark items logged together)
 would eliminate — worth doing at that layer if cheap, but not a blocking UX requirement

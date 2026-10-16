@@ -3,6 +3,10 @@
 Date: 2026-10-13
 Stage: planning (pre-requirements). Convened `pm` and `product-strategist`. This is not a requirements doc. No scope here is final until the user picks a direction below.
 
+Historical planning record: trip types, starter suggestions, and home templates
+are implemented; release checks remain open as listed in the
+[roadmap](../../ROADMAP.md). This document preserves the earlier scoping debate.
+
 Constraints from the user: LIGHT MODE ONLY (dark deferred). Phase 1 = screens A-G, I, L. Phase 2 (share/receive H, J, K) is out of scope. Source brief: [brief.md](brief.md).
 
 ## Raw idea
@@ -11,9 +15,9 @@ A new trip starts with a useful list, not a blank one. There are three trip type
 
 ## Orientation: what the repo already says
 
-- [v2-vision.md](../../v2-vision.md) does not mention templates or starter lists. Its test is whether a feature makes "log an expense" or "see the final split" faster or clearer, or adds a decision, screen or concept. Starter lists do neither of the first two. They improve the start of the side feature (the shopping list). Trip types add a decision on Create trip.
+- The [product principles](../../ROADMAP.md#product-principles-and-scope) do not specifically address templates or trip-type catalogs. At planning time, those additions raised a tradeoff against keeping the core expense and settle-up flows simple; the user approved proceeding, and the features are now implemented.
 - [shopping-list/planning.md](../shopping-list/planning.md) and the ROADMAP entry list "a cross-trip 'common items' template" as an explicit non-goal. Copy-past-trip, and to a lesser degree trip-type catalogs, reverse that. The user should reverse it consciously.
-- ROADMAP: the shopping list is shipped. Still open are counsel review (email-invites, self-serve delete), the performance measurement follow-up, and expense delete (unscoped). The vision's sequencing puts those ahead of list work. The dark-mode shopping-list variant is already a deferred follow-up, so light-only is consistent.
+- Current release work and follow-ups are in the roadmap. The earlier plan to defer list work behind other priorities is historical; the shared list has shipped. Dark mode remains deferred.
 - Compliance and security baselines: no hard stop is triggered (no outbound message, no new vendor, no special-category data). Three baseline rules do bite. Analytics must be event-name only. Any new bulk write path or cross-trip read needs the abuse case designed at requirements time. Migrations must be safe with old code on the new schema and new code on the old schema. See conflicts 7 and 8 below.
 
 ## Conflicts between the brief and the current codebase

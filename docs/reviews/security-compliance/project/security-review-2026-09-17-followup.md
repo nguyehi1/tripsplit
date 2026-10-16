@@ -1,6 +1,6 @@
 # Security follow-up review — 2026-09-17
 
-Re-verifying the fix for the blocking finding in `docs/security-review-2026-09-17.md`
+Re-verifying the fix for the blocking finding in `docs/reviews/security-compliance/project/security-review-2026-09-17.md`
 ("Invite codes are low-entropy and every RPC that consumes them is completely
 unthrottled"). Scope: the uncommitted diff only (`git diff` at time of review —
 `src/app/api/trip-invite/[code]/route.ts`, `src/lib/rate-limit.ts`,

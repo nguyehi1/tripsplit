@@ -1,0 +1,5 @@
+# Local Supabase configuration used by `supabase start` and CI migration verification.
+project_id = "splitiful"
+
+[db]
+major_version = 17

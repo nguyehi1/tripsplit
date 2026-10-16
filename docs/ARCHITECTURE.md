@@ -1,10 +1,12 @@
 # Architecture
 
-Current-state snapshot of the system. The `architect` agent updates this file
-(amends it, does not replace it) every time `/feature` touches something
-architecturally significant. For *why* a past decision was made — especially
-one later reversed or superseded — see [`adr/`](adr/) rather than trying to
-reconstruct it from this file's edit history.
+Detailed current-state architecture and data-access reference. For a quick
+description of shipped product behavior and outstanding release work, start
+with [`../README.md`](../README.md) and [`ROADMAP.md`](ROADMAP.md). The
+`architect` updates this file when a feature changes the system architecture.
+Feature docs are point-in-time records; they may retain superseded proposals.
+ADRs explain durable technical decisions and identify decisions that were
+later superseded.
 
 ## System overview
 
@@ -707,7 +709,7 @@ this before adding a parallel implementation.
   browser: it is never sent to a server, stored, or logged, and no new
   schema or API route backs the feature, and it adds no roster row. Any change that sends the
   address anywhere (logging, analytics properties, a fetch) breaks a claim made
-  on `/privacy`; see `docs/features/email-invites/compliance.md`.
+  on `/privacy`; see `docs/reviews/security-compliance/features/email-invites/compliance.md`.
 - `src/lib/errors.ts` — `errorMessage`, `errorCode`:
   normalize thrown values (Supabase errors are plain objects, not `Error`s).
   User-facing roster failures go through `rosterErrorCopy` so raw database
@@ -815,7 +817,7 @@ this before adding a parallel implementation.
   feature**, it also passes `trip.types` down to the List tab, and a trip
   created with a catalog type lands on `?tab=list`.
 - `src/lib/rate-limit.ts` — the app's one rate-limiting module, added to
-  close docs/security-review-2026-09-17.md's blocking finding (invite codes
+  close docs/reviews/security-compliance/project/security-review-2026-09-17.md's blocking finding (invite codes
   are low-entropy and every consuming RPC was unthrottled). Wraps
   `@upstash/ratelimit` + `@upstash/redis` (sliding window, keyed by
   `x-forwarded-for`) behind a single `enforceRateLimit(request, { key,
@@ -834,7 +836,7 @@ this before adding a parallel implementation.
   routes — it can't protect a Postgres function that's independently
   callable with the public anon/publishable key, which is exactly what
   `get_trip_by_invite_code`/`join_trip` are
-  (docs/security-review-2026-09-17-followup.md finding #1). Those two RPCs
+  (docs/reviews/security-compliance/project/security-review-2026-09-17-followup.md finding #1). Those two RPCs
   also throttle themselves from inside Postgres
   (`supabase/migrations/0013_throttle_invite_rpcs_in_postgres.sql`,
   [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md)), so the

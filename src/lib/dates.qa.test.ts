@@ -75,10 +75,8 @@ describe("dates.ts — existing behavior preserved (no regression from the UTC p
     process.env.TZ = process.env.TZ;
   });
 
-  it("formatDate still omits the year", () => {
-    expect(formatDate("2026-03-05")).not.toContain("2026");
-  });
-
+  // formatDate's own no-year behavior is covered by dates.test.ts; this one case
+  // (single-side-present collapse) isn't covered there, so it stays here.
   it("formatDateRange collapses to a single date when only one side is present", () => {
     expect(formatDateRange("2026-03-05", null)).toBe("Mar 5");
     expect(formatDateRange(null, "2026-03-05")).toBe("Mar 5");

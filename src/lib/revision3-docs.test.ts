@@ -30,7 +30,7 @@ describe("Revision 3: docs and tokens", () => {
   });
 
   it("security-baseline.md carries the Revision 3 rules (query param, closed-set analytics, wrapper split, real-URL test)", () => {
-    const baseline = norm(read("docs/security-baseline.md"));
+    const baseline = norm(read("docs/reviews/security-compliance/project/security-baseline.md"));
     expect(baseline).toContain("A query parameter that selects UI state must be validated server-side against a fixed set");
     expect(baseline).toContain("never copied into the proxy's `next` redirect");
     expect(baseline).toContain("Analytics event names built from a code must go through a helper that returns `undefined`");
@@ -39,7 +39,7 @@ describe("Revision 3: docs and tokens", () => {
   });
 
   it("compliance-baseline.md carries the Revision 3 rules (public-page events, query parameters)", () => {
-    const baseline = norm(read("docs/compliance-baseline.md"));
+    const baseline = norm(read("docs/reviews/security-compliance/project/compliance-baseline.md"));
     expect(baseline).toContain("Events on public or pre-sign-in pages follow the same rules as in-app events");
     expect(baseline).toContain("A URL query parameter is allowed only if it carries a closed-set code");
     expect(baseline).toContain("application-initiated request");

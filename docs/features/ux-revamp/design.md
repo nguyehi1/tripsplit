@@ -446,7 +446,7 @@ photo has extensive legible baked-in text unrelated to the product
 branded objects). When surfaced to the user, they explicitly chose to
 **keep the full uncropped photo as shipped**, rather than reverting to the
 cropped avatar or cropping out just the text — see
-`docs/features/ux-revamp/compliance-report.md` for the follow-up compliance
+[`compliance-report.md`](../../reviews/security-compliance/features/ux-revamp/compliance-report.md) for the follow-up compliance
 review of this specific decision. This section's earlier "resolved" framing
 for the crop treatment no longer reflects what's actually shipping; treat
 this update as the current state.

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * `src/lib/rate-limit.ts` reads UPSTASH_REDIS_REST_URL/TOKEN at module-import time, and vitest
  * doesn't load .env.local into process.env the way `next dev`/Vercel do. Parsed manually here so
  * these tests exercise the real Upstash-backed sliding window (per
- * docs/security-fix-2026-09-17-qa-report.md), not just the "no credentials configured" branches.
+ * docs/reviews/security-compliance/project/security-fix-2026-09-17-qa-report.md), not just the "no credentials configured" branches.
  * If .env.local doesn't have Upstash credentials in this environment, the Upstash-dependent tests
  * are skipped rather than silently passing against the wrong code path.
  */

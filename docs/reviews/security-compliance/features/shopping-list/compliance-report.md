@@ -112,7 +112,7 @@ and client-side state. No action needed here.
 
 The app currently has **no account-deletion or data-export flow at all**
 (pre-existing gap, tracked on the ROADMAP and in
-`docs/security-review-2026-09-17-followup.md`; not something this feature
+`docs/reviews/security-compliance/project/security-review-2026-09-17-followup.md`; not something this feature
 is required to fix, per this session's explicit scoping). This feature adds
 one more place personal data lives (`shopping_list_items.description`,
 `added_by`, `claimed_by`), which — like every other table in this app today
@@ -191,7 +191,7 @@ non-blocking documentation-drift item (the "everyone sees them" string).
 - **Claim-race / single-claimer guarantee**: enforced at the DB layer via
   a conditional `UPDATE ... WHERE status = 'open'` row lock, not just the
   UI (confirmed by reading the RPC and its comments). This matters for
-  recordkeeping-adjacent trust: the vision doc's own carve-out condition
+  recordkeeping-adjacent trust: the optional-list guardrail in the roadmap's product principles
   ("claiming must never become a new place the settlement number can be
   wrong or unclear") is satisfied at the layer that actually matters.
 - **Unclaim permission model** (requirements.md's superseded decision 2):

@@ -5,6 +5,11 @@ Stage: planning (pre-requirements) — convened `pm` and `product-strategist` pe
 `/feature` pipeline's planning stage. Not a requirements doc; no scope here is final
 until the user picks a direction below and `pm` formalizes it next.
 
+Historical planning record: the shared shopping list has since shipped. The
+discussion and open questions below explain its original scope; use the
+[roadmap](../../ROADMAP.md) and current feature requirements for status and
+behavior.
+
 ## Raw feature idea
 
 > Shopping list for a trip: any group member can add an item to a shared list. Other
@@ -16,8 +21,8 @@ until the user picks a direction below and `pm` formalizes it next.
 ## Strategic framing already settled (not re-opened here)
 
 This was already discussed directly with the user. It originally looked like it
-conflicted with [docs/v2-vision.md](../../v2-vision.md)'s outright rejection of
-itemized/subset splits, but the user chose to revise the vision doc rather than drop
+conflicted with the [product principles](../../ROADMAP.md#product-principles-and-scope)' outright rejection of
+itemized/subset splits, but the user chose to revise the product direction rather than drop
 the idea. The 2026-09-19 revision's "What changed since the 2026-09-15 draft" section
 carves this exact pattern back into scope — a shared prep-list + opt-in claim + prefill
 into the existing fast-entry flow, explicitly distinguished from the still-rejected
@@ -30,10 +35,9 @@ is tested against it:
 > unclear, and skipping the shopping list entirely must remain a fully valid way to log
 > an expense the old way.
 
-The vision doc's own "Recommended sequencing" also puts this feature **third**, after
-expense delete (still unbuilt) and after whatever friction real usage surfaces on the
-core loop — that ordering is a recommendation from the doc's author, not a locked
-decision, and is one of this doc's open questions below, not resolved here.
+The historical priority snapshot in the roadmap placed this feature after
+expense delete and improvements prompted by real use. That ordering was a
+recommendation, not a locked decision; the shared list has since shipped.
 
 Whether the pattern belongs in v2 at all is closed. Everything below is the normal
 scoping/tradeoff debate *within* that carve-out.
@@ -51,7 +55,7 @@ Full reasoning in the transcript; key points:
   flow already does for the submitting user). Explicitly *not* amount — an item has no
   real price until purchased, and inventing one at add-item time creates a second
   number that can disagree with the real expense, which is exactly the ambiguity the
-  vision doc's carve-out condition warns against.
+  optional-list guardrail in the roadmap warns against.
 - **Lifecycle**: once an item's claimer actually submits the resulting expense, the
   item should be marked logged and linked (`item.expense_id`), removed from the active
   claim/prefill list — otherwise it could be reused to prefill a second expense,
@@ -60,7 +64,7 @@ Full reasoning in the transcript; key points:
   lean is claiming should be restricted to real, session-backed members only — a
   placeholder can't meaningfully "claim" since nobody would ever log the resulting
   expense on their behalf, and adding a "claim on behalf of" concept is new scope the
-  vision doc would flag. Explicitly flagged as a real product call, not decided
+  product principles would flag. Explicitly flagged as a real product call, not decided
   unilaterally.
 - **Existing gating this must integrate with**: simplified-onboarding's
   hide-until-verified rule for organizer mutations (this needs to be added to that
@@ -82,7 +86,7 @@ Full reasoning in the transcript; key points:
 
 Full reasoning and full exchange in the transcript; key points:
 
-- **Sequencing**: agreed with the vision doc's own order, and went further — argued the
+- **Sequencing**: agreed with the September 2026 priority snapshot in the roadmap, and went further — argued the
   still-open items in ROADMAP.md's "In progress" section (invite-code-rpc-hardening not
   yet re-verified against a live deployment, `get_trip_summary` leaking the invite code,
   an open redirect in `check-email`, no privacy policy/ToS/data-export/retention story
@@ -92,7 +96,7 @@ Full reasoning and full exchange in the transcript; key points:
 - **Two thesis risks it wanted explicitly resolved, not left implicit**: (a) claim races
   — two members claiming the same item near-simultaneously needs a DB-level
   unique-claimer constraint, or first-come-claim becomes exactly the kind of group
-  negotiation the vision doc rejects; (b) whether prefill was meant to include amount —
+  negotiation the product principles reject; (b) whether prefill was meant to include amount —
   if yes, adding an item requires entering a price up front, relocating "filling out a
   form" to a new screen, working against the thesis's own test.
 - **Proposed alternative**: ship the shared list + claim with no add-expense
@@ -111,8 +115,8 @@ converged on:
 
 1. **Prefill is description-only, full stop — not just for v1.** An item has no real
    price until purchased; capturing one at add-time either invents a number that can
-   disagree with the real expense (the exact ambiguity the vision doc's carve-out
-   condition warns about) or turns "add an item" into its own mini-form, tripping the
+   disagree with the real expense (the exact ambiguity the optional-list guardrail
+   in the roadmap warns about) or turns "add an item" into its own mini-form, tripping the
    thesis test at a new point. Payer defaults to the claimer, trivially, same as
    add-expense already does for the submitter.
 2. **Integration scope: neither "full-fat" nor "zero" — a narrowed, bounded slice.**
@@ -126,11 +130,11 @@ converged on:
    call sites) is already solved; what this adds is one more piece of client state plus
    a query for "my claimed-unlogged items on this trip," surfaced at both existing call
    sites — bounded, not open-ended. A claim-only v1 with no tie back to logging was
-   rejected by both: it would orphan the feature from the vision doc's own stated
+   rejected by both: it would orphan the feature from the roadmap's stated
    rationale for the carve-out ("a claimed item can prefill a new expense"), needing its
    own different thesis justification the doc doesn't currently make.
 3. **Security/compliance-and-expense-delete-first sequencing argument: agreed, not
-   apples-to-oranges.** Both note the vision doc already sequences shopping-list third
+   apples-to-oranges.** Both note the historical priority snapshot placed shopping-list fourth
    on its own terms; the open ROADMAP items reinforce rather than compete with that.
 4. **V1 hard exclusion list, agreed**: unclaim/reassign, item edit/delete after claim
    (clarified: no *description edit* after claim — a never-claimed, added-by-mistake
@@ -164,7 +168,7 @@ open-endedness both agents converged on cutting.
 These are the genuine judgment calls neither agent could or should resolve — pick a
 direction on each before `pm` formalizes requirements:
 
-1. **Priority/sequencing.** The vision doc's own recommended order puts shopping-list
+1. **Priority/sequencing.** The historical priority snapshot in the roadmap puts shopping-list
    third, after expense delete (still no delete UI despite the DB already allowing it —
    a live correctness gap) and after usage-driven friction fixes. Separately, ROADMAP.md
    shows still-open items from the 2026-09-17 security/compliance audit (invite-code

@@ -3,8 +3,8 @@
 Scope: whole-project review, not a single feature. Covers the current data
 model (`supabase/migrations/*.sql`, `docs/ARCHITECTURE.md`), the
 simplified-onboarding anonymous-auth rework (ADR 0006), the Gmail→Resend
-email vendor switch, and `docs/market-research.md`/`docs/v2-vision.md` for
-forward-looking surface. I'm flagging exposure, not redesigning the
+email vendor switch, `docs/market-research.md`, and the roadmap's product
+principles for forward-looking product scope. I'm flagging exposure, not redesigning the
 feature or the app; anything marked "needs legal sign-off" is a real legal
 question, not something I'm answering for you.
 
@@ -128,12 +128,12 @@ yet). There's no history/audit table — an edit or delete is silent and
 irreversible from the other members' perspective. For a small
 friends-group splitting a bar tab, this is a fine, low-stakes product
 choice. It becomes a real dispute-resolution problem if Splitiful is ever
-used for larger sums or less-trusting groups (e.g. `docs/v2-vision.md`'s
-explicitly-rejected-for-now payment-rail integration would raise the
+used for larger sums or less-trusting groups (e.g. the payment-rail
+integration listed among the roadmap's current non-goals would raise the
 stakes considerably if it's ever revisited). Not a blocking issue given
-today's stated use case and v2-vision's explicit "no payment rails" call,
+today's stated use case and the former vision's explicit rejection of payment rails,
 but worth a product note: if a delete-expense feature ships (flagged as
-in-scope in `docs/v2-vision.md`'s recommended sequencing), narrowing
+in-scope in the roadmap's historical September 2026 priority snapshot), narrowing
 `delete` to the payer (matching the existing `update` policy, per ADR
 0002's own "consequences" note) closes a real gap where any member can
 currently erase another member's logged expense.
@@ -182,8 +182,8 @@ parts of `docs/ARCHITECTURE.md`'s mermaid diagram still say "Gmail SMTP"
 but worth fixing so anyone using these docs to reason about
 processors/vendors doesn't miss Resend.
 
-### 9. v2-vision / market-research: no near-term new compliance surface, but two items to watch
-`docs/v2-vision.md` explicitly rejects payment-rail integration and
+### 9. Product direction and market research (reviewed 2026-09-17): no near-term new compliance surface, but two items to watch
+The roadmap's product principles list payment-rail integration and
 multi-currency for v2 ("can wait indefinitely without hurting the core
 pitch"), which is good — those are exactly the features that would add
 real compliance surface (money-transmission licensing questions, FX

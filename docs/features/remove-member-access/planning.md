@@ -5,6 +5,10 @@ Stage: planning (pre-requirements) — convened `pm` and `product-strategist` pe
 `/feature` pipeline's planning stage. Not a requirements doc; no scope here is final
 until the user picks a direction below and `pm` formalizes it next.
 
+Historical planning record: organizer removal and member self-service leave
+are shipped. The discussion below preserves the original proposal and tradeoffs;
+see the [roadmap](../../ROADMAP.md) for current status.
+
 ## Raw feature idea
 
 > Enable organizer to remove other people's access — i.e., let a trip's organizer
@@ -12,7 +16,7 @@ until the user picks a direction below and `pm` formalizes it next.
 
 ## Context that grounds this discussion
 
-- **v2-vision.md** doesn't mention member removal at all — this is not a previously
+- **The product principles in the roadmap** do not specifically address member removal — this is not a previously
   litigated idea (unlike OCR, itemization, payment rails, multi-currency, which are
   explicitly rejected/deferred). The vision's only named "real gap worth closing" right
   now is expense delete (still unshipped). Its test for any new feature: does it make
@@ -60,14 +64,14 @@ Full reasoning in the transcript; key points:
   invite-code rejoin loophole — `join_trip`'s upsert means a removed member can just
   reopen the same link and silently rejoin; (2) no "removed member" UI treatment for
   their still-visible name/history in old expenses; (3) whether this even clears the
-  v2-vision bar, since it's a trust/admin feature rather than an obvious speed/clarity
+  product-principles test, since it's a trust/admin feature rather than an obvious speed/clarity
   win.
 - **After the strategist's pushback (reacted, conceded ground)**: agreed invite-code
   rotation is a real fork, not a detail — either ship rotation (bigger: also boots every
   other current link-holder, needs a re-share step) or ship without rotation but rename
   the feature away from "remove access" to something honest like "remove from trip,"
   with an explicit caveat that rejoining via the same link remains possible. On
-  post-removal balance visibility, agreed it's a real tension with the vision's "final
+  post-removal balance visibility, agreed it's a real tension with the product principles' "final
   number never requires interpretation," but should be a named non-goal with a
   one-line rationale (e.g. "ask the organizer directly") rather than solved in this pass,
   since solving it properly means new access-control shape (read-only post-membership
@@ -94,7 +98,7 @@ Full reasoning and full exchange in the transcript; key points:
   unable to see money they owe/are owed (dispute-avoidance/support-burden risk), the
   other means rewriting settle-up semantics.
 - **Reason 3 — opportunity cost is real and already decided.** Zero mentions in
-  ROADMAP.md/v2-vision.md; the vision's own sequencing already puts security/compliance
+  ROADMAP.md/the product principles in the roadmap; the September 2026 sequencing snapshot in the roadmap already puts security/compliance
   follow-ups and expense delete ahead of anything net-new; no cited incident or support
   ticket establishing urgency.
 - **Simpler alternative proposed**: self-service "leave trip" (voluntary, no
@@ -114,7 +118,7 @@ Full reasoning and full exchange in the transcript; key points:
   fast-follow.
 - **On "reduces organizer anxiety" as the vision-fit justification**: explicitly did not
   buy it as sufficient on its own — noted almost any admin feature can be reframed as
-  anxiety-reduction, and the vision's bar is about evidenced friction on the two core
+  anxiety-reduction, and the product-principles test is about evidenced friction on the two core
   moments, not a plausible-sounding frame. Said this reads as scope-creep rationalization
   unless the user can point to an actual mis-join incident or support request; if one
   exists, the objection drops.
@@ -182,7 +186,7 @@ unless the user has a concrete reason this is needed now.
 These are the genuine judgment calls neither agent could or should resolve:
 
 1. **Is there real urgency, or is this speculative?** Neither ROADMAP.md nor
-   v2-vision.md mentions this; no incident or support pattern was cited. Does the user
+   the product principles in the roadmap mentions this; no incident or support pattern was cited. Does the user
    have an actual case driving this (an accidental invite, a no-show, an unwanted
    participant), or is this "would be nice to have the capability"? This materially
    changes whether it should jump ahead of the security/compliance follow-ups and

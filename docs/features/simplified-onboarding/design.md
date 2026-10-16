@@ -1,7 +1,7 @@
 # Simplified onboarding — design
 
 Companion to `requirements.md` (locked decisions — this doc does not
-re-decide anything there) and `docs/v2-vision.md` ("simplicity is the
+re-decide anything there) and [the roadmap's product principles](../../ROADMAP.md#product-principles-and-scope) ("simplicity is the
 feature" / "final answer" framing). Scope here is the user-facing flow,
 screens/states, and copy only — data model and RLS are an architecture
 concern.
@@ -344,7 +344,7 @@ Opening `/join/[code]` today shows a "type your name + email to join"
 gate before any trip content is visible. That gate is replaced: the
 invite link now opens directly onto a **summary view of the trip**, with
 no form, no auth, styled as a first-class "final answer" screen per
-`docs/v2-vision.md`, not a teaser.
+the product principles in the roadmap, not a teaser.
 
 ### Screen shape
 
@@ -370,7 +370,7 @@ than stripped-down:
 - A **per-person who-owes-whom line**, if the data model can compute it
   without exposing line items (it can — it's an aggregate over the same
   expense rows, not the rows themselves): this is the actual "Alex owes
-  Sam $42" moment v2-vision.md calls out, and it belongs in the public
+  Sam $42" moment described in the roadmap's product principles, and it belongs in the public
   tier precisely because it's a summary number, not a detail. Present it
   as a short list beneath the Total/Avg row, in the same visual language
   (Kicker + `text-display` amounts):

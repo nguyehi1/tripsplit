@@ -1,8 +1,13 @@
 # Planning: "Improve performance and reduce latency to serve higher volume of users"
 
 Date: 2026-09-19
-Stage: planning (pre-requirements) — see [docs/v2-vision.md](../../v2-vision.md) and
+Stage: planning (pre-requirements) — see [Product principles](../../ROADMAP.md#product-principles-and-scope) and
 [docs/ROADMAP.md](../../ROADMAP.md) for the context this discussion is grounded in.
+
+Historical planning record: implementation and QA are complete. The remaining
+live performance measurement and timing-instrumentation follow-up are listed
+in the [roadmap](../../ROADMAP.md); questions below record the original scope
+discussion.
 
 ## Raw idea (as given by the user)
 
@@ -14,14 +19,14 @@ of questions only the user can answer, per the planning stage's job.
 
 ## Orientation
 
-- **docs/v2-vision.md** ("Simplicity is the feature") tests every feature against one bar:
+- **The product principles in the roadmap** ("Simplicity is the feature") test every feature against one bar:
   does it make logging an expense or seeing the final split *faster or clearer*, without
   adding a new concept, screen, or decision. Its recommended sequencing is (1) the still-open
   security/compliance items from the 2026-09-17 audit, (2) expense delete, (3) whatever
   friction real usage surfaces on the two core moments — evaluated case by case, not
   pre-planned as a roadmap of features — and (4) shopping-list-with-claiming, on hold behind
   1–3. **Performance/scaling as a named initiative does not appear anywhere in that
-  sequencing.** This idea doesn't resemble something the vision doc explicitly debated and
+  sequencing.** This idea doesn't resemble something the former product-direction discussion explicitly considered and
   rejected (unlike OCR, itemization, payment rails, multi-currency); it's simply absent,
   which itself is informative — nothing in the product thesis calls for it right now.
 - **docs/ROADMAP.md** "In progress": `invite-code-rpc-hardening`. The DB-side throttle
@@ -68,7 +73,7 @@ get a real baseline; (B) fix one concretely-known slow path if one exists; (C) a
 DB query/index + RLS-overhead audit on hot-path RPCs; (D) general capacity work (pooling,
 caching, read replicas) — flagged as premature without a measured bottleneck or stated
 volume target. Flagged non-goals: no infra/rewrite migration absent a measured bottleneck,
-no speculative caching (staleness risk directly conflicts with the vision's "final number
+no speculative caching (staleness risk directly conflicts with the product principles' "final number
 must never be ambiguous" bar), don't let this compete with or dilute the
 already-sequenced-ahead security/compliance work, and keep cost optimization conceptually
 separate from latency if the user cares about it.
@@ -155,7 +160,7 @@ These are the judgment calls the planning stage doesn't get to resolve on its ow
    RLS-overhead audit on hot-path RPCs, tested against live Postgres per the migration 0013
    lesson) rather than nothing.
 4. **Priority relative to the security/compliance items already ahead of this in
-   `docs/v2-vision.md`'s sequencing** (the 2026-09-17 audit's remaining items) and
+   the September 2026 priority snapshot in the roadmap** (the 2026-09-17 audit's remaining items) and
    `expense delete`: does anything about "serve higher volume" change your view that those
    should still go first? The group's default assumption is no.
 5. **Cost, as a separate axis from latency**: do you want cost/infra efficiency (Vercel

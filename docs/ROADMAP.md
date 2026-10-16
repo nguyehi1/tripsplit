@@ -1,476 +1,99 @@
 # Roadmap
 
-Single source of truth for what's planned, in progress, and shipped. The
-`pm` agent appends to this file every time `/feature` runs — it should never
-be replaced wholesale, so history of what was prioritized and why stays
-visible in one place instead of scattered across per-feature docs.
+Current delivery status and remaining release work. **Last reviewed: 2026-10-15.** This page is the
+status source of truth; feature documents are dated records of decisions and review evidence, and
+may contain earlier proposals or superseded status notes. “Shipped” means the change is on `main`;
+manual release checks and production deployment are listed separately when still open.
 
-Each entry links to its deep-dive in `docs/features/<slug>/requirements.md`.
+## Release work and follow-ups
 
-## Pending at a glance
+| Work | Current state | Remaining action | Record |
+|---|---|---|---|
+| Trip types, starter suggestions, and home templates (`starter-list-exploration`) | Implemented in this repository; release not yet marked complete | Apply migration 0022, run live QA and SQL verification, test the new-trip flows, deploy, complete counsel review, and resolve product-copy question X1. Follow [the ordered checklist](features/starter-list-exploration/release-checklist.md). | [Requirements](features/starter-list-exploration/requirements.md) · [Changelog proposal](../CHANGELOG.md) |
+| Performance and latency (`performance-scaling`) | Code and QA complete; live before/after measurement was explicitly deferred until after deployment | Capture per-surface p50/p95 from production logs, report whether the 30% target was met and whether invite throttling regressed, then remove temporary timing instrumentation as specified in ADR 0010. | [Requirements](features/performance-scaling/requirements.md) · [ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md) |
+| Vercel Analytics | Implemented and user-confirmed; dashboard event verification remains open | Confirm the expected events appear in the Vercel dashboard. | [Feature record](features/vercel-analytics/requirements.md) · [Analytics guide](ANALYTICS.md) |
+| Invite by email (`email-invites`) | Shipped to `main`; mailto design sends and stores no invitee address | Counsel review of the Terms invite clause and anti-spam position. | [Requirements](features/email-invites/requirements.md) · [Counsel review](reviews/security-compliance/features/email-invites/counsel-review.md) |
+| Invite-code RPC hardening | **Closed:** migrations 0017 and 0021 were applied live and production smoke checks passed, user-confirmed 2026-10-13 | Account-deletion self-service and counsel sign-off remain separate privacy/legal follow-ups; they are not open defects in the RPC hardening work. | [Security review](reviews/security-compliance/project/security-review-2026-09-17.md) · [Follow-up](reviews/security-compliance/project/security-review-2026-09-17-followup.md) · [Deletion/export runbook](runbooks/account-deletion-and-export.md) · [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md) |
+| Expense delete/undo | Backlog only; not scoped or implemented | Product and architecture work required before scheduling. It would also enable undoing a shopping-list item already logged as bought. | [Product principles](ROADMAP.md#product-principles-and-scope) |
+| Deferred design follow-ups | Not part of current release | Review Miso art disclosure/IP before launch promotion; dark-mode shopping-list treatment remains deferred. | [UX roadmap](features/ux-revamp/design.md) · [Shopping-list requirements](features/shopping-list/requirements.md) |
 
-_Last reviewed 2026-10-13. Summary only — the entries below are the source of truth._
+## Product principles and scope
 
-| # | Feature | Slug | Stage | What's left |
-|---|---------|------|-------|-------------|
-| 1 | Invite by email (mailto) | `email-invites` | Shipped, counsel review pending | Counsel review of Terms invite clause and anti-spam position |
-| 2 | Invite-code RPC hardening | `invite-code-rpc-hardening` | In progress | Counsel sign-off + self-serve delete flow |
-| 3 | Performance & latency fix | `performance-scaling` | Implemented, measurement deferred | After deploy: capture p50/p95 via `npm run perf:baseline`, confirm ≥30% target, check invite-throttle latency; then remove temp instrumentation (ADR 0010) |
-| 4 | Vercel Analytics + custom events | `vercel-analytics` | Implemented | Verify events appear in the Vercel dashboard; then mark shipped |
-| 5 | Expense delete / undo | _(no entry yet)_ | Unscoped | Referenced as next after security/compliance; also unblocks reverting "Bought" shopping items |
+### Product thesis
 
-Smaller follow-ups: Miso AI-art disclosure/IP review before any launch push (`ux-revamp`); dark-mode variant of the shopping list. Done 2026-10-13: removed unused `myClaimedUnloggedCount`; the settled Settle-up screen now has a "Create a new trip" button.
+Splitiful helps a group record who paid for shared expenses and see a clear,
+trusted balance at the end. The two core moments are quick expense entry and
+seeing an understandable settle-up result. Use these principles when evaluating new
+product work; this section records direction, while the tables above remain
+the source for delivery status.
 
-## In progress
+### Design principles
 
-### Invite-code guessing surface — RPC grants still public (invite-code-rpc-hardening)
-- Status: blocking root cause addressed — Postgres-side throttle shipped (option (b)); pending
-  security/QA re-verification against a live project before this is marked resolved
-- Docs: [security-review-2026-09-17.md](security-review-2026-09-17.md),
-  [security-review-2026-09-17-followup.md](security-review-2026-09-17-followup.md),
-  [security-fix-2026-09-17-qa-report.md](security-fix-2026-09-17-qa-report.md),
-  [compliance-review-2026-09-17.md](compliance-review-2026-09-17.md),
-  [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md)
-- The 2026-09-17 security audit found `get_trip_by_invite_code` and
-  `join_trip` guessable/joinable with no rate limiting (invite codes are
-  8 hex chars, ~32 bits, generated by `md5(random())` in
-  `supabase/migrations/0001_init.sql`). **Decision: invite-code length/format
-  stays as-is** — the fix is scoped to access control and throttling, not
-  entropy.
-- **Shipped so far**: `src/app/join/[code]/page.tsx` no longer calls
-  `get_trip_by_invite_code` directly from the browser — it goes through a
-  new server route (`src/app/api/trip-invite/[code]/route.ts`), and both
-  that route and the existing `src/app/api/join/route.ts` (`join_trip`) are
-  now rate-limited per-IP via Upstash Redis (`src/lib/rate-limit.ts`,
-  10 req/60s, fails closed with 503 in production if Upstash env vars are
-  unset). Test coverage added for the new route, the page, and the
-  rate-limiter against live Upstash (`src/app/api/trip-invite/[code]/route.test.ts`,
-  `src/app/join/[code]/page.qa.test.tsx`, `src/lib/rate-limit.test.ts`).
-- **Was open (blocking), now addressed**: the Postgres function grants
-  themselves were never touched by the app-level fix — `get_trip_by_invite_code`
-  is still `grant`ed to `anon` and `join_trip` to `authenticated`
-  (`supabase/migrations/0002_fix_function_grants.sql`), live-verified twice
-  independently (by the `security` and `qa` agents) to be callable straight
-  against Supabase's own PostgREST RPC endpoint with the public anon key,
-  completely bypassing this app's routes and the Upstash limiter.
-  **Shipped**: `supabase/migrations/0013_throttle_invite_rpcs_in_postgres.sql`
-  adds a throttle inside both `plpgsql` functions themselves — option (b)
-  below — so the limit applies no matter which door a caller uses.
-  `get_trip_by_invite_code` (anon, no session) throttles per
-  `x-forwarded-for` read from PostgREST's `request.headers`;
-  `join_trip` (authenticated) throttles per `auth.uid()`, a JWT-verified
-  identity an attacker can't reset without minting a fresh anonymous
-  session. Route handlers (`src/app/api/trip-invite/[code]/route.ts`,
-  `src/app/api/join/route.ts`) now map that DB-side rejection to a 429
-  via `isDbRateLimitError`/`dbRateLimitResponse` (`src/lib/rate-limit.ts`).
-  See [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md) for why
-  option (b) was chosen over (a), and its known residual caveat (the
-  `x-forwarded-for` trust assumption, same class as finding #3 below,
-  just relocated to Postgres) — **not yet re-verified against a live
-  Supabase/Vercel deployment**, only proven at the SQL/route level here.
-- **Remediation options considered** (picked one, not both — decision
-  recorded in [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md)):
-  (a) revoke the `anon`/`authenticated` execute grants on both functions
-  and route all access through a service-role server-only client (new
-  `SUPABASE_SERVICE_ROLE_KEY`, must never reach the client, bypasses all
-  RLS) — rejected because `join_trip`'s verification guard (migration
-  0010) depends on the caller's own `auth.uid()`/`auth.jwt()`, which a
-  service-role call doesn't carry without re-deriving it server-side, and
-  revoking `authenticated` outright would also block this app's own
-  legitimate calls, which are otherwise indistinguishable from a direct
-  caller at the grant level; or
-  (b) **(chosen)** add a throttle inside the `plpgsql` functions
-  themselves, the one layer every call path — in-app or direct —
-  actually passes through.
-- **2026-10-01 verified (anon-to-permanent-account linking, ADR 0006)**: this
-  assumption — every new RLS policy in `0009_simplified_onboarding.sql`
-  depends on it — had never been checked against a live Supabase project.
-  Verified directly against the live project's Auth REST API (anonymous
-  sign-up → `updateUser({email})` → real OTP code delivered to a genuinely
-  unregistered test inbox → `verifyOtp({type:"email_change"})`): the
-  resulting user is the **same `auth.uid()`** as the original anonymous
-  session (`76700021-ea47-40bf-bac4-5ef103d81f97` before and after),
-  `is_anonymous` flips `true` → `false`, email confirmed — a true
-  upgrade-in-place, not a new/different identity. ADR 0006's open risk is
-  closed. (Separately exercised in the same pass: `updateUser({email})` for
-  an email that's already a different, existing permanent account correctly
-  returns `email_exists` rather than silently misbehaving — the case
-  `use-otp-flow.ts`'s `email_exists` fallback, above, now handles.)
-- **2026-09-30 fix (open redirect)**: the open redirect flagged above is
-  closed — both `src/app/check-email/page.tsx` and
-  `src/app/join/[code]/welcome/page.tsx` read their `next`/`back` query params
-  through a new `sanitizeInternalPath` (`src/lib/validation/redirect.ts`,
-  tested in `redirect.test.ts`), which only allows a same-document-relative
-  internal path through (`/...`, rejecting `//`, `/\`, and any embedded
-  `://` scheme) and falls back to a safe default otherwise.
-- **2026-09-30 fix (`get_trip_summary` invite-code leak)**: closed via
-  migration `0016_join_by_trip_id_drop_invite_code_leak.sql` (option B from
-  the three considered — see the migration's own comment for the full
-  trade-off writeup). `get_trip_summary` no longer returns `invite_code` at
-  all; the two callers that used it (`TripSummaryOnly` and
-  `RemovedFromTripScreen` in `src/app/trip/[id]/page.tsx`) now join via a new
-  `join_trip_by_id` RPC (`joinTripById` in `src/lib/data/trips.ts`, wired
-  through `/api/join`'s existing route and a new `joinTripId` query param on
-  `/check-email`) keyed by the trip UUID they already have, instead of ever
-  learning the literal invite code. Preserves both screens' exact current
-  behavior (a bare-`/trip/<uuid>` visitor can still confirm-and-join; a
-  removed member can still rejoin) — this does not change who can end up
-  joining a trip, only removes the invite-code string itself from ever
-  reaching a client that only had the UUID. `join_trip_by_id` mirrors
-  `join_trip`'s guards exactly (migration 0010's anonymity check, migration
-  0013's per-`auth.uid()` throttle, same on-conflict membership upsert), and
-  was live-verified against a throwaway local Postgres 10 instance
-  (`initdb`/`pg_ctl`, same method as migration 0013's own verification) before
-  being handed over: confirmed `get_trip_summary`'s returned columns no
-  longer include `invite_code`, `join_trip_by_id` rejects an anonymous
-  caller and an unknown trip id, succeeds and upserts (not duplicates) on
-  rejoin for a verified caller, throttles after 10 calls/60s same as
-  `join_trip`, and that `join_trip`/`get_trip_by_invite_code` are unchanged.
-  Migration applied to the live Supabase project (2026-09-30, user-confirmed).
-  Live functional smoke test passed (2026-10-01, user-confirmed): both call
-  sites complete a join end-to-end against the deployed app. That same test
-  surfaced a real, separate bug — see the 2026-10-01 entries below — fixed
-  the same day. This item is closed.
-- **2026-10-01 fix (anonymous-session email-linking failure)**: the live
-  smoke test above found that a visitor with no local session at all (e.g. a
-  private window) whose email already belonged to a different, existing
-  permanent account got a hard failure (Supabase's `email_exists`) instead of
-  completing the join — `src/lib/use-otp-flow.ts`'s `sendCode`/`resend` only
-  knew how to *link* an anonymous session to an email, never to fall back to
-  a plain sign-in when that email turns out to already be someone's account.
-  Fixed: on `email_exists`, falls back to `signInWithOtp` for that email
-  (`signingIntoExisting` state threads the right `verifyOtp` type through to
-  `confirmCode`, since the session is still anonymous at verify time).
-  Covered by new tests in `use-otp-flow.qa.test.tsx`. Separately,
-  `TripSummaryOnly`/`RemovedFromTripScreen` now skip the email+OTP step
-  entirely for a visitor who already has a verified, non-anonymous session —
-  `JoinTripInline` (`src/app/trip/[id]/join-trip-inline.tsx`) joins them
-  directly via the existing `/api/join` route, since they're already who
-  they say they are. User-confirmed working live.
-- **2026-10-01 fix (`get_trip_by_invite_code` throttle bypass, live-confirmed
-  exploitable)**: live-tested the `x-forwarded-for` trust caveat flagged
-  under migration 0013/ADR 0009 by calling the RPC directly against
-  Supabase's own REST endpoint (bypassing this app/Vercel) 30 times, each
-  with a different forged `x-forwarded-for` value — **all 30 succeeded, 0
-  blocked** (versus 20-then-blocked when the forged header was held
-  constant). Confirmed: Supabase's API layer, unlike Vercel's edge in front
-  of this app's own routes, does not overwrite that header with the real
-  connecting IP, so the Postgres-side throttle is trivially bypassed by
-  anyone willing to spoof a different value per request — the original
-  invite-code-guessing surface this migration was meant to close. (`join_trip`
-  is not affected — it's keyed on `auth.uid()`, a JWT-verified identity with
-  no header to spoof.)
-  Fixed via `0017_revoke_public_invite_lookup_grant.sql`: revokes the
-  `anon`/`authenticated` execute grant on `get_trip_by_invite_code` entirely
-  (an `authenticated` JWT is itself free/anon-reachable via
-  `signInAnonymously()`, so that grant gave no real protection either). The
-  one legitimate caller (`src/app/api/trip-invite/[code]/route.ts`, already
-  behind its own Vercel-IP-keyed `enforceRateLimit`) now calls it via a new
-  service-role client (`src/lib/supabase/service.ts`, `SUPABASE_SERVICE_ROLE_KEY`,
-  server-only). Live-verified the grant revocation itself against a
-  throwaway local Postgres instance: `anon`/`authenticated` now get
-  "permission denied," a privileged role (standing in for `service_role`)
-  can still call it, and `join_trip` is unaffected.
-  **Closed (2026-10-13, user-confirmed)**: `SUPABASE_SERVICE_ROLE_KEY` is set in
-  both `.env.local` and the Vercel project's env vars, migration 0017 is applied
-  live, and an invite-link preview was tested end-to-end against production.
-- **2026-10-13 fix (`get_trip_summary` public grant)**: migration
-  `0021_revoke_public_trip_summary_grant.sql` revokes the `anon`/`authenticated` execute grant,
-  same approach as 0017. Its two callers (`renderTripDashboard` in `src/app/trip/[id]/page.tsx`
-  and `src/app/api/trip-invite/[code]/route.ts`) now use the service-role client. Trip ids are
-  `gen_random_uuid()`, so this was never a brute-force surface; it keeps direct-to-Supabase callers
-  out. Migration 0021 applied live (user-confirmed 2026-10-13); smoke test of `/trip/[id]` and an invite preview passed (user-confirmed 2026-10-13). Closed.
-- **Explicitly out of scope for this item**: receipt-storage RLS still
-  using bare `is_trip_member` pre-verification — deferred since receipt
-  storage isn't a shipped feature yet.
-- **Compliance findings from the same audit, separately tracked here since
-  there's no other home for them yet**: no privacy policy or terms of
-  service exist anywhere in the app; no account-deletion/data-export flow
-  exists; no retention policy for abandoned anonymous accounts created by
-  the simplified-onboarding flow before an email is ever collected. All
-  three need a decision from the user/legal, not just an engineering fix —
-  see the compliance report for detail. **Update 2026-10-01**: privacy/terms pages, an
-  email-request deletion/export runbook, and a 90-day anonymous-account purge (migration 0018)
-  shipped; hourly purge of stale `rpc_rate_limits` rows (migration 0019, PR #2/#4) also shipped; counsel sign-off and a self-serve delete flow remain open.
-- **2026-09-20 addition**: the still-pending live-deployment re-verification
-  above (currently scoped to the `x-forwarded-for` trust caveat) should also
-  confirm whether the Postgres-side throttle plus the added Upstash round
-  trip introduced a *material latency regression* on the join/invite-code
-  path — folded in here per
-  [performance-scaling](features/performance-scaling/requirements.md) rather
-  than duplicated as new scope. If that check finds a real regression (not
-  just a confirmation that the header-trust caveat holds), the fix itself is
-  tracked and delivered under `performance-scaling`, cross-referenced back
-  here — not by reopening ADR 0009's already-settled remediation choice.
+- Keep expense entry quick. The default equal split should remain easy to use
+  without requiring groups to configure how they divide every purchase.
+- Make the final balance easy to understand without asking users to reconcile
+  a ledger or interpret charts.
+- Avoid features that require the whole group to negotiate new settings or
+  decisions unless they clearly improve the core experience.
+- Prefer correctness and clear data handling over automation that can silently
+  produce a wrong amount.
+- Keep optional features optional. The shared shopping list is shipped as a
+  convenience before logging an expense; skipping it must not change the core
+  expense flow. It is a pre-purchase checklist with description-only prefill,
+  not post-hoc itemization of a bill.
 
-## Planned
+### Current priorities and non-goals
 
-### Starter lists: trip types + Suggested card, v0.8.0 (starter-list-exploration)
-- Status: implemented (Revisions 1-4), QA passed; security and compliance final and delta reviews have no blocking findings. Awaiting live DB verification and counsel review. Proposed version 0.8.0 (package.json not yet bumped).
-- Remaining release steps (details in [release-checklist.md](features/starter-list-exploration/release-checklist.md)): (1) apply the FIXED migration 0022 to the DB before the app deploy; (2) run `supabase/migrations/0022_trip_types_and_other_type.live.qa.test.ts` (`LIVE_SUPABASE_*`, non-production project if available) and `supabase/verify/0022_trip_types_and_other_type.verify.sql` (runbook section 5); (3) merge and deploy; (4) counsel review of the /privacy legitimate-interest wording (draft, `LEGAL_LAST_UPDATED` Oct 13 2026).
-- Requirements: [docs/features/starter-list-exploration/requirements.md](features/starter-list-exploration/requirements.md)
-- Docs: [planning.md](features/starter-list-exploration/planning.md), [breakdown.md](features/starter-list-exploration/breakdown.md), [brief.md](features/starter-list-exploration/brief.md)
-- New trip gets optional trip types (Camping / Airbnb stay / International, stored on the trip). The List tab gets a client-computed "Suggested for this trip" card (merged, deduped, "+" per item) from a bundled catalog kept in one easy-to-edit config file. Name-only analytics. Light mode only. A guest organizer's first add goes through the existing OTP gate. The user knowingly reverses the shopping-list non-goal "no cross-trip common items template". Later versions per breakdown.md: Add all + tiles + first-run (0.8.1), Undo (0.9.0), copy past trip (0.10.0), share (0.11.0+). Semver: feature.
-- Amended 2026-10-14 (user feedback, requirements Revision 3, criteria 74-100): 0.8.0 now also includes the "Start from a template" shelf (3 tiles, "Blank trip") on `/trips` and the welcome page, the bottom "New trip" pill replacing the small + on `/trips`, the first-run "No trips yet" card, `/trip/new?type=<code>` pre-check, name-only `home_template_tapped_*` and `home_blank_trip_tapped` events, canvas fidelity fixes (design-audit.md), a canvas coverage table (every board A-L), and a QA screenshot-versus-board check at 390px and 320px. Needs a re-run of design, build, QA and a compliance/security re-confirm.
-- Later versions per [breakdown.md](features/starter-list-exploration/breakdown.md): 0.8.1 Add all and editing trip types on existing trips (older trips have no types, so they get no suggestions until then; template tiles and first-run moved into 0.8.0); 0.9.0 Undo (batch_id schema change); 0.10.0 copy a past trip's list (plus its undo); 0.11.0+ share a list by link.
-- Backlog (from security-final and compliance-final): trip creation is unthrottled; `trips.name`/`location` have no length CHECK; `getMyTrips` still over-fetches with `select('*')` on `trip_members` (compliance R4-A1); check the user-edited 'sunscreen' catalog entry; optionally surface a notice when the trip is created but the trip type was not saved (fallback path).
-- For the product owner (X1): the welcome page claims "0 accounts to join" and "no account needed to start", which should be re-checked against the anonymous-session model.
+- Expense deletion and undo remain backlog items. Scope them only after the
+  product and architecture decisions are made; deletion must account for
+  shopping-list items linked to an expense.
+- After current release work is complete, prioritize friction observed in
+  real use of expense entry and settle-up rather than pre-planning a large new
+  feature set.
+- Receipt capture and OCR, post-hoc per-bill itemization, payment-rail
+  integrations, multi-currency accounting, spending charts, AI categorization,
+  and social feeds are not current product plans. Reconsider them only through
+  an explicit product decision that addresses added complexity and correctness
+  risks. A simple external payment link could be considered separately if a
+  concrete need emerges.
 
-### Performance & latency fix — three core surfaces (performance-scaling)
-- Status: implemented — QA passed on code correctness; **baseline/after
-  measurement deferred to post-deploy** (2026-09-21 user decision, see below)
-- Requirements: [docs/features/performance-scaling/requirements.md](features/performance-scaling/requirements.md)
-- Supersedes [planning.md](features/performance-scaling/planning.md)'s "zero
-  new scope" recommendation: the user confirmed at Checkpoint 1 this is a
-  **felt problem today**, not a speculative growth bet, and named all three
-  of the app's core interaction paths as slow — trip/expense page loads
-  (`/trips`, `/trip/[id]`), the invite-code join/preview flow, and adding/
-  editing an expense. No volume/growth data exists, so this is explicitly
-  **not** capacity/pooling/read-replica work — it's measure-then-fix on
-  three named surfaces. Since there's no observability layer yet
-  (`vercel-analytics` above is still planned, not shipped), this feature
-  ships its own narrow, interim timing instrumentation on just these three
-  surfaces (`src/lib/perf/timing.ts`, `POST /api/perf-log`, per
-  [ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md)) rather
-  than waiting on or duplicating the general analytics rollout. Any DB/RPC-level
-  fix must be live-Postgres-verified, not just CI-green, per the
-  migration-0013 lesson
-  ([ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md)'s
-  post-acceptance correction). No new caching that risks split-total/
-  balance staleness (`docs/v2-vision.md`). Coordinates with, rather than
-  duplicates, `invite-code-rpc-hardening`'s already-pending live-deployment
-  re-verification (see that entry's 2026-09-20 addition above) for the
-  join/invite-code surface specifically. Open questions carried into the
-  requirements doc for user confirmation: priority order across the three
-  surfaces, whether this changes the security/compliance-then-expense-delete
-  sequencing in `docs/v2-vision.md` (default: no), and the proposed ≥30%
-  p95-improvement target (default, adjustable once a baseline exists).
-- **Shipped**: Phase 1 instrumentation (unconditional) plus the safe/default
-  Phase 2 fixes — `/trip/[id]` parallelizes `getUser()`+`getTripSummary()`
-  via `Promise.all` (no Suspense/streaming, to avoid flashing the
-  unverified-visitor summary view to a verified member); `/trips` Tier 1
-  parallelizes its `getUser()` with the `trips` select; the invite-preview
-  route (`GET /api/trip-invite/[code]`) now returns an additive `summary`
-  field from one server-side round trip instead of two browser round trips
-  (necessarily sequential, not parallel, since `get_trip_summary` needs the
-  UUID `getTripByInviteCode` resolves from the invite code — a documented
-  deviation from architecture.md's original parallel sketch); `requireVerifiedSession`
-  gained an optional `prefetchedUser` param, fixing a double `getUser()` call
-  in add-expense; a delayed "Taking a little longer than usual…" loading line
-  (~4s) was added to the four blocking loading states. **Not implemented**:
-  [ADR 0011](adr/0011-forward-verified-user-id-header-for-trips-page.md)'s
-  header-forwarding idea for `/trips` — proposed only, explicitly gated
-  behind live Phase 1 data and a dedicated security sign-off, out of scope
-  for this pass.
-- **QA (2026-09-20)**: code correctness, RLS/visibility-tier race behavior,
-  invite-throttle side effects, split-calculation correctness, and the
-  explicit no-Suspense/no-ADR-0011 constraints all verified and passing
-  (257/257 tests). QA also found the Phase 1 baseline this doc's acceptance
-  criteria call **blocking** — a documented before/after p50/p95 per surface,
-  and an explicit regression finding for the invite-code throttle path —
-  cannot be produced in this build environment, since it requires real
-  production traffic on a live Vercel deployment.
-- **2026-09-21 decision (user)**: ship the implemented fixes now rather than
-  hold the merge for staging data or build a synthetic local benchmark.
-  **Follow-up (not yet actioned)**: once this is deployed, capture real
-  before/after p50/p95 measurements (broken down per Supabase call) for all
-  three surfaces via the shipped `[perf]`-tagged log instrumentation, confirm
-  the ≥30% p95 target per surface (or record why not), and explicitly report
-  whether the invite-code throttle path (folded in from
-  `invite-code-rpc-hardening` above) shows a material latency regression.
-  This roadmap entry should not be marked "shipped" until that follow-up is
-  done.
-  - **Tooling for this follow-up (added 2026-09-21)**: `scripts/perf-baseline.mjs`
-    (`npm run perf:baseline`) aggregates the `[perf]`-tagged log lines into
-    p50/p95/p99 per surface+call — pull raw logs from the live deployment
-    (`vercel logs <deployment-url> --since 24h`) and pipe them into the
-    script; it does not generate traffic or deploy anything itself, only
-    aggregates logs that already exist. Flags any surface+call with fewer
-    than 30 samples as low-confidence. Also remember to delete
-    `src/lib/perf/timing.ts`, `POST /api/perf-log`, and every call site once
-    this baseline is captured and Phase 2 concludes — this instrumentation
-    is explicitly temporary (see ADR 0010).
+The shared shopping list was previously a proposed follow-up; it is now
+implemented and listed under shipped capabilities. The older vision document's
+sequencing and security-audit status were point-in-time notes and are superseded
+by the current release table above.
 
-## Shipped
+### Historical priority snapshot (September 2026)
 
-### Vercel Analytics – Full Enable and Custom Event Tracking (vercel-analytics)
-- Status: implemented (user-confirmed 2026-10-13; `@vercel/analytics` and `@vercel/speed-insights` in `src/app/layout.tsx`, custom events via `src/lib/tracking.ts`). Dashboard verification of events not yet confirmed
-- Requirements: [docs/features/vercel-analytics/requirements.md](features/vercel-analytics/requirements.md)
-- Enable all Vercel Analytics capabilities (Web Vitals) and add custom event tracking for key user flows (trip creation, expenses, invites, settlement) to measure product engagement and performance; include privacy safeguards and dashboard-accessible documentation.
+The former vision document prioritized security/compliance closeout, then
+expense deletion, then improvements informed by real use, and then the shared
+shopping list. The invite-code RPC hardening is now closed, the shopping list
+has shipped, and expense deletion remains backlog. This snapshot explains the
+ordering discussed in dated feature-planning records; use the current release
+table above for today's status and sequencing.
 
-### Invite by email via the organizer's own mail app (email-invites)
-- Status: shipped to `main` (PR #3, 2026-10-12/13). Rescoped to the lighter mailto version; follow-up 2026-10-12: no name field, no placeholder, opens the mail app immediately; nothing stored. QA and compliance passed. **Still open**: counsel review of the Terms invite clause and anti-spam position ([counsel-review.md](features/email-invites/counsel-review.md)). Migration 0020 is applied live (user-confirmed 2026-10-13)
-- Requirements: [docs/features/email-invites/requirements.md](features/email-invites/requirements.md)
-- Docs: [planning.md](features/email-invites/planning.md)
-- Organizer taps "Invite by email" on the roster, types an email, and Splitiful immediately opens the organizer's own mail app with a prefilled mailto:. Splitiful sends no email and stores no invitee email. The link is the existing shared /join/[code] link; the join, code and first-time name-prompt flow is unchanged. Supersedes the earlier Splitiful-sent design (per-person tokens, Pending rows, suppression list, webhook, opt-out page, 30-day auto-removal), which was abandoned. Shipped together with migration 0020 (one display name per account), the standalone `/feedback` page, and home/trip UI tweaks.
+## Shipped capabilities
 
-### Shared shopping list with per-item claiming (shopping-list)
-- Status: shipped — QA/security/compliance passed
-- Requirements: [docs/features/shopping-list/requirements.md](features/shopping-list/requirements.md)
-- Docs: [architecture.md](features/shopping-list/architecture.md),
-  [design.md](features/shopping-list/design.md),
-  [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)
-- Adds a third "List" tab (alongside Expenses/Details) where any verified real trip
-  member can add free-text items, claim an open item (single first-come claimer,
-  DB-enforced against claim races via `claim_shopping_list_item`), and release their
-  own claim by tapping their avatar circle in "Your bag" again (the same control
-  toggles claim and unclaim). **Unclaim is claimer-only** — this was tightened during
-  implementation review from planning's earlier "anyone can unclaim" default; see
-  requirements.md decision 2's "Superseded post-implementation (2026-09-29)" note and
-  `unclaim_shopping_list_item`'s RPC-level enforcement (never trusting a
-  client-supplied member id). A user's claimed-unlogged items surface as multi-select
-  pills in the add-expense sheet (both existing call sites, per ADR 0008); selecting
-  one or more composes a comma-joined description client-side — the amount is always
-  typed by hand, never auto-filled. Submitting an expense with items selected calls a
-  new atomic RPC (`add_expense_and_log_shopping_items`) that inserts the expense and
-  marks the items "logged" in a single transaction, closing a staleness gap flagged in
-  design.md rather than leaving it as a two-call, non-atomic sequence. Logged items
-  move to a "Bought" section and tap through to their linked expense — now readable
-  (read-only) by any verified member, or on a locked trip, via a new render branch on
-  the existing edit-expense route, not just the payer (a real, if small, scope
-  addition beyond every prior tap-through precedent in the app, flagged and accepted
-  in design.md). Placeholder members can't claim or add items (ADR 0004's
-  identity convention). A removed member's in-flight claim is released by the app's
-  first DB trigger (`before delete on trip_members`,
-  [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)), so
-  member removal keeps working unchanged even mid-claim. **Deferred, not built**: a
-  dark-mode/glass visual variant of this feature was explored but is explicitly out of
-  scope for this pass (design.md is warm-paper only, matching the rest of the app
-  today) — tracked as a follow-up. **Known, accepted limitation carried from
-  requirements.md**: a "Bought" item's linked expense has no delete/undo path yet,
-  since expense-delete doesn't exist as a feature; the data model is deliberately left
-  able to revert a logged item back to claimed-unlogged without a schema change once
-  that feature ships. Non-goals (unchanged from requirements.md): any price/amount on
-  an item, co-claiming, cost-splitting a claim, editing a claimed item's description,
-  deleting a claimed/logged item, claim notifications, a cross-trip "common items"
-  template, a quantity field. Also, per direct user review of the live app ahead of
-  ship: removed the "Miso" mascot from the add-expense header, List/Expenses empty
-  states, and trip-creation page (left unchanged on the home/welcome screen), and
-  removed the pre-existing "Splits N ways — $X each" pill from the add-expense sheet.
-  **Pending follow-up**: `ShoppingListView.myClaimedUnloggedCount` (`src/lib/data/shopping-list.ts`)
-  is still computed and covered by its own unit test, but has had no UI consumer since the
-  Expenses-tab badge above was removed — kept rather than deleted since it's cheap, correct, and
-  may be wired back up if the badge (or something like it) returns in a future pass; revisit and
-  remove if it's still unused by then.
+These feature records describe work on `main`. Their status here takes precedence over older status
+text inside planning or requirements documents.
 
-### Remove member from trip roster + self-service leave trip (remove-member-access)
-- Status: shipped (2026-09-30 roadmap update — code shipped on `main` at `83d9453`;
-  no open PR existed to review, so "pending final PR review" was stale)
-- Requirements: [docs/features/remove-member-access/requirements.md](features/remove-member-access/requirements.md)
-- Docs: [planning.md](features/remove-member-access/planning.md),
-  [architecture.md](features/remove-member-access/architecture.md),
-  [design.md](features/remove-member-access/design.md),
-  [ADR 0012](adr/0012-post-removal-detection-and-ghost-payer-rendering.md)
-- Lets the organizer remove another real (non-placeholder) member from a trip's roster, and lets
-  any non-organizer member remove themselves ("leave trip") — both organizer-only-for-others and
-  self-service, sharing the same underlying mechanism (hard-delete the `trip_members` row, same
-  pattern as the existing `remove_placeholder_member`). **Not** invite-code rotation or true
-  access revocation — the confirmation step for both flows must disclose the person could still
-  rejoin by reusing the same invite link/code, per the `planning.md` debate's convergent
-  recommendation to ship the smaller, honest version rather than the originally-requested "revoke
-  access." Removed/left members' past expenses and `paid_by` history are never altered or
-  reassigned; note the requirements doc's finding that the *computed* equal-split share for
-  remaining members does shift once membership changes, since splits are live-computed off current
-  membership rather than snapshotted per expense (a pre-existing property of the split engine, not
-  new behavior). Notification is in-app state only ("you've been removed"/"you left" shown on
-  return, instead of a generic error) — no email, since no existing pattern lets one member trigger
-  email to another member's address without new scope. Both flows are gated on the trip still being
-  open, mirroring the existing placeholder-removal/expense-lock precedent. Explicit non-goals:
-  outstanding-balance blocking/warning, post-removal read-only balance visibility for the removed
-  member, invite-code rotation, organizer self-removal/ownership transfer, audit trail.
+| Capability | Feature record |
+|---|---|
+| Anonymous-first onboarding and email verification | [Simplified onboarding](features/simplified-onboarding/requirements.md) |
+| Server-rendered trip pages | [SSR trip pages](features/ssr-trip-pages/requirements.md) |
+| Expense dates and editing the payer's own expense | [Expense dates](features/expense-date-month/requirements.md) · [Edit own expense](features/edit-own-expense/requirements.md) |
+| Placeholder members and remove/leave trip | [Placeholder members](features/add-placeholder-members/requirements.md) · [Remove member access](features/remove-member-access/requirements.md) |
+| Shared shopping list and expense logging | [Shopping list](features/shopping-list/requirements.md) |
+| One display name per account and mailto invites | [Email invites](features/email-invites/requirements.md) |
+| UX restyle and remembered sign-in email | [UX revamp](features/ux-revamp/design.md) · [Remember email](features/remember-signin-email/requirements.md) |
 
-### UX Revamp (ux-revamp)
-- Status: shipped (2026-09-30 roadmap update — code shipped on `main` at `79ba628`;
-  no open PR existed to review, so "pending final PR review" was stale)
-- Requirements: [docs/features/ux-revamp/requirements.md](features/ux-revamp/requirements.md)
-- Restyles the existing browser app's highest-traffic path — welcome,
-  create-a-trip, the trip main view, and add-expense — to the "warm paper"
-  visual treatment (lit paper ground, ochre/terracotta glow, blurred nav,
-  floating capsule primary action, spring-up sheet for add-expense, Miso
-  the mascot) imported from a design exploration
-  (`docs/features/ux-revamp/design-import/`). Presentation-layer restyle of
-  the existing Next.js/Supabase app on the ADR 0005 SSR pattern — not a
-  mobile-specific build, native wrapper, or PWA. Ships as the app's light
-  theme, built on themeable tokens from the start so the design's "dark
-  glass" counterpart is a future token swap rather than a rebuild.
-  Add-expense's page-to-overlay-sheet conversion is flagged as real
-  routing/history/deep-link architecture work for the architect stage, not
-  a cosmetic change. Defers Details, Settle-up, and ~11 other canvas
-  screens (sign-back-in, pre-confirmation state, edit-expense, invite-link
-  opening, roster, feedback, all-trips states, loading/error patterns) to
-  later slices — note edit-expense's page-to-sheet conversion and cross-screen
-  consistency pass has since shipped separately (`1fadc46`,
-  `docs/ux-consistency-review-2026-09-30.md`), not tracked as its own
-  roadmap entry.
-- **Follow-up needed before any real launch/marketing push for Miso**
-  (user decision, 2026-09-18, not a blocker for this slice): compliance
-  flagged that Miso's art is AI-generated and now a permanent brand
-  element, raising (a) whether any target jurisdiction's AI-generated-
-  content disclosure rules apply, and (b) copyright/trademark
-  protectability of AI-generated art plus the generating tool's ToS for
-  commercial/brand use. User chose to proceed now and revisit this before
-  investing further in Miso as a brand identity — see
-  [docs/features/ux-revamp/compliance-report.md](features/ux-revamp/compliance-report.md) §2.
+## Reading project history
 
-### Simplified onboarding (simplified-onboarding)
-- Status: shipped
-- Requirements: [docs/features/simplified-onboarding/requirements.md](features/simplified-onboarding/requirements.md)
-- Replaces the mandatory email + sign-in-code screen a first-time visitor
-  hit before with a welcome + "create your first trip" action they can use
-  immediately, backed by a Supabase anonymous session (real, RLS-enforced
-  ownership, not just client-side memory) — creation and viewing their own
-  trip (summary and detail alike) are both free. On the organizer's own
-  trip, every mutating entry point (add/edit/delete expense, settle up,
-  invite/share, placeholder-member management) is hidden entirely while
-  unverified and replaced by a persistent inline email + OTP
-  confirmation on the trip page itself (no navigation to `/check-email`,
-  no draft-and-resume step needed since nothing was reachable
-  pre-verification) — this hide-and-reveal pattern is organizer-only.
-  Invitees are unchanged: public zero-auth summary view, with the
-  existing full-page attempt-then-redirect-then-resume OTP flow still
-  triggered by viewing detailed expenses or attempting to add/edit one.
-  Confirming upgrades the anonymous session to a permanent identity via
-  Supabase's anonymous-to-permanent linking rather than a separate save
-  step. Also fixes a pre-existing gap found during review: `complete_trip`
-  (Settle up) had no anonymity guard in the database at all, unlike
-  `join_trip`/placeholder RPCs already guarded by migration 0010 — closed
-  with the same SQL guard pattern plus the hide-until-verified UI
-  treatment. No unverified identity-claiming. An organizer who never
-  confirms an email has no way back in if browser memory is lost — an
-  accepted, self-evident consequence given that almost any real use
-  forces confirmation anyway.
-
-### Server-render trip pages (ssr-trip-pages)
-- Status: shipped
-- Requirements: [docs/features/ssr-trip-pages/requirements.md](features/ssr-trip-pages/requirements.md)
-- Converts `/trips` and `/trip/[id]` from client-fetched pages (loading state → client `auth.getUser()` → data fetch) to Server Components that fetch data during SSR, removing the fetch waterfall reported as slow page loads. Pure performance refactor — no UX/visual change, aside from one documented accessibility delta (the editable expense row now activates on Enter but not Space, since it's a real link). `src/proxy.ts` also changed as part of this push, but as a separate, deliberate fix made ahead of this feature's pipeline (skips the Supabase auth round trip on non-protected paths) — not by this feature's implementation. Live-verified redirect behavior is unchanged; see the QA report for the trace.
-
-### Placeholder members (add-placeholder-members)
-- Status: shipped
-- Requirements: [docs/features/add-placeholder-members/requirements.md](features/add-placeholder-members/requirements.md)
-- Lets the organizer add a name-only "placeholder" member (no invite, no account) so people who won't use the app still count in the equal split; organizer-only add/remove/rename, placeholders can never be a payer, no auto-merge with a real member who joins later.
-
-### Expense date (expense-date-month)
-- Status: shipped
-- Requirements: [docs/features/expense-date-month/requirements.md](features/expense-date-month/requirements.md)
-- Lets a member record the actual date an expense happened (separate from the log-entry timestamp), shown inline per expense (e.g. "Mon, 9/14") in place of today's weekday-only label. No month grouping/headers.
-
-### Remember sign-in email (remember-signin-email)
-- Status: shipped
-- Requirements: [docs/features/remember-signin-email/requirements.md](features/remember-signin-email/requirements.md)
-- Prefills the sign-in form with the last-used email on a returning device so users don't retype it every time they request a new sign-in code (local storage only — not an extended-login-session feature).
-
-### Edit own expense (edit-own-expense)
-- Status: shipped
-- Requirements: [docs/features/edit-own-expense/requirements.md](features/edit-own-expense/requirements.md)
-- Lets the member who paid for an expense correct its amount/description after creation, so a typo doesn't corrupt everyone's settlement math.
-
-<!--
-Entry format:
-
-### <Feature name> (<slug>)
-- Status: planned | in progress | shipped
-- Requirements: [docs/features/<slug>/requirements.md](features/<slug>/requirements.md)
-- One-line why this exists
--->
-</content>
+- Use this page to answer **what is shipped, what is awaiting release, and what remains open**.
+- Use the README for a concise description of current product behavior and `docs/ARCHITECTURE.md` for
+  the detailed system design.
+- Use `docs/features/<slug>/` for the requirements, design, and verification record of an individual
+  effort. Planning documents and earlier revisions preserve context; they are not current scope.
+- Use ADRs for durable technical decisions. An ADR marked `superseded` records history, not current
+  implementation policy.
+- Use `CHANGELOG.md` for release notes. An entry under `[Unreleased]` is implemented work proposed
+  for a future release, not proof that it has been deployed.

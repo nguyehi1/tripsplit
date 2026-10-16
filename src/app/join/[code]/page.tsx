@@ -38,7 +38,7 @@ function JoinTripContent() {
     setLoadError(null);
     // Goes through the server-side /api/trip-invite/[code] route rather than calling
     // `get_trip_by_invite_code` straight from the browser, so the invite-code lookup is rate-
-    // limited (docs/security-review-2026-09-17.md finding #1) — see src/lib/rate-limit.ts.
+    // limited (docs/reviews/security-compliance/project/security-review-2026-09-17.md finding #1) — see src/lib/rate-limit.ts.
     //
     // performance-scaling architecture.md's "Invite/join preview" fix: this used to be two
     // sequential browser-to-network hops — this fetch, then a second, direct-to-Supabase

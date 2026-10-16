@@ -1,151 +1,58 @@
 # Splitiful
 
-Split trip/event expenses with a friend group. Create a trip in seconds — no account or email
-required — add expenses as you go, and see who owes who. Anyone with an invite link can see a
-trip's running totals with zero sign-up; an email is only ever asked for at the moment someone
-wants the itemized expense list or wants to add/edit an expense.
+Split trip and event expenses with a friend group. Organizers can create and view a trip without
+entering email up front; invitees can see its public summary from a shared link. Email verification
+unlocks invitees' itemized ledger and changes, and unlocks changes for organizers.
 
-## Status
+## Current state
 
-Core v1 flow is implemented: Supabase schema/auth/RLS, trip dashboard (expenses + settle-up),
-add-expense, edit-own-expense, and feedback. The trip organizer can also add name-only
-"placeholder" members — no account or invite needed — for people who won't use the app, so the
-equal split still accounts for everyone on the trip; the organizer can rename or remove them
-later. From the same roster, **Invite by email** opens the organizer's own mail app with a
-prefilled message containing the trip's shared join link (Splitiful sends no email, never
-receives the address and stores nothing). Full spec:
-[docs/features/email-invites/requirements.md](./docs/features/email-invites/requirements.md).
+The core app and roster, expense, invite, and shared-list features are implemented. Trip types,
+starter suggestions, and the home template shelf are implemented in this repository; their release
+checklist is still open. [The roadmap](./docs/ROADMAP.md) is the current status source for shipped
+work and outstanding release actions.
 
-Each account has **one display name** shared across all its trips (migration 0020). Creating a
-trip doesn't ask for a name; a first-time prompt appears after sign-in or join if the account has
-none. Feedback lives at the standalone `/feedback` page (session required; the old
-`/trip/[id]/feedback` URL redirects there).
+### Shipped capabilities
 
-The organizer can also remove a real (non-placeholder) member from the trip's roster, and any
-non-organizer member can leave a trip themselves, from the roster screen
-(`/trip/[id]/invite`) — both require an explicit confirm step that discloses the removed/left
-member could still rejoin by reusing the same invite link (there's no invite-code rotation in
-this pass). Both hard-delete the `trip_members` row and are blocked once the trip is completed;
-past expenses stay in the ledger untouched and attributed to the removed/left member, but
-remaining members' computed shares recompute live across the smaller member count, the same way
-they already do when someone joins mid-trip. The removed/left member sees an explicit in-app
-"you're no longer on this trip" state the next time they visit — not an email — unless they
-never logged an expense on that trip before being removed, in which case they see the existing
-generic "trip not found" view instead (a disclosed, accepted gap — see
-[ADR 0012](./docs/adr/0012-post-removal-detection-and-ghost-payer-rendering.md)). The organizer
-can't remove or leave a trip via this flow. Full spec:
-[docs/features/remove-member-access/requirements.md](./docs/features/remove-member-access/requirements.md).
+- **Trips and onboarding:** anonymous-first trip creation, public trip summaries, email-code
+  verification for details and changes, remembered sign-in email, and one display name per account.
+- **Expense splitting:** equal trip-wide split, expense dates, edit-own-expense, and settle-up
+  summaries. No payment integration or expense delete/undo flow yet.
+- **Roster:** name-only placeholder members, organizer removal of a real member, and member
+  self-service leave. Removing a member does not rotate the invite link; see [ADR 0012](./docs/adr/0012-post-removal-detection-and-ghost-payer-rendering.md).
+- **Shared list:** members can add and claim items; claimed items can be logged as expenses.
+- **Invites:** organizers can open their own mail app with a prefilled shared invite link. Splitiful
+  does not send or store invitee email addresses.
+- **Interface:** warm-paper visual theme and route-backed add-expense/add-item sheets.
 
-The trip page has a third **List** tab (alongside Expenses/Details) for a shared shopping list:
-any verified real trip member can add free-text items, claim an open item for themselves
-(single first-come claimer, enforced at the database level against claim races), and release
-their own claim via a × control — unclaim is claimer-only, not any member. A user's
-claimed-unlogged items appear as multi-select pills in the add-expense sheet; selecting one or
-more composes the expense's description as a comma-joined list of the selected items' names
-(the amount is always typed by hand, never auto-filled). Submitting the expense marks the
-selected items "logged" and links them to it, atomically with the expense's creation; logged
-items move to a "Bought" section and tap through to their linked expense (read-only for anyone
-but the payer, or on a locked trip). The Expenses tab shows a small badge counting the current
-user's own claimed-unlogged items. Placeholder members can't claim or add items. A dark-mode/
-glass visual variant was designed but deferred — not built in this pass, see
-[docs/ROADMAP.md](./docs/ROADMAP.md). Full spec:
-[docs/features/shopping-list/requirements.md](./docs/features/shopping-list/requirements.md).
+Feature requirements and QA records are linked from the [roadmap](./docs/ROADMAP.md). The trip
+workflow and onboarding details are in
+[docs/features/simplified-onboarding/requirements.md](./docs/features/simplified-onboarding/requirements.md).
 
-New trips can optionally be tagged with trip types (Camping, Airbnb stay, International, and/or a
-short typed "Other", up to 30 characters; not editable after creation yet). The List tab then shows
-a "Suggested for this trip" card at the end of the list, built on the device from a bundled catalog
-(`src/lib/starter-catalog.ts`), with a "+" per item that adds it to the shared list. Home (`/` and
-`/trips`) has a "Start from a template" shelf that opens New trip with a type pre-checked. Apply
-the fixed migration 0022 (not 0021, which is the unrelated summary-grant revoke) before deploying;
-the owner's ordered steps are in
-[docs/features/starter-list-exploration/release-checklist.md](./docs/features/starter-list-exploration/release-checklist.md)
-and release checks are in
-[docs/runbooks/account-deletion-and-export.md](./docs/runbooks/account-deletion-and-export.md)
-section 5. Full spec:
-[docs/features/starter-list-exploration/requirements.md](./docs/features/starter-list-exploration/requirements.md).
+## Project docs
 
-**Onboarding** is a two-track model (see
-[docs/features/simplified-onboarding/requirements.md](./docs/features/simplified-onboarding/requirements.md)
-for the full spec):
+- [Documentation index](./docs/README.md) — guide to current references, historical records, and
+  operational docs.
+- [Roadmap](./docs/ROADMAP.md) — current shipped status, release gates, and open follow-ups.
+- [Architecture](./docs/ARCHITECTURE.md) — system and data-access architecture.
+- [Feature records](./docs/features/README.md) — dated planning, requirements, design, and review evidence.
+- [ADRs](./docs/adr/README.md) — architectural decision history, including superseded decisions.
+- [Agent workflow](./docs/agent-workflow.md) — shared team roles, stages, and review gates.
+- [Analytics](./docs/ANALYTICS.md) — event catalog and dashboard guidance.
+- [User flow](./docs/user-flow.html) — auth and navigation flow (open in a browser).
 
-- **Organizer**: tapping "Create your first trip" creates the trip immediately behind an
-  anonymous Supabase session on that browser — no email, no code. The organizer can fully view
-  their own trip right away, but Add expense, Settle up, and Invite/roster-management are
-  hidden from the trip page until they confirm an email via an inline "email → 6-digit code"
-  prompt on the trip page itself (no navigation to another screen). Confirming upgrades that
-  same session to a permanent identity and reveals all three actions, fully unlocked — nothing
-  to redo.
-- **Invitee**: opening an invite link shows the trip's public summary (totals, who-owes-who)
-  with zero auth. The moment someone tries to view the itemized expense list, or add/edit an
-  expense, that's what triggers the existing email + 6-digit-code sign-in flow — confirming
-  unlocks both viewing detail and writing in one step.
-
-A returning visitor on the same browser/device goes straight back into their trip(s); signing in
-from a new device (or after clearing storage) uses the same email + code flow and lands on a
-trips list page, since one email can be tied to multiple trips. Sign-in remembers the last email
-used on a device (local-only, with an easy "clear" option) so returning users don't have to
-retype it.
-
-**Visual design**: the welcome, create-a-trip, trip view, and add-expense screens use a "warm
-paper" theme — lit paper background with an ochre/terracotta ambient glow, a blurred sticky nav,
-floating capsule primary actions, a faint paw-print texture, and a mascot named Miso (currently
-placeholder art on the welcome screen; final-resolution art is a tracked fast-follow, see
-[docs/ROADMAP.md](./docs/ROADMAP.md)). Colors, shadows, and radii are all named CSS custom
-properties in `src/app/globals.css` so a future dark theme is a token swap, not a rebuild — see
-[ADR 0007](./docs/adr/0007-css-custom-property-tokens-for-themeable-restyle.md). Add-expense opens
-as a spring-up overlay sheet over the (dimmed) trip view rather than a separate page, but its URL
-(`/trip/[id]/add-expense`) still works as a direct link or on refresh, and the browser back button
-closes it — see [ADR 0008](./docs/adr/0008-add-expense-sheet-via-intercepting-parallel-routes.md).
-Full spec: [docs/features/ux-revamp/design.md](./docs/features/ux-revamp/design.md).
-
-Pre-production hardening still pending.
-
-## Docs
-
-- [docs/market-research.md](./docs/market-research.md) — competitive landscape and positioning.
-- [docs/user-flow.html](./docs/user-flow.html) — auth + navigation flow from invite link to
-  Trip Home (open in a browser).
-- Build plan: `~/.claude/plans/gentle-tumbling-floyd.md` — locked product decisions, schema, auth
-  flow, app structure, settlement algorithm, and milestone sequence for v1.
+Feature planning and requirements files are point-in-time records; they may describe proposals that
+were later changed or dropped. Use the roadmap for delivery status and the current code for exact
+behavior.
 
 ## Stack
 
-- **Frontend**: Next.js (App Router, TypeScript) + Tailwind CSS, deployed on Vercel.
-- **Backend**: Supabase — Postgres with row-level security, Auth (anonymous sessions +
-  6-digit email OTP sign-in), Storage (receipt photos, v2).
+- **Frontend:** Next.js App Router, TypeScript, Tailwind CSS; deployed on Vercel.
+- **Backend:** Supabase Postgres with row-level security and Supabase Auth (anonymous sessions and
+  six-digit email OTP).
 
-## v1 scope
-
-- Whole-trip equal split (total ÷ member count), computed live.
-- Manual expense entry (amount + description + date — date is optional and defaults to today
-  when left blank).
-- The member who paid for an expense can edit its amount/description/date afterward, until the
-  trip is completed (date is required on edit); editing another member's expense is rejected
-  server-side (RLS), not just hidden in the UI.
-- The expense list shows each expense's actual date (e.g. "Mon, 9/14"), not just the log-entry
-  weekday.
-- The organizer can add name-only "placeholder" members (no invite or account needed) to the
-  trip's roster (`/trip/[id]/invite`) so someone who won't use the app still counts in the equal
-  split; a placeholder always displays as "<name> (placeholder)", counts as a full member with
-  $0 paid, and can never be an expense's payer. The organizer can rename or remove a placeholder
-  at any time (up to 20 per trip); there's no auto-claim/merge, so once the real person joins
-  for real, the organizer must manually remove the stale placeholder or that person is
-  double-counted. Add/rename/remove are all locked once the trip is completed.
-- The organizer can remove a real member from the roster, and any non-organizer member can leave
-  a trip themselves; both are locked once the trip is completed and neither rotates the invite
-  code (removal/leaving is disclosed as reversible by reusing the same link, not true access
-  revocation). See the "Status" section above for the full behavior.
-- A shared, per-trip shopping list (the "List" tab) lets any verified member add items and claim
-  one for themselves; a claimer's claimed-unlogged items can be selected as pills in the
-  add-expense sheet to prefill the description, then move to "Bought" once that expense is
-  logged. No price/quantity on a list item, no co-claiming, and no delete/undo of a logged item
-  yet. See the "Status" section above for the full behavior.
-- Two views: Summary (settle-up transactions) and Details (per-person paid/share table).
-- Displays amounts owed; no payment integration yet.
-
-Receipt photo upload (alongside OCR parsing), per-expense subset splits, and Venmo/PayPal links
-are deferred to v2. The `receipts` storage bucket and `receipt_photo_url` column already exist
-in the schema but are unused by the app until then.
+Receipt photo upload/OCR, per-expense subset splits, and payment links remain outside the current
+release scope. The `receipts` storage bucket and `receipt_photo_url` column exist but are unused by
+the app.
 
 ## Development
 
@@ -167,6 +74,11 @@ Apply database migrations to your Supabase project with the Supabase CLI:
 supabase link --project-ref <project-ref>
 supabase db push
 ```
+
+Pull requests also start a clean local Supabase stack and apply every migration with
+`supabase db reset --local`. To run the same migration check locally, start Docker and run
+`supabase start` followed by `supabase db reset --local`. This resets only the local Supabase
+database; it does not target the linked remote project.
 
 Two Supabase dashboard settings (not expressible as a SQL migration) are required for the
 onboarding flow to work:
@@ -206,5 +118,5 @@ Deployed on Vercel from this repo:
    0022 this is a hard ordering: apply it **before** deploying, then run the live checks in the
    [runbook](./docs/runbooks/account-deletion-and-export.md) section 5.
 
-CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and a production build on every push
-and pull request to `main`.
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, a production build, and a separate
+clean-database migration replay on every push and pull request to `main`.

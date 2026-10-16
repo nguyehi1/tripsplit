@@ -1,4 +1,4 @@
-# QA report — security fix for docs/security-review-2026-09-17.md finding #1
+# QA report — security fix for docs/reviews/security-compliance/project/security-review-2026-09-17.md finding #1
 
 **Scope**: standalone security fix (no `docs/features/<slug>/`), verifying the engineer's
 uncommitted changes: `src/app/api/trip-invite/[code]/route.ts`, `src/lib/rate-limit.ts`, and the
@@ -139,7 +139,7 @@ browser — at which point this app-layer rate limiting would actually be the on
 adding a nicer app-layer route in front of a still-directly-callable RPC leaves the original attack
 fully intact.
 
-**Corroboration**: `docs/security-review-2026-09-17-followup.md` (a security-agent re-review that
+**Corroboration**: `docs/reviews/security-compliance/project/security-review-2026-09-17-followup.md` (a security-agent re-review that
 appeared in the working tree alongside this QA pass, independently arrived at the same
 conclusion) verified the identical live `200`-with-no-throttle result against the same RPC and
 flags this as its own "Blocking" finding #1, in the same terms. Two independent checks landing on
@@ -161,6 +161,6 @@ limiter's per-IP keying even for the traffic path it does cover.
 - `src/app/api/trip-invite/[code]/route.test.ts` (new)
 - `src/lib/rate-limit.test.ts` (new)
 - `src/app/join/[code]/page.qa.test.tsx` (new)
-- `docs/security-fix-2026-09-17-qa-report.md` (this report)
+- `docs/reviews/security-compliance/project/security-fix-2026-09-17-qa-report.md` (this report)
 
 No implementation files were modified.
