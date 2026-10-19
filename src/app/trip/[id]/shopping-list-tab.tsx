@@ -88,7 +88,7 @@ function ToGetRow({
   return (
     <div className={`${isLast ? "" : "border-b border-ink/[0.07]"} ${claimedByOther ? "-mx-4 bg-ink/[0.04] px-4" : ""}`}>
       {isConfirming ? (
-        <div className="py-[13px]">
+        <div className="py-[11px]">
           <p className="text-[13.5px] leading-[1.4] text-ink/80">Delete &quot;{item.description}&quot;?</p>
           {deleteError ? <p className="mt-1.5 text-[12.5px] text-terracotta">{deleteError}</p> : null}
           <div className="mt-2.5 flex gap-2">
@@ -114,7 +114,7 @@ function ToGetRow({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3 py-[13px]">
+        <div className="flex items-center gap-3 py-[11px]">
           {claimedByOther ? (
             <span aria-hidden="true">
               <Avatar initials={item.claimedBy!.initials} color={item.claimedBy!.avatar} size={24} />
@@ -177,7 +177,7 @@ function BagRow({
   const captionId = `shopping-bag-caption-${item.id}`;
   const canUnclaim = verified && !isCompleted;
   return (
-    <div className={`flex items-center gap-3 py-[13px] ${isLast ? "" : "border-b border-ink/[0.07]"}`}>
+    <div className={`flex items-center gap-3 py-[11px] ${isLast ? "" : "border-b border-ink/[0.07]"}`}>
       {canUnclaim ? (
         <button
           type="button"
@@ -205,7 +205,7 @@ function BagRow({
 function BoughtRow({ item, isLast, tripId }: { item: ShoppingListItem; isLast: boolean; tripId: string }) {
   const payerName = item.claimedBy?.displayName ?? "someone";
   const content = (
-    <div className={`flex items-center gap-3 py-[13px] ${isLast ? "" : "border-b border-ink/[0.07]"}`}>
+    <div className={`flex items-center gap-3 py-[11px] ${isLast ? "" : "border-b border-ink/[0.07]"}`}>
       {item.claimedBy ? <Avatar initials={item.claimedBy.initials} color={item.claimedBy.avatar} size={24} /> : null}
       <div className="min-w-0 flex-1 opacity-60">
         <div className="truncate text-[15px] font-medium line-through decoration-[1.5px]">{item.description}</div>
@@ -553,7 +553,7 @@ export function ShoppingListTab({
             <Kicker>Your bag</Kicker>
           </div>
           <div className="h-2" />
-          <Card className="px-4 py-1">
+          <Card className="px-4 py-[3px]">
             {yourBag.map((item, i) => (
               <BagRow
                 key={item.id}
@@ -577,7 +577,7 @@ export function ShoppingListTab({
         <Kicker>tap a circle to grab it</Kicker>
       </div>
       <div className="h-2" />
-      <Card className="px-4 py-1">
+      <Card className="px-4 py-[3px]">
         {toGet.length === 0 ? (
           <p className="py-3.5 text-[13.5px] text-ink/60">All caught up — nothing left to grab.</p>
         ) : (
@@ -609,7 +609,7 @@ export function ShoppingListTab({
             <Kicker>Bought</Kicker>
           </div>
           <div className="h-2" />
-          <Card className="px-4 py-1">
+          <Card className="px-4 py-[3px]">
             {bought.map((item, i) => (
               <BoughtRow key={item.id} item={item} isLast={i === bought.length - 1} tripId={tripId} />
             ))}

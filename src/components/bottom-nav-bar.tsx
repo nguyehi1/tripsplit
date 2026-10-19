@@ -37,7 +37,7 @@ export function BottomNavBar({ tabs }: { tabs: readonly NavTab[] }) {
   return (
     <nav
       aria-label="Primary"
-      className="sticky bottom-0 z-10 flex border-t border-hairline px-5 pt-2 pb-[max(20px,env(safe-area-inset-bottom))] backdrop-blur-[16px]"
+      className="sticky bottom-0 z-10 flex border-t border-hairline px-4 pt-[10px] pb-[max(16px,env(safe-area-inset-bottom))] backdrop-blur-[16px]"
       style={{ background: "var(--color-nav-bar)" }}
     >
       {tabs.map((tab) => {
@@ -167,7 +167,7 @@ export function TripNavBarStatic({ tripId }: { tripId: string }) {
 export function NavBarShell({ children }: { children: ReactNode }) {
   return (
     <div
-      className="sticky bottom-0 z-10 border-t border-hairline px-5 pt-2 pb-[max(20px,env(safe-area-inset-bottom))] backdrop-blur-[16px]"
+      className="sticky bottom-0 z-10 border-t border-hairline px-4 pt-[10px] pb-[max(16px,env(safe-area-inset-bottom))] backdrop-blur-[16px]"
       style={{ background: "var(--color-nav-bar)" }}
     >
       {children}

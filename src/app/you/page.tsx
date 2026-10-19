@@ -38,8 +38,8 @@ export default async function YouPage() {
         <div className="h-4" />
         <YouIdentityCard initialName={name} />
         <div className="h-4" />
-        <Card className="px-4 py-1">
-          <Link href="/privacy" className="flex items-center gap-3 py-[17px]">
+        <Card className="px-4 py-[3px]">
+          <Link href="/privacy" className="flex items-center gap-3 py-[11px]">
             <span
               aria-hidden="true"
               className="flex size-9 flex-none items-center justify-center rounded-[11px]"
@@ -51,7 +51,7 @@ export default async function YouPage() {
             <ChevronRightIcon size={17} strokeWidth={2.2} className="flex-none text-muted" />
           </Link>
           <Divider className="bg-hairline" />
-          <Link href="/terms" className="flex items-center gap-3 py-[17px]">
+          <Link href="/terms" className="flex items-center gap-3 py-[11px]">
             <span
               aria-hidden="true"
               className="flex size-9 flex-none items-center justify-center rounded-[11px]"

@@ -107,7 +107,7 @@ function TripSummaryOnly({
               <Kicker>Who owes who</Kicker>
               <div className="h-2" />
               {settlements.map((s, i) => (
-                <div key={i} className="flex items-baseline justify-between py-1">
+                <div key={i} className="flex items-baseline justify-between py-[11px]">
                   <span className="text-[14px] font-medium">
                     {s.from.displayName} owes {s.to.displayName}
                   </span>

@@ -56,7 +56,7 @@ export function SuggestedCard({
           return (
             <div
               key={key}
-              className={`flex items-center gap-3 py-1 ${i === visible.length - 1 && !collapsible ? "" : "border-b border-ink/[0.08]"}`}
+              className={`flex items-center gap-3 py-[11px] ${i === visible.length - 1 && !collapsible ? "" : "border-b border-ink/[0.08]"}`}
             >
               <div className="min-w-0 flex-1">
                 <div className="text-[15px] font-semibold [overflow-wrap:anywhere]">{s.name}</div>

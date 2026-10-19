@@ -70,7 +70,7 @@ function TripRow({ trip, isLast }: { trip: MyTrip; isLast: boolean }) {
   return (
     <Link
       href={`/trip/${trip.id}`}
-      className={`flex w-full cursor-pointer items-center gap-3 py-[17px] text-left ${isLast ? "" : "border-b border-hairline-strong"}`}
+      className={`flex w-full cursor-pointer items-center gap-3 py-[11px] text-left ${isLast ? "" : "border-b border-hairline-strong"}`}
     >
       <span
         aria-hidden="true"
@@ -216,7 +216,7 @@ export default async function TripsDashboardPage({
                   Ongoing ({ongoingTrips.length})
                 </Kicker>
                 <div className="h-[14px]" />
-                <Card className="px-4 py-1">
+                <Card className="px-4 py-[3px]">
                   {ongoingTrips.map((trip, i) => (
                     <TripRow key={trip.id} trip={trip} isLast={i === ongoingTrips.length - 1} />
                   ))}
@@ -230,7 +230,7 @@ export default async function TripsDashboardPage({
                   Completed ({completedTrips.length})
                 </Kicker>
                 <div className="h-[14px]" />
-                <Card className="px-4 py-1">
+                <Card className="px-4 py-[3px]">
                   {completedTrips.map((trip, i) => (
                     <TripRow key={trip.id} trip={trip} isLast={i === completedTrips.length - 1} />
                   ))}
