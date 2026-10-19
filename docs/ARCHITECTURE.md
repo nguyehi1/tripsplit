@@ -73,7 +73,12 @@ that `/trips` specifically still pays *two* sequential Supabase-Auth-server
 round trips per request (one inside `proxy.ts`'s gate, one again in the page
 itself) — an already-known, deliberately-accepted tradeoff from ADR 0005; see
 [ADR 0011](adr/0011-forward-verified-user-id-header-for-trips-page.md) for
-the proposed (not yet executed) fix, contingent on real latency data.
+the proposed (not yet executed) fix, contingent on real latency data. **As of
+the October 2026 performance review**, the page's own `getUser()` call has
+since been parallelized with its `trips` select (see "Performance review
+notes" below) — this removed one sequential stage, but the second
+Auth-server round trip itself (`proxy.ts`'s) is still there; ADR 0011 is
+still the right place to look before changing this further.
 
 **Modal-that's-also-a-route pattern (parallel + intercepting routes)**: as of
 the ux-revamp feature, `src/app/trip/[id]/` has the app's first
@@ -109,12 +114,14 @@ fetch (member count, lock state, ownership) independently re-fetches data the
 underlying trip page's Server Component already computed — a real, if not
 yet acted-on, round-trip-reduction candidate; see
 `docs/features/performance-scaling/architecture.md`'s add/edit-expense
-section. **As of the shopping-list feature**, this same scaffold is reused a
-second time for an "Add an item" sheet (`@sheet/(.)add-item/page.tsx` +
-`add-item/page.tsx`, same intercepted/hard-nav-fallback shape) — the only
-existing-file edit this required was generalizing `trip-sheet-chrome.tsx`'s
-`dimmed` pathname check to also match `/add-item`, not just `/add-expense`;
-see `docs/features/shopping-list/architecture.md`.
+section, and this file's "Performance review notes" section below for
+production log evidence confirming it. **As of the shopping-list feature**,
+this same scaffold is reused a second time for an "Add an item" sheet
+(`@sheet/(.)add-item/page.tsx` + `add-item/page.tsx`, same
+intercepted/hard-nav-fallback shape) — the only existing-file edit this
+required was generalizing `trip-sheet-chrome.tsx`'s `dimmed` pathname check
+to also match `/add-item`, not just `/add-expense`; see
+`docs/features/shopping-list/architecture.md`.
 
 **Design tokens / theming**: as of the ux-revamp feature, all color,
 shadow, and radius values used by a restyled screen are expected to be named
@@ -291,7 +298,13 @@ temporary/interim, not a permanent tracing layer — see
 `docs/features/performance-scaling/architecture.md` for the full mechanism,
 call sites, and what's deliberately excluded (no instrumentation inside any
 Postgres function body, to avoid an observability-only RPC edit of the kind
-migration 0013 already showed can break production).
+migration 0013 already showed can break production). **As of the October
+2026 performance review**, this instrumentation's Tier 1 fixes
+(`getMyTrips`'s `prefetchedTripRows` parameter, `requireVerifiedSession`'s
+`prefetchedUser` parameter, and `/trip/[id]`'s `getTripSummary`/`getTripView`
+parallelization) have shipped and are confirmed present in the code — see
+"Performance review notes" below for what's shipped, what real log data shows,
+and what's still open.
 
 **Additive `not null` schema changes on populated tables**: sequence as add
 nullable -> backfill -> set DB-level default -> set `not null`, all in one
@@ -387,7 +400,17 @@ schema; summarized here as it stabilizes:
   [ADR 0004](adr/0004-placeholder-member-nullable-user-id-and-identity-key.md).
   `user_id` remains available on the raw row for matching against
   `expenses.paid_by` (which is still always a real user id), but is not used
-  as the display-layer identity key anymore.
+  as the display-layer identity key anymore. **Indexing note (October 2026
+  performance review)**: the only index on this table besides its primary
+  key and the `unique (trip_id, user_id)` constraint's implicit index is
+  `create index on trip_members (trip_id)` from migration 0001 — there is
+  still no index with `user_id` as a leading column. This has never shown up
+  as a measured cost (every lookup that matters today is already scoped by a
+  known `trip_id`, which the existing composite unique index serves), but a
+  future feature that needs "every trip a given user belongs to" as its own
+  query (rather than via the `trips` table's RLS policy — see that table's
+  entry below) should add one rather than assuming the existing index covers
+  it.
 - `expenses` — one row per logged expense; `paid_by` (set once, at insert,
   to the submitting user) is the **only** ownership signal — there is no
   separate `created_by` column. `amount` is `numeric(10,2)` dollars,
@@ -418,7 +441,14 @@ schema; summarized here as it stabilizes:
   table with the same shape/validation `addExpense`'s existing direct insert
   already enforces, duplicated intentionally rather than routing the
   existing "skip the list" path through the new RPC (see
-  `docs/features/shopping-list/architecture.md` for the tradeoff).
+  `docs/features/shopping-list/architecture.md` for the tradeoff). There is
+  no index with `paid_by` as a leading column; every read of `expenses` goes
+  through `trip_id` (indexed, or `(trip_id, date desc)` as of migration
+  0007), and `paid_by` resolution happens in application code
+  (`src/lib/data/trips.ts`'s `userIdToMemberId` map) against an
+  already-fetched, trip-scoped row set, not a separate query — so this is
+  not a gap today, just worth knowing if a future feature ever needs "every
+  expense a given user paid for, across trips" as its own query.
 - `shopping_list_items` — one row per per-trip shopping-list item (the
   shopping-list feature). `trip_id`, free-text `description`, nullable
   `added_by`/`claimed_by` (both `trip_members.id`, per ADR 0004's identity
@@ -454,7 +484,10 @@ schema; summarized here as it stabilizes:
   starter-list feature, the Suggested card's "+" adds an item through this
   same plain insert (name only); suggestions themselves are never stored —
   they are derived client-side from `trips.types` and a bundled catalog, so
-  a deleted suggested item simply reappears as a suggestion.
+  a deleted suggested item simply reappears as a suggestion. This table is
+  the best-indexed one in the schema (`(trip_id, status)`, plus three
+  partial indexes on `claimed_by`/`added_by`/`expense_id`) — a useful
+  reference shape if a future table needs similar filtered-status lookups.
 - One display name per account (migration 0020,
   `supabase/migrations/0020_one_display_name_per_account.sql`) — not a new
   table; it changes how `trip_members.display_name` is set. A `before insert`
@@ -543,7 +576,7 @@ See `docs/features/shopping-list/architecture.md` section 1b for the full
 policy text and reasoning, and [ADR 0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md)
 for the related member-removal trigger.
 
-**RLS on `trips`**: `select` is `is_trip_member(id) or created_by = auth.uid()`
+**RLS on `trips`**: `select` is `id in (select my_trip_ids()) or created_by = (select auth.uid())` (migration 0023; originally `is_trip_member(id) or created_by = auth.uid()` from 0001, which is equivalent)
 and `insert` is `created_by = auth.uid()` (migration 0001); there is no
 `update` or `delete` policy. Because `select` is row-level, any member
 (including an anonymous joiner) can read every column of a trip row they can
@@ -551,7 +584,113 @@ see, which is why a column such as `other_type` must be kept out of every
 public RPC and every `select("*")`. As of the starter-list feature, table-level
 `update` on `trips` is also revoked from `anon` and `authenticated`
 (defense in depth; completion goes through the `security definer`
-`complete_trip`).
+`complete_trip`). **Indexing note (October 2026 performance review)**: the
+only index on this table besides the primary key is the unique index on
+`invite_code` — there is no index on `created_by`, and `getMyTrips`'s
+`trips` select (`src/lib/data/trips.ts`, called from `src/app/trips/page.tsx`)
+runs with no `WHERE` clause at all, relying entirely on this `select` policy
+to filter the result set. Postgres therefore evaluates the policy
+row-by-row against *every* row in `trips`, not just the caller's own —
+the `is_trip_member(id)` branch's own lookup is index-served (the
+`unique (trip_id, user_id)` index on `trip_members` has `trip_id` as its
+leading column, which is exactly what that correlated per-row subquery
+filters on), but there is nothing that lets Postgres skip rows the policy
+will reject before evaluating it. This scaled with the **total number of
+trips ever created across the whole app**, not with any single trip's or
+user's data size. Measured on a scratch Postgres 10.5 with 200k trips it
+took ~4.7-8.7 s, and an index on `trips (created_by)` did **not** help: the
+`or` with an opaque function call (`is_trip_member(id)`) means Postgres
+cannot use an index for either arm and still seq-scans every row, calling
+the function once per row. Fixed by migration
+`0023_trips_select_policy_hashed_membership.sql`: the policy is now
+`id in (select public.my_trip_ids()) or created_by = (select auth.uid())`,
+where `my_trip_ids()` is a `security definer` helper (same `search_path` and
+grants as `is_trip_member`) returning the caller's trip ids once, so the
+planner hashes them. Same 200k-trip test: ~0.06-0.23 s, identical result
+set. It also adds `trip_members (user_id)`, which backs that helper. The
+live database needs this migration applied by hand. See "Performance review
+notes" below.
+
+## Performance review notes (October 2026)
+
+A focused performance code review (not a new feature) was run against the
+current codebase, cross-checked against `perf-raw.log`'s captured `[perf]`
+log lines and the already-documented `performance-scaling` feature
+(`docs/features/performance-scaling/{requirements,design,architecture}.md`,
+[ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md),
+[ADR 0011](adr/0011-forward-verified-user-id-header-for-trips-page.md)).
+That feature already covers most of what a performance pass would otherwise
+flag (the `/trips` double-auth-round-trip, the `/trip/[id]` summary/view
+sequencing, the invite/join preview's dependency chain) — this section
+exists so later readers don't have to reconstruct what's shipped vs. still
+open, and records what this review found that wasn't already written down.
+
+**What's confirmed shipped** (read directly from the current code, not
+assumed from the feature doc): `src/app/trips/page.tsx` already runs its own
+`getUser()` concurrently with the `trips` select and passes the fetched rows
+into `getMyTrips(supabase, user.id, tripsRowsResult.data ?? [])`
+(`src/lib/data/trips.ts`'s optional `prefetchedTripRows` parameter); `/trip/[id]`
+(`src/app/trip/[id]/page.tsx`) already runs `getUser()` and `getTripSummary()`
+concurrently before conditionally awaiting `getTripView()`; and
+`add-expense-sheet-content.tsx`'s submit handler already fetches the user
+once and passes it into `requireVerifiedSession(supabase, user)` instead of
+calling `supabase.auth.getUser()` twice. These are the Tier 1 fixes
+`docs/features/performance-scaling/architecture.md` proposed; they're done.
+
+**Still open, but the evidence is thinner than first reported**:
+`add-expense-sheet-content.tsx`'s *mount-time* gating fetch (distinct from
+the already-fixed submit-time call above) is still a client-side chain:
+`getUser` -> (`trips` and `own_member_id` together) -> `claimed_items`.
+`perf-raw.log` holds exactly **one** add-expense sample (2026-09-30), taken
+before or around the Tier 1 reorder, so it shows the shape (~280 + ~270 +
+~222 ms of client-to-Supabase round trips) but is not a baseline. The same
+log shows server-side calls at ~105 ms against ~270 ms for client-side
+calls of the same shape, which is the real argument for the designed fix
+(pass `memberCount`/`locked`/`ownerGateBlocked` as props from the server
+instead of a client `useEffect` fetch). **Not yet built**, because it moves
+the owner/lock gate (fail-closed, security-relevant) and changes when the
+intercepted sheet appears (the route would wait on server fetches before
+opening), so it should go through the feature pipeline with QA and security
+review, ideally after a real baseline exists.
+
+**Instrumentation coverage gap (closed)**: `src/proxy.ts`'s own
+`supabase.auth.getUser()` call (the first of `/trips`'s two sequential
+Auth-server round trips) is now wrapped in `timeAsync("proxy", "getUser", ...)`,
+so ADR 0011's gating number will appear in the logs after the next deploy.
+ADR 0011 stays "proposed, not executed" until that number is read.
+
+**`perf-raw.log` caveat**: `perf-raw.log` (git-ignored, local only) is a ~50-line,
+single-session capture (all timestamps within about one minute of each
+other), not the "aggregate over a representative window of real traffic"
+baseline ADR 0010 and `docs/features/performance-scaling/architecture.md`
+call for. It's useful as directional evidence (and is what confirms the
+add-expense waterfall finding above), but nobody should read p50/p95 off of
+it as if it were the real Phase 1 baseline — that aggregation step, per ADR
+0010's own design, still needs to happen against actual production log
+volume before any Phase 2 fix is declared to have hit requirements.md's
+≥30% target.
+
+**Indexing**: the one real finding was `trips`' select policy, whose cost
+grew with total trips app-wide. It was fixed by migration 0023 (see the
+`trips` data-model entry above for the measurements and why a plain
+`created_by` index was not the fix). Every other table/query this review checked
+(`expenses`, `trip_members`, `shopping_list_items`, and every per-trip read
+in `src/lib/data/trips.ts`/`src/lib/data/shopping-list.ts`) is already
+indexed on the column it's actually filtered by, and this app's per-trip
+dataset sizes (a handful of members, a few dozen to a few hundred expenses
+per trip) are far too small for a missing index on any of those to be a
+real cost at today's traffic — nothing else here rises to a finding.
+
+**Not findings, checked and ruled out**: client-side recompute
+(`src/lib/settlement.ts`'s `computeBalances`/`simplifyDebts`) runs
+server-side today (both `getMyTrips` and `getTripView` are called from
+Server Components) over small per-trip arrays — negligible cost, and
+duplicating the computation once per trip per `/trips` load is not worth
+caching at this data size. The per-Supabase-call durations in
+`perf-raw.log` (roughly 90-190ms per simple, already-indexed, single-table
+query) look dominated by Vercel-function-to-Supabase network round-trip
+time, not query execution — an infrastructure/region-colocation
+consideration, not a code-level fix, and out of scope for a code review.
 
 ## Known integration points / shared code
 

@@ -29,7 +29,7 @@ describe("fab variant and FabBar (additive)", () => {
 
   it("leaves BottomBar and the capsule variants exactly as they were", () => {
     expect(renderToStaticMarkup(<BottomBar>x</BottomBar>)).toContain(
-      'class="sticky bottom-0 flex-none bg-gradient-to-t from-paper from-60% to-transparent px-4 pt-3 pb-[max(24px,env(safe-area-inset-bottom))]"',
+      'class="sticky bottom-0 flex-none bg-gradient-to-t from-paper from-60% to-transparent px-4 pt-[10px] pb-[max(16px,env(safe-area-inset-bottom))]"',
     );
     const capsule = renderToStaticMarkup(<Button variant="capsule">x</Button>);
     expect(capsule).toContain(

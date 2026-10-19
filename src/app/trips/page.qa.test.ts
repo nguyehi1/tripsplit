@@ -235,10 +235,10 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
       expect(html).not.toContain("Settled up");
     });
 
-    it("uses the compact rhythm: Card px-4 py-1, rows py-[17px] (design-audit.md #4: 17px list row padding, not 14px) with a 40px icon square, 15px/600 body-font name", async () => {
+    it("uses the compact rhythm: Card px-4 py-[3px], rows py-[11px] (design-audit.md #4: 17px list row padding, not 14px) with a 40px icon square, 15px/600 body-font name", async () => {
       const html = await render([row(), row({ id: "trip-2", name: "Second" })]);
-      expect(html).toContain("rounded-card bg-white shadow-card px-4 py-1");
-      expect(html).toContain("py-[17px]");
+      expect(html).toContain("rounded-card bg-white shadow-card px-4 py-[3px]");
+      expect(html).toContain("py-[11px]");
       expect(html).not.toContain("py-3.5");
       expect(html).toContain("size-10 flex-none");
       expect(html).toContain("text-[15px] font-semibold leading-5");

@@ -209,7 +209,7 @@ in the design choices already made. Making them explicit here:
 |---|---|---|---|
 | **Availability** | Can users reach the app when they try to? | Inherits whatever uptime Vercel + Supabase provide; no extra redundancy is built on top of that in this repo | [§5](#5-load-balancer-and-reverse-proxy), [§7](#7-database-relational-replication-sharding) |
 | **Consistency** | Does everyone see the same, latest data? | Strong/immediate — there's exactly one Postgres instance and no replicas, so there's no lag to reason about (yet) | [§7](#7-database-relational-replication-sharding) |
-| **Latency** | How fast does the app respond? | No permanent measurement anywhere in this repo, but the performance-scaling feature added *interim* per-call timing instrumentation (`src/lib/perf/timing.ts`) that logs p50/p95-computable durations for the slowest surfaces — temporary and log-based, not a real APM, see [ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md) | [§4](#4-dns-and-cdn), [§8](#8-caching), [§12](#12-scaling-roadmap-current--future) |
+| **Latency** | How fast does the app respond? | No permanent measurement anywhere in this repo, but the performance-scaling feature added *interim* per-call timing instrumentation (`src/lib/perf/timing.ts`) that logs p50/p95-computable durations for the slowest surfaces — temporary and log-based, not a real APM, see [ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md). A follow-up October 2026 performance code review used that instrumentation's own captured log data to confirm one real, still-open finding and flag one latent indexing gap — see [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s "Performance review notes" section rather than repeating it here | [§4](#4-dns-and-cdn), [§8](#8-caching), [§12](#12-scaling-roadmap-current--future) |
 | **Scalability** | How much growth can it absorb before something needs to change? | See the full breakdown | [§12](#12-scaling-roadmap-current--future) |
 | **Security** | Can only the right people see/change the right data? | Row-Level Security is the actual enforcement boundary; sign-in is a one-time passcode; sensitive actions go through least-privilege `security definer` functions; the two guessable-invite-code RPCs are additionally rate-limited at both the app layer (Upstash Redis) and inside Postgres itself, so a caller can't bypass the limit by skipping the app entirely | [§11](#11-security) |
 | **Durability** | Does data survive a crash or restart? | Yes — Postgres persists to disk on Supabase's managed side. Backup/disaster-recovery policy isn't something this repo configures or documents — it's inherited from the platform | [§7](#7-database-relational-replication-sharding) |
@@ -344,24 +344,25 @@ every request (except static files — see the `matcher` at the bottom of
 the file). What it does, in order:
 
 1. Checks whether the requested path even needs a session at all (see
-   `SESSION_REQUIRED_PATTERNS`, [line 14](../src/proxy.ts#L14)) — if not, it
+   `SESSION_REQUIRED_PATTERNS`, [line 16](../src/proxy.ts#L16)) — if not, it
    skips the whole auth check and lets the request through immediately
-   ([lines 20–27](../src/proxy.ts#L20-L27)), specifically so pages that
+   ([lines 27–29](../src/proxy.ts#L27-L29)), specifically so pages that
    don't need it aren't slowed down by an extra network round trip.
 2. If the path *does* require a session, it asks Supabase "is this a
-   signed-in user?" ([lines 51–53](../src/proxy.ts#L51-L53)).
+   signed-in user?" ([lines 53–55](../src/proxy.ts#L53-L55)).
 3. If there's no signed-in user, it redirects to the sign-in flow instead
-   of ever running that page's code ([lines 55–59](../src/proxy.ts#L55-L59)).
+   of ever running that page's code ([lines 57–61](../src/proxy.ts#L57-L61)).
    Otherwise, it lets the request continue through.
 
-**As of the simplified-onboarding feature, only `/trips` requires a
-session** (`SESSION_REQUIRED_PATTERNS = [/^\/trips/]`) — `/trip/new` and
-`/trip/[id]*` deliberately don't: a trip can be created by, or a trip page
-viewed by, a fully anonymous visitor (an anonymous Supabase session created
-client-side, or no session at all for a summary-only invite preview). This
-is a narrower gate than it used to be — worth knowing if you're reading
-older discussion of this file that mentions a `PROTECTED_PATTERNS` list
-covering more routes.
+**As of the redesign-ui feature, three path patterns require a session**
+(`SESSION_REQUIRED_PATTERNS = [/^\/trips/, /^\/feedback/, /^\/you/]`) —
+`/trip/new` and `/trip/[id]*` deliberately don't: a trip can be created
+by, or a trip page viewed by, a fully anonymous visitor (an anonymous
+Supabase session created client-side, or no session at all for a
+summary-only invite preview). This is a narrower gate than it used to be —
+worth knowing if you're reading older discussion of this file that
+mentions a `PROTECTED_PATTERNS` list covering more routes, or a
+`SESSION_REQUIRED_PATTERNS` that only named `/trips`.
 
 The **load balancer** half doesn't exist as code in this repo — Vercel's
 platform spins up app instances on demand and spreads traffic across them
@@ -393,6 +394,17 @@ performance-scaling feature showing the extra round trip is actually
 costly enough to justify introducing a new trust boundary. It's a good
 concrete example of *why* NFR trade-offs get written down (§2) rather than
 just made silently: this one isn't built yet, on purpose.
+
+**Update, October 2026 performance review:** the *page's* half of this
+(`/trips`'s own `getUser()` call) has since been changed to run
+concurrently with its `trips` data fetch instead of sequentially before it
+— one fewer sequential stage than when the paragraph above was written.
+The proxy's own `getUser()` call (the first of the two round trips) is
+untouched, and still isn't directly measured by the app's own timing
+instrumentation, so ADR 0011's proposal above is still exactly where it
+was: a real idea, still not acted on, still waiting on its own latency
+number. See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s "Performance
+review notes" section for the full detail, not repeated here.
 
 ---
 
@@ -633,6 +645,26 @@ flowchart TB
   admin report) becomes much harder, because the data isn't all in one
   place anymore. You only take this step once one database provably can't
   keep up — which is nowhere close to true for Splitiful today.
+- **Indexing is cheaper and comes first.** Before replication or sharding
+  are even on the table, the primer's own ordering is "make sure the
+  queries you already run are actually using an index." A October 2026
+  performance code review checked this directly against Splitiful's real
+  migrations and found almost everything already indexed on the column
+  it's actually filtered by (`trip_id` on `expenses`/`trip_members`,
+  `invite_code` on `trips`, several on `shopping_list_items`) — with one
+  exception, and it teaches something the primer's rule of thumb
+  doesn't: `trips`' read policy (`is_trip_member(id) or created_by =
+  auth.uid()`) made the `/trips` page check a function against *every*
+  trip row in the app. The obvious fix, an index on `created_by`, was
+  tested and **does nothing** — Postgres can't use an index through an
+  `or` that contains a function call, so it still reads every row. What
+  worked was changing the policy so the caller's trip ids are looked up
+  once and hashed (migration 0023): on 200k test trips, ~5-9 s dropped
+  to ~0.1 s with identical results. The lesson: "add an index" is a
+  hypothesis, so check the query plan (`explain analyze`) before
+  believing it. about. See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s `trips`/
+  `trip_members` data-model entries and "Performance review notes" section
+  for the full detail.
 
 ---
 
@@ -688,7 +720,13 @@ trip is tiny. Adding a cache here would mean taking on **cache
 invalidation** — the genuinely hard problem of making sure the cache gets
 updated or thrown away the instant the underlying data changes — for no
 real benefit yet. This is the primer's "don't add complexity you don't
-need" lesson in its purest form.
+need" lesson in its purest form. A October 2026 performance code review
+reached the same conclusion from the other direction: the per-call
+durations captured by `src/lib/perf/timing.ts` look dominated by
+network round-trip time to Supabase, not by query execution against a
+tiny per-trip dataset — exactly the "no stale-data problem to justify
+caching" profile this section describes, not a hidden recompute cost a
+cache would actually fix.
 
 ---
 
@@ -1057,6 +1095,19 @@ worth watching — 🔧 recommended upgrade at this stage.
   triggers to extract a service or add a formal API layer are more about
   *product* changes (a mobile app, third-party integrations) than raw
   user count.
+- **A October 2026 performance code review didn't move any cell in this
+  table, and that's itself the finding worth naming.** It checked the
+  §7 row's premise directly (is query performance actually something to
+  watch yet?) against real captured timing data and the schema's actual
+  indexes, and confirmed "not yet, 👀 is still right" — most per-call
+  durations are dominated by network round-trip time to Supabase, not
+  query execution, and nearly every table is already indexed on the
+  column it's filtered by. It did find one real problem, now fixed by migration 0023:
+  the `trips` read policy made a `/trips` load cost grow with the *total*
+  number of trips across the whole app, not with any one user's data. That
+  is not evidence that the §7 row should move to 🔧 today. See
+  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s "Performance review notes"
+  section for the full detail, not repeated here.
 
 ## 13. Containers: Vercel's model vs. Docker, and when to switch
 

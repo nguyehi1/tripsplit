@@ -14,14 +14,14 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("BottomNavBar measurements (AC3)", () => {
-  it("HomeNavBar matches the handoff's bar/tab measurements: 24px icons, 11px labels, 52px tabs, 8/20px padding, hairline + blur", async () => {
+  it("HomeNavBar matches the handoff's bar/tab measurements: 24px icons, 11px labels, 52px tabs, 10/16px padding, hairline + blur", async () => {
     currentPathname = "/trips";
     const { HomeNavBar } = await import("./bottom-nav-bar");
     const html = renderToStaticMarkup(<HomeNavBar />);
     expect(html).toContain("border-t border-hairline");
     expect(html).toContain("backdrop-blur-[16px]");
-    expect(html).toContain("pt-2"); // 8px top padding
-    expect(html).toContain("pb-[max(20px,env(safe-area-inset-bottom))]"); // 20px bottom + safe area
+    expect(html).toContain("pt-[10px]"); // 10px top padding
+    expect(html).toContain("pb-[max(16px,env(safe-area-inset-bottom))]"); // 16px bottom + safe area
     expect(html).toContain("h-[52px]");
     expect(html).toMatch(/width="24" height="24"/);
     expect(html).toContain("text-[11px]");

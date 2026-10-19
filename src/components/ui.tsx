@@ -80,7 +80,7 @@ export function ScreenContent({
 
 export function BottomBar({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky bottom-0 flex-none bg-gradient-to-t from-paper from-60% to-transparent px-4 pt-3 pb-[max(24px,env(safe-area-inset-bottom))]">
+    <div className="sticky bottom-0 flex-none bg-gradient-to-t from-paper from-60% to-transparent px-4 pt-[10px] pb-[max(16px,env(safe-area-inset-bottom))]">
       {children}
     </div>
   );

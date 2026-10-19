@@ -87,10 +87,10 @@ export function TripTabs({
             <p className="text-[13px] text-ink/60">No expenses logged yet.</p>
           </div>
         ) : (
-          <Card className="px-4 py-1">
+          <Card className="px-4 py-[3px]">
             {expenses.map((expense, i) => {
               const editable = expense.payer.id === you?.id && !isCompleted;
-              const rowClassName = `flex items-center gap-3 py-[13px] ${
+              const rowClassName = `flex items-center gap-3 py-[11px] ${
                 i < expenses.length - 1 ? "border-b border-ink/[0.07]" : ""
               } ${editable ? "cursor-pointer" : ""}`;
               const children = (
@@ -132,14 +132,14 @@ export function TripTabs({
           </Card>
         )
       ) : tab === "details" ? (
-        <Card className="px-[18px] py-4">
+        <Card className="px-[18px] py-3">
           {visibleMembers.map((member, i) => (
             <div key={member.id}>
               {i > 0 ? (
                 <>
-                  <div className="h-4" />
+                  <div className="h-3" />
                   <Divider className="bg-ink/[0.08]" />
-                  <div className="h-4" />
+                  <div className="h-3" />
                 </>
               ) : null}
               <div className="flex items-baseline justify-between">
@@ -176,7 +176,7 @@ export function TripTabs({
           ))}
           {hiddenMemberCount > 0 ? (
             <>
-              <div className="h-4" />
+              <div className="h-3" />
               <Divider className="bg-ink/[0.08]" />
               <button
                 type="button"
