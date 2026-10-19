@@ -38,29 +38,40 @@
 
 begin;
 
+-- IF NOT EXISTS / existence-checked guards throughout this migration (same precedent as 0004's
+-- `to_regprocedure` guard on a from-scratch reset): a retried apply — e.g. a preview branch build
+-- that re-runs this file after an earlier attempt already committed it — must be a no-op on each
+-- already-applied statement rather than erroring with "already exists" (42701).
 alter table public.trips
-  add column types text[] not null default '{}'::text[],
-  add column other_type text;
+  add column if not exists types text[] not null default '{}'::text[],
+  add column if not exists other_type text;
 
 -- types: every atom is null-free. The empty-array guard is required (array_ndims('{}') is NULL).
 -- The CASE keeps array_remove from ever seeing a multi-dimensional array, which it rejects.
-alter table public.trips
-  add constraint trips_types_check check (
-    cardinality(types) = 0
-    or case
-      when array_ndims(types) <> 1 then false
-      else array_lower(types, 1) = 1
-        and cardinality(types) <= 3
-        and cardinality(array_remove(types, null)) = cardinality(types)
-        and types <@ array['camping', 'airbnb', 'international']::text[]
-        -- Duplicates: compare only positions that exist. Plain IS DISTINCT FROM is wrong here,
-        -- because for a one- or two-element array the missing slots are both NULL and
-        -- NULL IS DISTINCT FROM NULL is false, which would reject every one-type trip. NULL
-        -- elements were already excluded above, so <> cannot return NULL for existing slots.
-        and (cardinality(types) < 2 or types[1] <> types[2])
-        and (cardinality(types) < 3 or (types[1] <> types[3] and types[2] <> types[3]))
-    end
-  );
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conrelid = 'public.trips'::regclass and conname = 'trips_types_check'
+  ) then
+    alter table public.trips
+      add constraint trips_types_check check (
+        cardinality(types) = 0
+        or case
+          when array_ndims(types) <> 1 then false
+          else array_lower(types, 1) = 1
+            and cardinality(types) <= 3
+            and cardinality(array_remove(types, null)) = cardinality(types)
+            and types <@ array['camping', 'airbnb', 'international']::text[]
+            -- Duplicates: compare only positions that exist. Plain IS DISTINCT FROM is wrong
+            -- here, because for a one- or two-element array the missing slots are both NULL and
+            -- NULL IS DISTINCT FROM NULL is false, which would reject every one-type trip. NULL
+            -- elements were already excluded above, so <> cannot return NULL for existing slots.
+            and (cardinality(types) < 2 or types[1] <> types[2])
+            and (cardinality(types) < 3 or (types[1] <> types[3] and types[2] <> types[3]))
+        end
+      );
+  end if;
+end $$;
 
 -- other_type: 1-30 characters, at most 120 bytes, equal to its own trim (btrim() with no argument
 -- trims ASCII space only), no double spaces, first character a letter or digit, every character on
@@ -69,17 +80,24 @@ alter table public.trips
 -- BMP only: this blocks every emoji, flag and tag sequence by construction. Invisible and format
 -- characters (ZWSP, ZWJ, bidi controls, BOM, soft hyphen, U+034F, ...) are outside the allowlist.
 -- The class strings below must stay identical to src/lib/validation/trip-type.ts (drift test).
-alter table public.trips
-  add constraint trips_other_type_check check (
-    other_type is null or (
-      char_length(other_type) between 1 and 30
-      and octet_length(other_type) <= 120
-      and other_type = btrim(other_type)
-      and other_type !~ '  '
-      and other_type ~ '^[A-Za-z0-9\u00AA\u00B5\u00BA\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u0386\u0388-\u05FF\u0606-\u061B\u061D-\u06DC\u06DE-\u070E\u0710-\u088F\u0892-\u08E1\u08E3-\u115E\u1161-\u167F\u1681-\u17B3\u17B6-\u180A\u1810-\u1AAF\u1B00-\u1DBF\u1E00-\u1FEE\u1FF0-\u1FFC\u1FFE-\u1FFF\u2C00-\u2DFF\u3005-\u3007\u3041-\u3096\u3099-\u309F\u30A1-\u30FF\u3105-\u312F\u3131-\u3163\u3165-\u318E\u31A0-\u31BF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\uD7FF\uF900-\uFA6B\uFA6D-\uFACE\uFAD2-\uFAD4\uFAD8-\uFD3D\uFD40-\uFDCF\uFDF0-\uFDFB\uFE70-\uFEFC\uFF10-\uFF19\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFF9F\uFFA1-\uFFDC]'
-      and other_type ~ '^[A-Za-z0-9\u00AA\u00B5\u00BA\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u034E\u0350-\u037D\u037F-\u0386\u0388-\u05FF\u0606-\u061B\u061D-\u06DC\u06DE-\u070E\u0710-\u088F\u0892-\u08E1\u08E3-\u115E\u1161-\u167F\u1681-\u17B3\u17B6-\u180A\u1810-\u1FEE\u1FF0-\u1FFC\u1FFE-\u1FFF\u2C00-\u2DFF\u3005-\u3007\u3041-\u3096\u3099-\u309F\u30A1-\u30FF\u3105-\u312F\u3131-\u3163\u3165-\u318E\u31A0-\u31BF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\uD7FF\uF900-\uFA6B\uFA6D-\uFACE\uFAD2-\uFAD4\uFAD8-\uFD3D\uFD40-\uFDCF\uFDF0-\uFDFB\uFE20-\uFE2F\uFE70-\uFEFC\uFF10-\uFF19\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFF9F\uFFA1-\uFFDC &,./''-]+$'
-    )
-  );
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conrelid = 'public.trips'::regclass and conname = 'trips_other_type_check'
+  ) then
+    alter table public.trips
+      add constraint trips_other_type_check check (
+        other_type is null or (
+          char_length(other_type) between 1 and 30
+          and octet_length(other_type) <= 120
+          and other_type = btrim(other_type)
+          and other_type !~ '  '
+          and other_type ~ '^[A-Za-z0-9\u00AA\u00B5\u00BA\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u0386\u0388-\u05FF\u0606-\u061B\u061D-\u06DC\u06DE-\u070E\u0710-\u088F\u0892-\u08E1\u08E3-\u115E\u1161-\u167F\u1681-\u17B3\u17B6-\u180A\u1810-\u1AAF\u1B00-\u1DBF\u1E00-\u1FEE\u1FF0-\u1FFC\u1FFE-\u1FFF\u2C00-\u2DFF\u3005-\u3007\u3041-\u3096\u3099-\u309F\u30A1-\u30FF\u3105-\u312F\u3131-\u3163\u3165-\u318E\u31A0-\u31BF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\uD7FF\uF900-\uFA6B\uFA6D-\uFACE\uFAD2-\uFAD4\uFAD8-\uFD3D\uFD40-\uFDCF\uFDF0-\uFDFB\uFE70-\uFEFC\uFF10-\uFF19\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFF9F\uFFA1-\uFFDC]'
+          and other_type ~ '^[A-Za-z0-9\u00AA\u00B5\u00BA\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u034E\u0350-\u037D\u037F-\u0386\u0388-\u05FF\u0606-\u061B\u061D-\u06DC\u06DE-\u070E\u0710-\u088F\u0892-\u08E1\u08E3-\u115E\u1161-\u167F\u1681-\u17B3\u17B6-\u180A\u1810-\u1FEE\u1FF0-\u1FFC\u1FFE-\u1FFF\u2C00-\u2DFF\u3005-\u3007\u3041-\u3096\u3099-\u309F\u30A1-\u30FF\u3105-\u312F\u3131-\u3163\u3165-\u318E\u31A0-\u31BF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\uD7FF\uF900-\uFA6B\uFA6D-\uFACE\uFAD2-\uFAD4\uFAD8-\uFD3D\uFD40-\uFDCF\uFDF0-\uFDFB\uFE20-\uFE2F\uFE70-\uFEFC\uFF10-\uFF19\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFF9F\uFFA1-\uFFDC &,./''-]+$'
+        )
+      );
+  end if;
+end $$;
 
 -- Defence in depth for "no UPDATE path": no policy exists, and now no privilege either, so an
 -- attempted update fails with "permission denied". Same precedent as shopping_list_items (0015).

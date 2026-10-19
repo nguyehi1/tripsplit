@@ -24,16 +24,18 @@ describe("migration 0022: trip types and other_type", () => {
     expect(sql).toContain("notify pgrst, 'reload schema';");
   });
 
-  it("adds the two columns with their exact definitions", () => {
-    expect(flat).toContain("add column types text[] not null default '{}'::text[]");
-    expect(flat).toContain("add column other_type text");
+  it("adds the two columns with their exact definitions, guarded for a retried apply", () => {
+    expect(flat).toContain("add column if not exists types text[] not null default '{}'::text[]");
+    expect(flat).toContain("add column if not exists other_type text");
     expect(flat).not.toMatch(/other_type text (not null|default)/);
   });
 
-  it("adds both named CHECKs inline, never not valid", () => {
+  it("adds both named CHECKs inline, never not valid, each guarded by an existence check", () => {
     expect(sql).toContain("add constraint trips_types_check check (");
     expect(sql).toContain("add constraint trips_other_type_check check (");
     expect(sql).not.toMatch(/not valid/i);
+    expect(sql).toContain("conname = 'trips_types_check'");
+    expect(sql).toContain("conname = 'trips_other_type_check'");
   });
 
   it("types CHECK keeps the empty-array guard, the closed set, and a null-free shape", () => {
