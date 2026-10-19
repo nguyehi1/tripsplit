@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { timeAsync } from "@/lib/perf/timing";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
 // Protected by an optimistic cookie check here; the real enforcement is Postgres RLS
@@ -50,9 +51,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
+  // Timed so ADR 0011's decision (forward this verified id to /trips instead of re-checking there)
+  // has the proxy-side round-trip cost it is gated on. Interim, removed with src/lib/perf/timing.ts.
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await timeAsync("proxy", "getUser", () => supabase.auth.getUser());
 
   if (!user) {
     const signInUrl = new URL("/", request.url);
