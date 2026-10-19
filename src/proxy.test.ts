@@ -53,3 +53,39 @@ describe("proxy: /trips without a session", () => {
     expect(isRedirect(res)).toBe(false);
   });
 });
+
+describe("proxy: /you gated the same way as /trips (redesign-ui architecture.md §3.4)", () => {
+  it("redirects to /?next=%2Fyou and carries no other query key when there is no session", async () => {
+    const res = await proxy(req("/you?utm_source=x"));
+    expect(isRedirect(res)).toBe(true);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/");
+    expect(location.search).toBe("?next=%2Fyou");
+  });
+
+  it("lets a signed-in user through to /you", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "u" } } });
+    const res = await proxy(req("/you"));
+    expect(isRedirect(res)).toBe(false);
+  });
+
+  it("does not loosen or tighten gating on /trips or /feedback by adding the /you pattern", async () => {
+    const trips = await proxy(req("/trips"));
+    expect(isRedirect(trips)).toBe(true);
+    const feedback = await proxy(req("/feedback"));
+    expect(isRedirect(feedback)).toBe(true);
+    // Unrelated routes stay public, same as before this feature — no Supabase call at all.
+    const home = await proxy(req("/"));
+    expect(isRedirect(home)).toBe(false);
+    expect(createServerClientMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("only matches the literal /you prefix, not an unrelated path that happens to contain it", async () => {
+    // e.g. a future "/your-stuff" route shouldn't accidentally be swept into this pattern.
+    const res = await proxy(req("/yourself"));
+    // /^\/you/ does match "/yourself" (prefix match) — document the real regex behavior rather
+    // than assume a word-boundary that doesn't exist, so a stricter future route doesn't get
+    // silently caught by this broad prefix.
+    expect(isRedirect(res)).toBe(true);
+  });
+});

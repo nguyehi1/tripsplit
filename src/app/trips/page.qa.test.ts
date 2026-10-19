@@ -35,6 +35,8 @@ vi.mock("@/lib/data/trips", () => ({
 
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
+  // HomeNavBar (redesign-ui) reads usePathname() to compute which tab is active.
+  usePathname: () => "/trips",
 }));
 
 describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
@@ -105,13 +107,18 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
     const { default: TripsDashboardPage } = await import("./page");
     const html = renderToStaticMarkup(await TripsDashboardPage());
     expect(html).toContain("No trips yet");
-    expect(html).toContain("Pick a template above and your list starts with the basics. Your trips will show up here.");
-    expect(html.match(/>Your trips</g)).toHaveLength(1);
+    expect(html).toContain("Splitiful is ready when you are. Pick a template above, or start a blank trip.");
+    // No "Your trips" kicker and no Ongoing/Completed sections render on the zero-trips
+    // first-run card (redesign-ui AC10) — the card is the entire empty state.
+    expect(html).not.toContain("Your trips");
+    expect(html).not.toContain("Ongoing");
+    expect(html).not.toContain("Completed");
     expect(html).not.toContain("You&#x27;re not on any trips yet.");
     expect(html).not.toContain("Start a trip");
     expect(html).toContain("Start from a template");
     expect(html).toContain('href="/trip/new?type=camping"');
-    expect(html).toMatch(/<a[^>]*href="\/trip\/new"[^>]*>(<svg[^>]*>.*?<\/svg>)?New trip<\/a>/);
+    // "New trip" now lives in the HomeNavBar tab strip, not a FabBar pill.
+    expect(html).toMatch(/<a[^>]*href="\/trip\/new"[^>]*>(<svg[^>]*>.*?<\/svg>)?<span[^>]*>New trip<\/span><\/a>/);
   });
 
   it("has an h1 'Trips', no top-bar plus, the Feedback link, and the shelf before the trips (criterion 74)", async () => {
@@ -128,28 +135,38 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
         members: [],
         totalCents: 1000,
         yourNetCents: 0,
+        itemsToGetCount: 0,
       },
     ]);
     const { default: TripsDashboardPage } = await import("./page");
     const html = renderToStaticMarkup(await TripsDashboardPage());
-    expect(html).toMatch(/<h1[^>]*>Trips<\/h1>/);
+    // The plain "Trips" h1 is replaced by the wordmark (redesign-ui AC4) — no h1 at all now.
+    expect(html).not.toMatch(/<h1[^>]*>Trips<\/h1>/);
+    expect(html).toContain('alt="Splitiful"');
     expect(html).not.toContain("Your trips");
     expect(html).toContain('title="Send feedback"');
     expect(html).not.toContain('title="New trip"');
     expect(html.indexOf("Start from a template")).toBeLessThan(html.indexOf("Ongoing"));
-    // Tab order: Feedback, Blank trip, tiles, trips, pill.
-    const order = ["/feedback", ">Blank trip<", "?type=camping", "/trip/trip-1", ">New trip<"].map((x) => html.indexOf(x));
+    // Tab order: Feedback, tiles, Blank trip (now the last tile in the 2-column grid, not a
+    // header link — template-shelf's "Blank trip" restyle), trips, nav bar's "New trip" tab.
+    const order = ["/feedback", "?type=camping", ">Blank trip<", "/trip/trip-1", ">New trip<"].map((x) => html.indexOf(x));
     expect(order).toEqual([...order].sort((x, y) => x - y));
     expect(order.every((i) => i >= 0)).toBe(true);
   });
 
-  it("uses the flat fab pill on a FabBar and leaves the capsule material alone (criterion 77)", async () => {
+  it("replaces the old FabBar pill with the unified HomeNavBar's Trips/New trip/You tabs (redesign-ui AC3)", async () => {
     getMyTripsMock.mockResolvedValueOnce([]);
     const { default: TripsDashboardPage } = await import("./page");
     const html = renderToStaticMarkup(await TripsDashboardPage());
-    expect(html).toContain("color-mix(in_srgb,var(--color-ink)_90%,transparent)");
-    expect(html).not.toContain("backdrop-blur-xl");
+    // Old FabBar capsule fill is gone outright, not just restyled — FabBar is retired on this page.
+    expect(html).not.toContain("color-mix(in_srgb,var(--color-ink)_90%,transparent)");
     expect(html).not.toContain("animate-capsule-in");
+    expect(html).toContain('aria-label="Primary"');
+    expect(html).toContain("backdrop-blur-[16px]");
+    expect(html).toContain(">Trips</span>");
+    expect(html).toContain(">New trip</span>");
+    expect(html).toContain(">You</span>");
+    expect(html).toContain('href="/you"');
   });
 
   it("makes no privacy or security claim near the shelf (criteria 96, 116)", async () => {
@@ -185,6 +202,7 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
       members: [{ id: "m1", displayName: "A", isOrganizer: true, isPlaceholder: false, initials: "A", avatar: { bg: "#000", fg: "#fff" } }],
       totalCents: 24000,
       yourNetCents: -1240,
+      itemsToGetCount: 3,
       ...over,
     });
     const render = async (rows: unknown[]) => {
@@ -199,33 +217,52 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
       expect(html).not.toContain("rounded-full px-[10px] py-[4px] text-[11px] font-semibold\" style=\"background:oklch(0.95 0.04 88)");
       expect(html).not.toContain("rounded-full border-2");
       expect(html).toContain("Lake Tahoe");
-      expect(html).toContain("Feb 14–17 · 1 person · $240.00");
+      // Row subtitle shows open shopping-list items ("N item(s) to get"), not the money total —
+      // matches the handoff's literal example, and is now rendered as separate spans with a
+      // styled `·` separator (`mx-1.5 text-faint`), not one plain joined string (design-audit
+      // follow-up, 2026-10-16) — parts still read in the same order/content.
+      expect(html).toContain(">Feb 14–17</span>");
+      expect(html).toContain(">1 person</span>");
+      expect(html).toContain(">3 items to get</span>");
+      expect(html.match(/<span class="mx-1\.5 text-faint">·<\/span>/g)).toHaveLength(4); // 2 rows x 2 separators each
+      expect(html).not.toContain("$240.00");
       expect(html).toContain("You owe $12.40");
       expect(html).toContain("Locked");
-      expect(html).toContain("Settled up");
+      // Locked (completed) trips never show a balance anywhere — not "Settled up", not "You
+      // owe"/"You're owed" — a locked trip is settled by definition (user feedback, 2026-10-16).
+      // Big Sur (the second, completed row in this test) has yourNetCents: 0, which would
+      // otherwise render "Settled up" were it not locked.
+      expect(html).not.toContain("Settled up");
     });
 
-    it("uses the compact rhythm: Card px-4 py-1, rows py-3.5 with a 40px icon square, 15px/600 body-font name", async () => {
+    it("uses the compact rhythm: Card px-4 py-1, rows py-[17px] (design-audit.md #4: 17px list row padding, not 14px) with a 40px icon square, 15px/600 body-font name", async () => {
       const html = await render([row(), row({ id: "trip-2", name: "Second" })]);
       expect(html).toContain("rounded-card bg-white shadow-card px-4 py-1");
-      expect(html).toContain("py-3.5");
+      expect(html).toContain("py-[17px]");
+      expect(html).not.toContain("py-3.5");
       expect(html).toContain("size-10 flex-none");
       expect(html).toContain("text-[15px] font-semibold leading-5");
       expect(html).not.toContain("text-display text-[22px]");
     });
 
-    it("draws a 15% ink divider between rows only, none after the last", async () => {
+    it("draws a stronger divider between rows only, none after the last (redesign-ui AC9: hairline-strong, not border-ink/[0.15])", async () => {
       const html = await render([row(), row({ id: "trip-2", name: "Second" }), row({ id: "trip-3", name: "Third" })]);
-      expect(html.match(/border-b border-ink\/\[0\.15\]/g)).toHaveLength(2);
+      expect(html.match(/border-b border-hairline-strong/g)).toHaveLength(2);
       expect(html).not.toContain("divide-y");
       expect(html).not.toContain("border-ink/[0.07]");
+      expect(html).not.toContain("border-ink/[0.15]");
     });
 
-    it("skips an absent date without a stray separator, and says 'No expenses yet' instead of $0.00", async () => {
-      const html = await render([row({ startsOn: null, endsOn: null, totalCents: 0, yourNetCents: 0, members: [] })]);
-      expect(html).toContain("0 people · No expenses yet");
+    it("skips an absent date without a stray separator, and shows '0 items to get' (open shopping-list items) instead of a money total", async () => {
+      const html = await render([
+        row({ startsOn: null, endsOn: null, totalCents: 0, yourNetCents: 0, members: [], itemsToGetCount: 0 }),
+      ]);
+      expect(html).toContain(">0 people</span>");
+      expect(html).toContain(">0 items to get</span>");
+      // Only one separator (date is absent, so just "people · items to get"), not a stray one
+      // where the missing date would have been.
+      expect(html.match(/<span class="mx-1\.5 text-faint">·<\/span>/g)).toHaveLength(1);
       expect(html).not.toContain("$0.00");
-      expect(html).not.toContain("> · ");
     });
 
     it("shows dates across months compactly", async () => {
@@ -233,16 +270,20 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
       expect(html).toContain("Dec 28 – Jan 2");
     });
 
-    it("keeps the subtitle on the full width: balance on the name line (ongoing), Locked pill there (completed) with the balance on a third line", async () => {
+    it("keeps the subtitle on the full width: balance on the name line + third line (ongoing); a locked (completed) trip shows the Locked pill and NO balance anywhere, not even a third line", async () => {
       const ongoing = await render([row({ yourNetCents: 5000 })]);
       // Ongoing: once on the name line (>=360px) and once as the third line (<360px).
       expect(ongoing).toContain("hidden flex-none text-right text-[12.5px] leading-5 min-[360px]:block");
       expect(ongoing).toContain("min-[360px]:hidden");
       expect(ongoing.match(/You&#x27;re owed \$50\.00/g)).toHaveLength(2);
+      // A locked trip never shows a balance anywhere (user feedback, 2026-10-16) — not on the
+      // name line, not on a third line — even though this row has a nonzero yourNetCents that
+      // would otherwise render "You're owed $50.00".
       const done = await render([row({ isCompleted: true, yourNetCents: 5000 })]);
       expect(done).toContain("Locked");
-      expect(done.match(/You&#x27;re owed \$50\.00/g)).toHaveLength(1);
+      expect(done).not.toContain("You&#x27;re owed $50.00");
       expect(done).not.toContain("min-[360px]:hidden");
+      expect(done).not.toContain("min-[360px]:block");
     });
 
     it("uses the first catalog type's icon, and a neutral pin when there is none", async () => {
@@ -252,11 +293,11 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
       expect(without).toContain("M20 10c0 6-8 12-8 12");
     });
 
-    it("keeps a 10px gap under each kicker and 26px between Ongoing and Completed", async () => {
+    it("keeps a 14px gap under each kicker (now with counts, redesign-ui AC9) and 36px between Ongoing and Completed (design-audit.md #6: handoff's 14px/36px, not 10px/26px)", async () => {
       const html = await render([row(), row({ id: "trip-2", name: "Done", isCompleted: true })]);
-      expect(html).toContain("h-[26px]");
-      expect(html).toMatch(/Ongoing<\/div><div class="h-2\.5">/);
-      expect(html).toMatch(/Completed<\/div><div class="h-2\.5">/);
+      expect(html).toContain("h-[36px]");
+      expect(html).toMatch(/Ongoing \(1\)<\/div><div class="h-\[14px\]">/);
+      expect(html).toMatch(/Completed \(1\)<\/div><div class="h-\[14px\]">/);
     });
   });
 

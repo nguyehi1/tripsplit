@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { PencilIcon } from "@/components/icons";
-import { Avatar, Card, Divider, ProgressBar, TabSwitch } from "@/components/ui";
+import { Avatar, Card, Divider, ProgressBar } from "@/components/ui";
 import { displayNameFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
 import { getShoppingListView, type ShoppingListView } from "@/lib/data/shopping-list";
@@ -36,7 +36,10 @@ export function TripTabs({
   /** The trip's catalog types in pick order, for the Suggested card on the List tab. */
   tripTypes?: readonly string[];
 }) {
-  const { tab, setTab } = useTripTab();
+  // The active tab is now selected via `TripNavBar` (design.md §4.4/§5) — this component only
+  // reads it to decide which panel to render; the inline `TabSwitch` segmented control it used to
+  // render here is retired, not kept alongside the bar.
+  const { tab } = useTripTab();
   const [shoppingList, setShoppingList] = useState(initialShoppingList);
   const [syncedShoppingList, setSyncedShoppingList] = useState(initialShoppingList);
   const [showAllMembers, setShowAllMembers] = useState(false);
@@ -78,17 +81,6 @@ export function TripTabs({
 
   return (
     <>
-      <TabSwitch
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: "expenses", label: "Expenses" },
-          { value: "details", label: "Details" },
-          { value: "list", label: "List" },
-        ]}
-      />
-      <div className="h-3.5" />
-
       {tab === "expenses" ? (
         expenses.length === 0 ? (
           <div className="px-1">

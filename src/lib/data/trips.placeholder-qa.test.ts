@@ -51,19 +51,26 @@ function makeTripViewFake(opts: {
   return { from } as unknown as Client;
 }
 
-/** Fake for getMyTrips: trips.select().order(), trip_members.select().in().order(), expenses.select().in() */
+/**
+ * Fake for getMyTrips: trips.select().order(), trip_members.select().in().order(),
+ * expenses.select().in(), shopping_list_items.select().in().neq() ("N to get", redesign-ui
+ * follow-up — empty here since this file's own assertions are about placeholder-member identity
+ * keys, not the shopping-list count).
+ */
 function makeMyTripsFake(opts: {
   trips: Record<string, unknown>[];
   members: Record<string, unknown>[];
   expenses: Record<string, unknown>[];
 }) {
   const from = vi.fn((table: string) => {
-    const data = table === "trips" ? opts.trips : table === "trip_members" ? opts.members : opts.expenses;
+    const data =
+      table === "trips" ? opts.trips : table === "trip_members" ? opts.members : table === "expenses" ? opts.expenses : [];
     const resultPromise = Promise.resolve({ data, error: null });
     const builder: Record<string, unknown> = {
       select: () => builder,
       order: () => resultPromise, // trips ends the chain here
-      in: () => builder, // trip_members/expenses continue with .in().order() or just .in()
+      in: () => builder, // trip_members/expenses/shopping_list_items continue with .in().order()/.in().neq()/just .in()
+      neq: () => resultPromise, // shopping_list_items ends with .in().neq()
       then: resultPromise.then.bind(resultPromise),
     };
     return builder;

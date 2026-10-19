@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowRightIcon, ChevronLeftIcon, CheckIcon, LockIcon } from "@/components/icons";
-import { Avatar, BottomBar, Button, Card, IconButton, Kicker, Screen, ScreenContent, ScreenError, ScreenLoading, TopBar } from "@/components/ui";
+import { TripNavBarStatic } from "@/components/bottom-nav-bar";
+import { Avatar, BottomBar, Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, ScreenError, ScreenLoading, TopBar } from "@/components/ui";
 import { displayNameFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
 import { completeTrip, getTripView, type TripView } from "@/lib/data/trips";
-import { formatDateRange } from "@/lib/dates";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 
@@ -84,25 +84,14 @@ export default function SettleUpPage() {
     );
   }
 
-  const { trip, members, settlements, totalCents, you } = view;
+  const { trip, members, settlements, totalCents, avgPerPersonCents, you } = view;
 
   if (!trip.isCompleted) {
     return (
       <Screen>
         <ScreenContent className="pt-4">
-          <Card className="flex items-center justify-between p-4">
-            <div>
-              <div className="text-display text-[20px]">{trip.name}</div>
-              <div className="mt-[3px] text-[12px] text-ink/[0.72]">
-                {formatDateRange(trip.startsOn, trip.endsOn)} · {members.length} people
-              </div>
-            </div>
-            <div className="text-right">
-              <Kicker>Total</Kicker>
-              <div className="text-display mt-[3px] text-[20px]">{formatCents(totalCents)}</div>
-            </div>
-          </Card>
-          <div className="h-3.5" />
+          {/* No name/date/total summary card here (user feedback, 2026-10-16) — that data now
+             lives inside the "Still on the mountain" card below instead of a separate header. */}
           <TopBar sticky title="Settle up" trailing={backButton} />
           <div className="h-3.5" />
 
@@ -120,6 +109,38 @@ export default function SettleUpPage() {
               Nothing&apos;s final until the organizer calls it. Keep logging — the running
               numbers below update every time.
             </p>
+            <div className="h-4" />
+            <Divider />
+            <div className="h-4" />
+            <div className="flex">
+              <div className="flex-1">
+                <Kicker>Total so far</Kicker>
+                <div className="text-display mt-1 text-[24px]">{formatCents(totalCents)}</div>
+              </div>
+              <div className="mx-4 w-px bg-ink/10" />
+              <div className="flex-1 text-right">
+                <Kicker>Avg / person</Kicker>
+                <div className="text-display mt-1 text-[24px]">{formatCents(avgPerPersonCents)}</div>
+              </div>
+            </div>
+            {you ? (
+              <>
+                <div className="h-4" />
+                <Divider />
+                <div className="h-4" />
+                <div className="flex items-baseline justify-between">
+                  <Kicker>You&apos;ve paid so far</Kicker>
+                  <div className="text-display text-[16px]">{formatCents(you.paidCents)}</div>
+                </div>
+                <div className="h-2" />
+                <div className="flex items-baseline justify-between">
+                  <Kicker>You&apos;d owe</Kicker>
+                  <div className="text-display text-[16px]" style={{ color: "var(--color-terracotta)" }}>
+                    {formatCents(Math.max(0, -you.netCents))}
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
           <div className="h-4" />
           {settlements.length > 0 ? (
@@ -150,6 +171,9 @@ export default function SettleUpPage() {
             <p className="px-1 text-[13px] text-ink/60">All settled up so far — nothing owed.</p>
           )}
         </ScreenContent>
+        {/* Real footer nav bar now, like every other screen (user feedback, 2026-10-16) —
+           stacked above `TripNavBarStatic` the same way the main trip page stacks `BottomBar`
+           above `TripNavBar` (see trip/[id]/page.tsx), not a one-off shell. */}
         <BottomBar>
           <Button
             variant="accent"
@@ -167,6 +191,7 @@ export default function SettleUpPage() {
               : "Only the organizer can lock the trip"}
           </p>
         </BottomBar>
+        <TripNavBarStatic tripId={id} />
       </Screen>
     );
   }
@@ -239,7 +264,13 @@ export default function SettleUpPage() {
             </p>
           </>
         ) : null}
+        {/* Clearance for the nav bar below, which moves these two buttons out of the scrolling
+           content (they rendered inline here before this feature — architecture.md's
+           "Orientation" note: this branch had no `BottomBar` at all today). */}
         <div className="h-6" />
+      </ScreenContent>
+      {/* Real footer nav bar, same stacking as the ongoing branch above and the main trip page. */}
+      <BottomBar>
         <Button variant="muted" className="h-[50px] text-[14px]">
           <CheckIcon size={16} strokeWidth={2.6} />
           Trip completed
@@ -249,7 +280,8 @@ export default function SettleUpPage() {
           Create a new trip
           <ArrowRightIcon size={18} strokeWidth={2.4} />
         </Button>
-      </ScreenContent>
+      </BottomBar>
+      <TripNavBarStatic tripId={id} />
     </Screen>
   );
 }

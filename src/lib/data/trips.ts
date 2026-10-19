@@ -294,17 +294,28 @@ export async function getMyTrips(supabase: Client, currentUserId: string, prefet
   if (tripRows.length === 0) return [];
 
   const tripIds = tripRows.map((t) => t.id);
-  const [membersResult, expensesResult] = await Promise.all([
+  const [membersResult, expensesResult, shoppingItemsResult] = await Promise.all([
     timeAsync("my-trips", "trip_members", () =>
       supabase.from("trip_members").select("*").in("trip_id", tripIds).order("joined_at", { ascending: true }),
     ),
     timeAsync("my-trips", "expenses", () => supabase.from("expenses").select("*").in("trip_id", tripIds)),
+    // Home's "N to get" subtitle (redesign-ui, board A): not yet bought/logged, regardless of
+    // who claimed it — same `status` field `getShoppingListView` groups by, just scoped to "not
+    // logged" instead of split into open/claimed.
+    timeAsync("my-trips", "shopping_list_items", () =>
+      supabase.from("shopping_list_items").select("trip_id, status").in("trip_id", tripIds).neq("status", "logged"),
+    ),
   ]);
   if (membersResult.error) throw membersResult.error;
   if (expensesResult.error) throw expensesResult.error;
+  if (shoppingItemsResult.error) throw shoppingItemsResult.error;
 
   const memberRows = membersResult.data ?? [];
   const expenseRows = expensesResult.data ?? [];
+  const itemsToGetCountByTripId = new Map<string, number>();
+  for (const row of shoppingItemsResult.data ?? []) {
+    itemsToGetCountByTripId.set(row.trip_id, (itemsToGetCountByTripId.get(row.trip_id) ?? 0) + 1);
+  }
 
   return tripRows.map((tripRow) => {
     const tripMemberRows = memberRows.filter((m) => m.trip_id === tripRow.id);
@@ -356,6 +367,7 @@ export async function getMyTrips(supabase: Client, currentUserId: string, prefet
       members,
       totalCents,
       yourNetCents: yourBalance?.netCents ?? 0,
+      itemsToGetCount: itemsToGetCountByTripId.get(tripRow.id) ?? 0,
     };
   });
 }

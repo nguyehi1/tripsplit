@@ -292,6 +292,8 @@ Revision 4: QA and regression
 
 Every board from the canvas, so none is silently skipped. "Built" means built in 0.8.0; boards A, B, C and L are also compared to the screenshot in QA (criteria 92, 130).
 
+**Scope note (2026-10-16):** this feature is templates-only. Ownership of the copy-a-past-trip boards (E, F, G) and the share/receive boards (H, I, J, K) moves to [`copy-list-from-past-trip`](../copy-list-from-past-trip/requirements.md) and [`share-list-with-other`](../share-list-with-other/requirements.md) respectively; the "Deferred to 0.1x.0" statuses below are superseded by those docs' own scoping. This row is left in place as a dated record, not current ownership.
+
 | Board | Screen | Status | Notes |
 |---|---|---|---|
 | A (Main) | Home with template shelf, Your trips, New trip pill | **Built in 0.8.0** | `/trips` plus the shelf on `/`. Documented deviations: no avatar (A3), Feedback icon kept. **Revision 4: trip rows (A5) are now restyled to the board's row anatomy and spacing, keeping name, dates, people, balance and Locked state, minus the "Trip" pill (criteria 122-123); whole-page section/kicker spacing re-checked against board A (criterion 123); measured in QA (criterion 130).** |
@@ -362,7 +364,7 @@ Binding constraints are criteria 29-34, 47-50 and 59-71. Revision 3 and Revision
 
 ## Non-goals (not in 0.8.0)
 
-Add all N (0.8.1), Undo and batch ids (0.9.0), template tiles on an existing trip's empty list (board D), restyling the top half of New trip (the `/trips` trip rows ARE now restyled, Revision 4), a Home profile avatar (Home tiles, "Blank trip" and the first-run card were moved INTO 0.8.0 by Revision 3), copy a past trip with Undo (0.10.0), sharing and receiving lists (0.11.0+), item notes, editing a trip's types after creation in 0.8.0 (and therefore no UPDATE policy or grant on `trips.types` or the Other text; proposed for 0.8.1, see "Planned next"), a `source` or `batch_id` column, saved custom templates, private suggestions, a Share icon in the trip header, dark-mode styling, localization, analytics properties, in-app catalog editing.
+Add all N (0.8.1), Undo and batch ids (0.9.0), template tiles on an existing trip's empty list (board D), restyling the top half of New trip (the `/trips` trip rows ARE now restyled, Revision 4), a Home profile avatar (Home tiles, "Blank trip" and the first-run card were moved INTO 0.8.0 by Revision 3), copy a past trip with Undo (now owned by [`copy-list-from-past-trip`](../copy-list-from-past-trip/requirements.md), not this feature), sharing and receiving lists (now owned by [`share-list-with-other`](../share-list-with-other/requirements.md), not this feature), item notes, editing a trip's types after creation in 0.8.0 (and therefore no UPDATE policy or grant on `trips.types` or the Other text; proposed for 0.8.1, see "Planned next"), a `source` or `batch_id` column, saved custom templates, private suggestions, a Share icon in the trip header, dark-mode styling, localization, analytics properties, in-app catalog editing.
 
 Added from the early review:
 

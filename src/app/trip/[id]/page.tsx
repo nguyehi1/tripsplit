@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { ChevronLeftIcon, LockIcon, PeopleIcon } from "@/components/icons";
+import { LockIcon, MessageSquareIcon, PeopleIcon } from "@/components/icons";
+import { TripNavBar } from "@/components/bottom-nav-bar";
+import { Wordmark } from "@/components/brand/wordmark";
 import {
   AvatarStack,
   BottomBar,
@@ -66,9 +68,9 @@ function TripSummaryOnly({
   const { members, settlements, totalCents, avgPerPersonCents } = summary;
   return (
     <Screen glow texture>
-      <ScreenContent className="pt-0.5">
+      <ScreenContent className="pt-0.5" padding="px-4">
         <div className="flex items-center gap-2 py-3">
-          <span className="text-[12.5px] font-semibold text-ink/[0.72]">Trip summary</span>
+          <span className="text-[12.5px] font-semibold text-muted">Trip summary</span>
         </div>
         <Card className="p-[18px]">
           <div className="flex items-center">
@@ -79,7 +81,7 @@ function TripSummaryOnly({
                 avatar: { bg: "var(--color-avatar-placeholder)", fg: "var(--color-ink)" },
               }))}
             />
-            <span className="ml-2.5 text-[12.5px] text-ink/[0.72]">
+            <span className="ml-2.5 text-[12.5px] text-muted">
               {members.length} {members.length === 1 ? "person" : "people"}
             </span>
           </div>
@@ -120,7 +122,7 @@ function TripSummaryOnly({
           {alreadySignedIn ? (
             <>
               <div className="text-[15px] font-semibold">Join this trip?</div>
-              <div className="mt-1.5 text-[13px] leading-[1.45] text-ink/[0.72]">
+              <div className="mt-1.5 text-[13px] leading-[1.45] text-muted">
                 You&apos;re already signed in — just add your name to see the full list and add
                 your own expenses.
               </div>
@@ -130,7 +132,7 @@ function TripSummaryOnly({
           ) : (
             <>
               <div className="text-[15px] font-semibold">Want the full expense list?</div>
-              <div className="mt-1.5 text-[13px] leading-[1.45] text-ink/[0.72]">
+              <div className="mt-1.5 text-[13px] leading-[1.45] text-muted">
                 See exactly what was spent and add your own — just confirm your email.
               </div>
               <div className="h-3" />
@@ -244,7 +246,7 @@ export async function renderTripDashboard(
     return (
       <>
         <Screen glow texture>
-          <ScreenContent className="pt-14">
+          <ScreenContent className="pt-14" padding="px-4">
             <p className="text-[15px] text-ink/70">Couldn&apos;t load this trip — you may not be on it.</p>
           </ScreenContent>
         </Screen>
@@ -320,79 +322,84 @@ export async function renderTripDashboard(
     <TripVerificationProvider initialIsVerified={isVerified} initialNeedsName={isVerified && you?.displayName === "Organizer"}>
       <TripTabProvider initialTab={initialTab}>
         <Screen glow texture>
-          <ScreenContent className="pt-0.5">
+          <ScreenContent className="pt-0.5" padding="px-4">
+            {/* Splitiful wordmark + Feedback icon, same header as Home (user feedback,
+               2026-10-16) — not a back-to-Trips link; the bottom nav bar's "Trips" tab already
+               covers that. No "Trip" tag either — it named the obvious and ate space the compact
+               board-C card doesn't spend on it; the date/Locked badge carry the row. */}
             <TopBar
-              sticky
-              titleClassName="text-[12.5px] font-semibold text-ink/[0.72]"
-              title="Your trip"
-              leading={
-                <IconLinkButton title="All trips" className="text-ink/[0.73]" href="/trips">
-                  <ChevronLeftIcon size={18} strokeWidth={2.3} />
+              title={<Wordmark width={150} height={42} />}
+              titleClassName=""
+              trailing={
+                <IconLinkButton title="Send feedback" className="text-muted" href="/feedback">
+                  <MessageSquareIcon size={19} strokeWidth={2.2} />
                 </IconLinkButton>
               }
-              trailing={
-                <>
-                  <VerifiedActionIcons tripId={id} />
-                </>
-              }
             />
-
-            <Card className="p-[18px]">
-              <div className="flex items-center gap-2">
-                <span
-                  className="rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
-                  style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}
-                >
-                  Trip
-                </span>
-                {formatDateRange(trip.startsOn, trip.endsOn) ? (
-                  <span className="text-[12.5px] text-ink/[0.72]">
-                    {formatDateRange(trip.startsOn, trip.endsOn)}
-                  </span>
-                ) : null}
-                {trip.isCompleted ? (
-                  <span
-                    className="ml-auto flex items-center gap-1 rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
-                    style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
-                  >
-                    <LockIcon size={11} strokeWidth={2.6} />
-                    Locked
-                  </span>
-                ) : null}
+            <div className="h-4" />
+            <Card className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                {/* 26px, not today's shipped 32px (design.md §4.4 — the 32px is what's being
+                   changed by this feature) — wraps rather than truncates on a long name, same
+                   `[overflow-wrap:anywhere]` convention as Home's `TripRow`. */}
+                <div className="text-display text-[26px] [overflow-wrap:anywhere]">{trip.name}</div>
+                {/* Settle up/Invite, moved here from the TopBar's trailing slot (design.md
+                   §4.4's board-C layout; architecture.md §2.4's open item, resolved per the
+                   default call: a straightforward relocation, same links/icons). */}
+                <div className="flex flex-none items-center gap-2">
+                  <VerifiedActionIcons tripId={id} />
+                </div>
               </div>
-              <div className="h-3" />
-              <div className="text-display text-[32px]">{trip.name}</div>
-              <div className="h-3.5" />
+              {formatDateRange(trip.startsOn, trip.endsOn) || trip.isCompleted ? (
+                <>
+                  <div className="h-1" />
+                  <div className="flex items-center gap-2">
+                    {formatDateRange(trip.startsOn, trip.endsOn) ? (
+                      <span className="text-[12.5px] text-muted">{formatDateRange(trip.startsOn, trip.endsOn)}</span>
+                    ) : null}
+                    {trip.isCompleted ? (
+                      <span
+                        className="flex items-center gap-1 rounded-full px-[11px] py-[5px] text-[11.5px] font-semibold"
+                        style={{ background: "var(--color-terracotta-soft)", color: "var(--color-terracotta)" }}
+                      >
+                        <LockIcon size={11} strokeWidth={2.6} />
+                        Locked
+                      </span>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+              <div className="h-2.5" />
               <div className="flex items-center">
                 <AvatarStack members={members} />
-                <span className="ml-2.5 text-[12.5px] text-ink/[0.72]">
+                <span className="ml-2.5 text-[12.5px] text-muted">
                   {members.length} {members.length === 1 ? "person" : "people"}
                 </span>
               </div>
-              <div className="h-4" />
+              <div className="h-3" />
               <Divider />
-              <div className="h-4" />
+              <div className="h-3" />
               <div className="flex">
                 <div className="flex-1">
                   <Kicker>Total so far</Kicker>
-                  <div className="text-display mt-1 text-[28px]">{formatCents(totalCents)}</div>
+                  <div className="text-display mt-1 text-[24px]">{formatCents(totalCents)}</div>
                 </div>
                 <div className="mx-4 w-px bg-ink/10" />
                 <div className="flex-1 text-right">
                   <Kicker>Avg / person</Kicker>
-                  <div className="text-display mt-1 text-[28px]">{formatCents(avgPerPersonCents)}</div>
+                  <div className="text-display mt-1 text-[24px]">{formatCents(avgPerPersonCents)}</div>
                 </div>
               </div>
               {you ? (
                 <>
-                  <div className="h-4" />
+                  <div className="h-3" />
                   <Divider />
-                  <div className="h-4" />
+                  <div className="h-3" />
                   <div className="flex items-baseline justify-between">
                     <Kicker>You&apos;ve paid so far</Kicker>
                     <div className="text-display text-[16px]">{formatCents(you.paidCents)}</div>
                   </div>
-                  <div className="h-3" />
+                  <div className="h-2" />
                   <div className="flex items-baseline justify-between">
                     <Kicker>You&apos;d owe</Kicker>
                     <div className="text-display text-[16px]" style={{ color: "var(--color-terracotta)" }}>
@@ -405,7 +412,7 @@ export async function renderTripDashboard(
 
             <InlineVerifyWidget />
 
-            <div className="h-3.5" />
+            <div className="h-7" />
 
             <TripTabs
               tripId={id}
@@ -422,6 +429,10 @@ export async function renderTripDashboard(
               <TripBottomBarButton tripId={id} isCompleted={trip.isCompleted} />
             </VerifiedBottomBarContent>
           </BottomBar>
+          {/* The unified nav bar sits below the existing CTA capsule (architecture.md §2.1's
+             "stacking with the existing CTA slot") — both already sticky/fixed, so this is a
+             stacking-order addition, not a rewrite of `BottomBar`. */}
+          <TripNavBar tripId={id} />
         </Screen>
         {sheet}
       </TripTabProvider>

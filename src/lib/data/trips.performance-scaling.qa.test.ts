@@ -26,7 +26,11 @@ function makeMyTripsFake(opts: {
 }) {
   const tripsSelectCalls: unknown[] = [];
   const from = vi.fn((table: string) => {
-    const data = table === "trip_members" ? opts.members : table === "expenses" ? opts.expenses : opts.trips;
+    // "N to get" (redesign-ui follow-up): `getMyTrips` also queries `shopping_list_items` via
+    // `.select(...).in(...).neq("status", "logged")` — empty here since this file's own
+    // assertions are about `trips`/`trip_members`/`expenses` wiring, not the shopping-list count.
+    const data =
+      table === "trip_members" ? opts.members : table === "expenses" ? opts.expenses : table === "trips" ? opts.trips : [];
     const resultPromise = Promise.resolve({ data, error: null });
     const builder: Record<string, unknown> = {
       select: (...args: unknown[]) => {
@@ -34,7 +38,8 @@ function makeMyTripsFake(opts: {
         return builder;
       },
       order: () => resultPromise, // trips ends the chain here
-      in: () => builder, // trip_members/expenses continue with .in().order() or just .in()
+      in: () => builder, // trip_members/expenses/shopping_list_items continue with .in().order()/.in().neq()/just .in()
+      neq: () => resultPromise, // shopping_list_items ends with .in().neq()
       then: resultPromise.then.bind(resultPromise),
     };
     return builder;

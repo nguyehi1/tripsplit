@@ -64,11 +64,18 @@ export function Screen({
 export function ScreenContent({
   children,
   className = "",
+  padding = "px-5",
 }: {
   children: ReactNode;
   className?: string;
+  /** Horizontal page padding. Defaults to the pre-redesign 20px (`px-5`) so every screen outside
+   *  `redesign-ui`'s scope keeps its existing gutter untouched; `redesign-ui`'s in-scope screens
+   *  (Welcome, Home, Home first-run, New trip, trip screens, You) opt into the handoff's 16px
+   *  (`px-4`) explicitly per call site, rather than this default changing out from under screens
+   *  this feature never touched. */
+  padding?: string;
 }) {
-  return <div className={`flex-1 px-5 pb-10 ${className}`}>{children}</div>;
+  return <div className={`flex-1 ${padding} pb-10 ${className}`}>{children}</div>;
 }
 
 export function BottomBar({ children }: { children: ReactNode }) {
@@ -98,6 +105,7 @@ export function TopBar({
   trailing,
   titleClassName = "text-[16px] font-semibold",
   sticky = false,
+  stickyInsetClassName = "-mx-5 px-5",
 }: {
   title: ReactNode;
   leading?: ReactNode;
@@ -113,9 +121,14 @@ export function TopBar({
    *  `settle-up` qualify. Screens with a short, mostly-static form (add-expense, edit-expense,
    *  invite, feedback) keep the plain header. */
   sticky?: boolean;
+  /** Negative-margin/padding pair that cancels the parent `ScreenContent`'s own horizontal
+   *  padding so the sticky bar's blur spans full-bleed. Must match whatever `padding` the sibling
+   *  `ScreenContent` on the same screen uses — defaults to the pre-redesign 20px pairing; `New
+   *  trip` (the one in-scope sticky-header screen moving to 16px) passes `"-mx-4 px-4"`. */
+  stickyInsetClassName?: string;
 }) {
   const stickyClass = sticky
-    ? "sticky top-0 z-20 -mx-5 px-5 py-3 backdrop-blur-xl [background:var(--surface-nav)] [backdrop-filter:blur(24px)_saturate(1.6)]"
+    ? `sticky top-0 z-20 ${stickyInsetClassName} py-3 backdrop-blur-xl [background:var(--surface-nav)] [backdrop-filter:blur(24px)_saturate(1.6)]`
     : "px-1 pb-1 pt-5";
 
   if (trailing) {
@@ -175,7 +188,9 @@ type ButtonVariant = "primary" | "accent" | "soft" | "muted" | "ghost" | "capsul
  *  on first paint. Opt-in, additive variants — every existing `primary`/`accent`/etc. call site
  *  outside this feature's four screens is unaffected. */
 const buttonVariantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-ink text-white",
+  // redesign-ui design.md §2: the handoff's flat "primary button" token (ink 90%), distinct from
+  // the blurred `capsule` variant below (ink 86%, blurred) — see globals.css's `--color-primary-button`.
+  primary: "text-white [background:var(--color-primary-button)]",
   accent: "bg-accent text-white",
   soft: "bg-ink/[0.06] text-ink",
   muted: "bg-ink/[0.07] text-ink/70 cursor-default",
@@ -360,7 +375,7 @@ export function Field({
 export function Avatar({
   initials,
   color,
-  size = 36,
+  size = 34,
   ring = false,
   className = "",
 }: {

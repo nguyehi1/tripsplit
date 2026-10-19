@@ -62,20 +62,42 @@ const summaryRows = memberRows.map((m, i) => ({
   invite_code: tripRow.invite_code,
 }));
 
+// Home's "N to get" row subtitle (redesign-ui follow-up): `getMyTrips` now also queries
+// `shopping_list_items` (`.select("trip_id, status").in("trip_id", tripIds).neq("status",
+// "logged")`) to count open items per trip. A handful of rows are enough to exercise the same
+// chain shape under the bench without materially changing its timing characteristics.
+const shoppingListItemRows = Array.from({ length: 10 }, (_, i) => ({
+  trip_id: "t1",
+  status: i % 3 === 0 ? "logged" : "open",
+}));
+
 function makeClient(): Client {
   const from = (table: string) => {
-    const data = table === "trip_members" ? memberRows : table === "expenses" ? expenseRows : [tripRow];
+    const data =
+      table === "trip_members"
+        ? memberRows
+        : table === "expenses"
+          ? expenseRows
+          : table === "shopping_list_items"
+            ? shoppingListItemRows
+            : [tripRow];
     const single = () => Promise.resolve({ data: data[0], error: null });
     const resultPromise = Promise.resolve({ data, error: null });
     const builder: Record<string, unknown> = {
       select: () => builder,
       eq: () => builder,
-      // `expenses` chains `.order().order()` (date, then created_at) before resolving, and
-      // `trip_members` chains `.in().order()` while `expenses` (in getMyTrips) ends at `.in()` —
-      // every `order()`/`in()` call returns a thenable that's also still chainable, so any of
-      // these chain shapes resolves without a second, table-specific builder.
+      // `expenses` chains `.order().order()` (date, then created_at) before resolving,
+      // `trip_members` chains `.in().order()`, `shopping_list_items` chains `.in().neq()`, and
+      // plain `expenses` (in getMyTrips) ends at `.in()` — every `order()`/`in()`/`neq()` call
+      // returns a thenable that's also still chainable, so any of these chain shapes resolves
+      // without a second, table-specific builder.
       order: () => ({ then: resultPromise.then.bind(resultPromise), order: () => resultPromise }),
-      in: () => ({ then: resultPromise.then.bind(resultPromise), order: () => resultPromise }),
+      in: () => ({
+        then: resultPromise.then.bind(resultPromise),
+        order: () => resultPromise,
+        neq: () => resultPromise,
+      }),
+      neq: () => resultPromise,
       single,
       then: resultPromise.then.bind(resultPromise),
     };

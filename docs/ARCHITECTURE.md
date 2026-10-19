@@ -129,7 +129,20 @@ paper") is resolved today; no toggle, `[data-theme]` attribute, or
 the full decision and the discipline this places on future component code
 (reference `var(--token)` / a token-backed utility class, never a raw
 hex/oklch/rgba literal, for anything that should participate in a future
-theme swap).
+theme swap). **As of the redesign-ui feature**, the token set is extended
+with the remaining names from that feature's full semantic table (`text
+muted`/`text faint`, `card border`, `hairline`, `on accent`, `tint`, `primary
+button`, `brand brown`, `logo plate`, alongside a retuned `nav bar`
+surface) — **light-theme values only**; dark mode was descoped mid-feature
+(see `docs/features/redesign-ui/requirements.md` decision #6) and deferred to
+its own future feature, so still no `[data-theme]` block, toggle, or
+`prefers-color-scheme` handling exists yet. The token *names* exist so that
+future feature can add dark values as a value-only swap, per this section's
+existing acceptance bar. A draft ADR for the eventual activation mechanism
+(toggle vs. `prefers-color-scheme` vs. both) was written and withdrawn
+unmerged during redesign-ui's design — see
+`docs/adr/0016-system-preference-dark-theme-via-data-theme-attribute.md` for
+that starting point.
 
 **Auth model — anonymous sessions + a three-tier verification boundary**: as
 of the simplified-onboarding feature, not every session is a permanent,
@@ -600,7 +613,9 @@ this before adding a parallel implementation.
   `src/lib/data/trip-columns.ts` (kept out of this module so tests that mock
   `@/lib/data/trips` do not strip them), and `getTripView` returns
   `trip.types`. `other_type` is never selected. Any new read of `trips` must
-  use an explicit column list.
+  use an explicit column list. **As of the redesign-ui feature**, the new
+  `/you` page (see below) reuses the existing `getMyDisplayName` export from
+  this module — no new function needed.
 - `src/lib/starter-catalog.ts`, `src/lib/starter-suggestions.ts`,
   `src/lib/validation/trip-type.ts` (new, starter-list feature) — the
   catalog is the **one** editable config file (type codes, labels, phrases,
@@ -629,6 +644,11 @@ this before adding a parallel implementation.
   `--color-accent-ink` token backs "Blank trip", the checked tile icon and the
   "+" glyph. No database, API or migration change. See
   `docs/features/starter-list-exploration/architecture.md` section 17.
+  **As of the redesign-ui feature**, `FabBar`'s one call site (`/trips`) is
+  replaced by the new `HomeNavBar` bottom tab bar (see below) — `FabBar` the
+  component stays in `ui.tsx` unused rather than deleted; see
+  `docs/features/redesign-ui/architecture.md` section 3.1 for the impact note
+  and the test (`ui.fab.test.tsx`) that needs engineer/QA attention.
 - **Revision 4 (starter-list feature, layout fixes)**: `Screen` in `ui.tsx` now
   clips with `overflow: clip` instead of `hidden`; `hidden` creates a scroll
   container, which silently disabled `position: sticky` on the top bar and on
@@ -779,7 +799,15 @@ this before adding a parallel implementation.
   small accent count-pill design-reference's Screen 2 describes when
   `badge > 0`) — additive to the existing `{ value, label }` option shape;
   its one existing consumer (`trip-tabs.tsx`) passes no `badge` and is
-  unaffected.
+  unaffected. **As of the redesign-ui feature**, `BottomBar` (the existing
+  sticky-bottom CTA slot) keeps its exact current contract and consumers
+  unchanged; a new, separate component, `src/components/bottom-nav-bar.tsx`
+  (`BottomNavBar`, plus thin `HomeNavBar`/`TripNavBar` wrappers), is the home
+  for the feature's new unified bottom *tab* bar — deliberately not a
+  repurposing of `BottomBar`, since the two have different jobs (one CTA
+  slot, one navigation control) that can and do stack on the same screen.
+  See `docs/features/redesign-ui/architecture.md` section 2.1 for the full
+  design.
 - `src/app/globals.css` — as of the ux-revamp feature, this is also the
   app's one design-token source (`:root` custom properties, mirrored into
   the adjacent `@theme inline` block) — see the "Design tokens / theming"
@@ -787,7 +815,10 @@ this before adding a parallel implementation.
   [ADR 0007](adr/0007-css-custom-property-tokens-for-themeable-restyle.md).
   New color/shadow/radius values a screen needs should extend this file's
   token set rather than introducing a local literal, so a future theme
-  (dark mode) stays a value swap in one place.
+  (dark mode) stays a value swap in one place. **As of the redesign-ui
+  feature**, this file gains the remaining semantic tokens from that
+  feature's token table (light values only — see the System overview note
+  above); no `[data-theme]` block exists yet.
 - `src/proxy.ts` — the server-side session-existence gate. As of
   simplified-onboarding, it gates **only** `/trips` (and, since the feedback
   move, `/feedback`; both need some session) (session required,
@@ -815,7 +846,10 @@ this before adding a parallel implementation.
   extends its `tab` query-param branch to a third `"list"` value — see
   `docs/features/shopping-list/architecture.md`. **As of the starter-list
   feature**, it also passes `trip.types` down to the List tab, and a trip
-  created with a catalog type lands on `?tab=list`.
+  created with a catalog type lands on `?tab=list`. **As of the redesign-ui
+  feature**, this file gains one more gated route, `/you` (new account page
+  — see `docs/features/redesign-ui/architecture.md` section 2.3), gated the
+  same way `/trips` already is (some session required).
 - `src/lib/rate-limit.ts` — the app's one rate-limiting module, added to
   close docs/reviews/security-compliance/project/security-review-2026-09-17.md's blocking finding (invite codes
   are low-entropy and every consuming RPC was unthrottled). Wraps
@@ -885,3 +919,4 @@ List notable ones here as they're added:
 - [0013](adr/0013-shopping-list-claim-release-trigger-on-member-removal.md) — A `before delete` trigger on `trip_members` (the app's first trigger) to release an in-flight shopping-list claim and clear `added_by`/`claimed_by` when a member is removed, over a declarative `on delete set null`/`restrict`, a relaxed shape-check constraint, read-time reconstruction (ADR 0012's pattern), or an app-level cleanup job
 - [0014](adr/0014-trip-types-column-checks-and-create-trip-overload.md) — Trip types and the typed "Other" trip type stored as two `trips` columns validated by column CHECKs (inline, locale-independent code-point allowlist, no validator function), a seven-argument `create_trip` overload with no parameter defaults and a not-found-only client fallback, and client-side derived suggestions, over RPC-only validation, defaults on the existing function, a second-step update, an `other` code in `types`, or a separate custom-types table
 - [0015](adr/0015-in-memory-single-item-replay-after-inline-verification.md) — A one-item in-memory pending slot (held in TripVerificationProvider, bound to the tapping user, 10-minute TTL) plus the inline verification widget to add the first tapped suggestion automatically after an unverified organizer verifies, over `pending-action.ts`/sessionStorage with a `/check-email` redirect, loosening RLS for the organizer, or hiding the card until verification
+- [0016](adr/0016-system-preference-dark-theme-via-data-theme-attribute.md) — **Withdrawn, never implemented.** Drafted during `redesign-ui`'s design while dark mode was still in scope (system-preference-driven `data-theme` attribute, set by a pre-paint inline script, over a stored toggle/`next-themes`/CSS-only `prefers-color-scheme`); dark mode was descoped from that feature before this ADR was acted on. Kept as a starting point for whichever future feature actually ships dark mode — see `docs/features/redesign-ui/architecture.md` section 1.1/6.

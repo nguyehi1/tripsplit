@@ -11,6 +11,12 @@
   --color-accent-soft: oklch(0.95 0.04 88);
   --color-accent-deep: oklch(0.38 0.08 80);
   --color-accent-ink: oklch(0.42 0.08 80);
+  /* "Accent text" per the handoff's token table (active tab label, plus icon) — same light
+     value as `accent-ink` but its own name, since `bottom-nav-bar.tsx` was written against this
+     name and it was never actually defined here (bug found via user feedback, 2026-10-16: the
+     active nav tab's icon/label rendered white instead of the accent color — Tailwind had no
+     `--color-accent-text` to resolve `text-accent-text` against). */
+  --color-accent-text: oklch(0.42 0.08 80);
 
   --color-terracotta: oklch(0.42 0.09 44);
   --color-terracotta-soft: oklch(0.95 0.035 44);
@@ -40,12 +46,45 @@
   --radius-tile: 14px;
 
   /* New for this restyle: sticky/blurred nav surface, floating capsule fills, sheet backdrop,
-     dimming scrim (ADR 0007 point 4, ADR 0008 point 6). */
-  --surface-nav: color-mix(in srgb, var(--color-paper) 78%, transparent);
+     dimming scrim (ADR 0007 point 4, ADR 0008 point 6). `--surface-nav` retuned from paper-78% to
+     paper-72% (redesign-ui design.md §2's `nav-bar` token) — same variable, new value, since this
+     is the one existing token the handoff's table asks to retune rather than add alongside. */
+  --surface-nav: color-mix(in srgb, var(--color-paper) 72%, transparent);
   --surface-capsule: color-mix(in srgb, var(--color-ink) 86%, transparent);
   --surface-capsule-muted: color-mix(in srgb, var(--color-ink) 8%, var(--color-paper));
   --surface-sheet: color-mix(in srgb, var(--color-paper) 90%, transparent);
   --color-scrim: color-mix(in srgb, var(--color-ink) 22%, transparent);
+
+  /* redesign-ui (requirements.md AC1, design.md §2): the handoff's semantic token table, light
+     values only — no `[data-theme]` block and no dark value anywhere in this file (decision #6).
+     Named per ADR 0007's existing `--color-<role>` convention so a future dark-mode feature can
+     attach a dark value to each name later without renaming or restructuring anything here.
+     `text-muted`/`tint` are renames of values already in use as ad hoc Tailwind opacity utilities
+     (`text-ink/[0.74]`, `bg-ink/[0.05]`) — same value, just a name now, per design.md §2's mapping
+     table. `nav-bar` aliases the just-retuned `--surface-nav` above so call sites can use either
+     the existing inline-style convention or the new semantic name. */
+  --color-text-muted: rgba(35, 28, 18, 0.74);
+  --color-text-faint: rgba(35, 28, 18, 0.68);
+  --color-card-border: transparent;
+  --color-hairline: rgba(35, 28, 18, 0.08);
+  /* AC9: Home's row divider is already stronger than the handoff's plain hairline — keep that
+     distinction as its own token rather than regressing it down to --color-hairline. */
+  --color-hairline-strong: rgba(35, 28, 18, 0.15);
+  --color-on-accent: #ffffff;
+  --color-tint: rgba(35, 28, 18, 0.05);
+  /* The handoff's flat "primary button" fill (ink 90%) — distinct from the blurred floating
+     `--surface-capsule` (ink 86%), per design.md §2's flag that the two aren't the same thing even
+     though today's code only ever shipped the capsule. Kept separate rather than folding one into
+     the other. */
+  --color-primary-button: rgba(35, 28, 18, 0.9);
+  --color-nav-bar: var(--surface-nav);
+  --color-brand-brown: #4a2d22;
+  /* `--color-logo-plate` (board T's cream circle, requirements item 3): QA removed this as dead
+     once board S's brand row switched the sticker tile to a plain `--color-card` fill, but the
+     user then asked to keep the original big dog + bubble composition's size and backing on
+     Welcome (2026-10-16) — the sticker-card housing there is sized to match, and reuses this
+     token rather than `--color-card`, so the plate color is back in use. */
+  --color-logo-plate: #fffaf1;
 
   /* Faint, full-bleed paw-print texture (AC3) — opt-in via Screen's `texture` prop.
      Kept deliberately subtle per design.md §1 ("a paper grain, not a wallpaper print"):
@@ -67,11 +106,23 @@
   --color-accent-soft: var(--color-accent-soft);
   --color-accent-deep: var(--color-accent-deep);
   --color-accent-ink: var(--color-accent-ink);
+  --color-accent-text: var(--color-accent-text);
   --color-terracotta: var(--color-terracotta);
   --color-terracotta-soft: var(--color-terracotta-soft);
   --color-balance-positive: var(--color-balance-positive);
   --color-balance-negative: var(--color-balance-negative);
   --color-avatar-placeholder: var(--color-avatar-placeholder);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-faint: var(--color-text-faint);
+  --color-card-border: var(--color-card-border);
+  --color-hairline: var(--color-hairline);
+  --color-hairline-strong: var(--color-hairline-strong);
+  --color-on-accent: var(--color-on-accent);
+  --color-tint: var(--color-tint);
+  --color-primary-button: var(--color-primary-button);
+  --color-nav-bar: var(--color-nav-bar);
+  --color-brand-brown: var(--color-brand-brown);
+  --color-logo-plate: var(--color-logo-plate);
   --shadow-card: var(--shadow-card);
   --shadow-card-sm: var(--shadow-card-sm);
   --shadow-capsule: var(--shadow-capsule);

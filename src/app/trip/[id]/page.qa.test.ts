@@ -229,4 +229,61 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
     const source = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
     expect(source.trimStart().startsWith('"use client"')).toBe(false);
   });
+
+  describe("redesign-ui: summary card (board C, AC12/AC17)", () => {
+    it("renders the trip name at 26px, wrapping (not truncating) a long name", async () => {
+      getTripSummaryMock.mockResolvedValueOnce(baseSummary);
+      getTripViewMock.mockResolvedValueOnce({
+        ...baseView,
+        trip: { ...baseView.trip, name: "Grandma's 80th Birthday Extravaganza Weekend" },
+      });
+      const el = await callPage();
+      const html = renderToStaticMarkup(el);
+      expect(html).toContain("text-display text-[26px] [overflow-wrap:anywhere]");
+      expect(html).not.toContain("text-display text-[32px]");
+      expect(html).not.toContain("truncate");
+      expect(html).not.toContain("text-ellipsis");
+      expect(html).toContain("Grandma&#x27;s 80th Birthday Extravaganza Weekend");
+    });
+
+    it("moves the Settle up/Invite icon links into the summary card; the sticky 'Your trip' TopBar/back-chevron is gone (bottom nav's Trips tab covers that instead, user feedback follow-up)", async () => {
+      getTripSummaryMock.mockResolvedValueOnce(baseSummary);
+      getTripViewMock.mockResolvedValueOnce(baseView);
+      const el = await callPage();
+      const html = renderToStaticMarkup(el);
+      // No "All trips" back-chevron / "Your trip" sticky header at all anymore — the bottom nav
+      // bar's "Trips" tab (always present) is now the only way back.
+      expect(html).not.toContain('title="All trips"');
+      expect(html).not.toContain("Your trip");
+      const cardIdx = html.indexOf("text-display text-[26px]");
+      expect(cardIdx).toBeGreaterThanOrEqual(0);
+      // Settle up/Invite links appear after the trip name within the same card.
+      expect(html.indexOf("/settle-up", cardIdx)).toBeGreaterThan(cardIdx);
+      // Bottom nav bar's own "Trips" tab is still the way back to /trips.
+      expect(html).toContain('href="/trips"');
+    });
+
+    it("drops the old 'Trip' pill tag from the summary card header (user feedback follow-up: compact card)", async () => {
+      getTripSummaryMock.mockResolvedValueOnce(baseSummary);
+      getTripViewMock.mockResolvedValueOnce(baseView);
+      const el = await callPage();
+      const html = renderToStaticMarkup(el);
+      expect(html).not.toMatch(/>Trip<\/span>/);
+    });
+
+    it("mounts TripNavBar below the existing Add-an-expense BottomBar (stacked, not a replacement)", async () => {
+      getTripSummaryMock.mockResolvedValueOnce(baseSummary);
+      getTripViewMock.mockResolvedValueOnce(baseView);
+      const el = await callPage();
+      const html = renderToStaticMarkup(el);
+      const bottomBarIdx = html.indexOf("Add an expense");
+      const navBarIdx = html.indexOf('aria-label="Primary"');
+      expect(bottomBarIdx).toBeGreaterThanOrEqual(0);
+      expect(navBarIdx).toBeGreaterThan(bottomBarIdx);
+      expect(html).toContain(">Trips</span>");
+      expect(html).toContain(">Expenses</span>");
+      expect(html).toContain(">Details</span>");
+      expect(html).toContain(">List</span>");
+    });
+  });
 });

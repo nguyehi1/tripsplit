@@ -1,9 +1,7 @@
 # Roadmap
 
-Current delivery status and remaining release work. **Last reviewed: 2026-10-15.** This page is the
-status source of truth; feature documents are dated records of decisions and review evidence, and
-may contain earlier proposals or superseded status notes. “Shipped” means the change is on `main`;
-manual release checks and production deployment are listed separately when still open.
+**Last reviewed: 2026-10-16.** 
+This page is the status source of truth; feature documents are dated records of decisions and review evidence, and may contain earlier proposals or superseded status notes. “Shipped” means the change is on `main`; manual release checks and production deployment are listed separately when still open.
 
 ## Release work and follow-ups
 
@@ -15,7 +13,10 @@ manual release checks and production deployment are listed separately when still
 | Invite by email (`email-invites`) | Shipped to `main`; mailto design sends and stores no invitee address | Counsel review of the Terms invite clause and anti-spam position. | [Requirements](features/email-invites/requirements.md) · [Counsel review](reviews/security-compliance/features/email-invites/counsel-review.md) |
 | Invite-code RPC hardening | **Closed:** migrations 0017 and 0021 were applied live and production smoke checks passed, user-confirmed 2026-10-13 | Account-deletion self-service and counsel sign-off remain separate privacy/legal follow-ups; they are not open defects in the RPC hardening work. | [Security review](reviews/security-compliance/project/security-review-2026-09-17.md) · [Follow-up](reviews/security-compliance/project/security-review-2026-09-17-followup.md) · [Deletion/export runbook](runbooks/account-deletion-and-export.md) · [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md) |
 | Expense delete/undo | Backlog only; not scoped or implemented | Product and architecture work required before scheduling. It would also enable undoing a shopping-list item already logged as bought. | [Product principles](ROADMAP.md#product-principles-and-scope) |
-| Deferred design follow-ups | Not part of current release | Review Miso art disclosure/IP before launch promotion; dark-mode shopping-list treatment remains deferred. | [UX roadmap](features/ux-revamp/design.md) · [Shopping-list requirements](features/shopping-list/requirements.md) |
+| UI redesign — tokens, spacing, nav bar, brand, boards T/A/L/B/C/O (`redesign-ui`) | Requirements scoped; Welcome headline resolved (keep "Miso does the math"); dark mode explicitly deferred to its own future feature, light-mode-only this pass (both user decisions, 2026-10-16); architecture and UX design in progress | One blocking open item before engineering starts: source an SVG vector logo master from design. **Build first** among the three split redesign features since the other two consume its tokens/spacing. | [Requirements](features/redesign-ui/requirements.md) · [Engineering handoff](features/Splitiful%20UX%20redesign%20engineering%20handoff.md) |
+| Copy list from a past trip (`copy-list-from-past-trip`) | Requirements scoped; Open question 1 resolved (user decision 2026-10-16): copy item names only, as new open rows — no bought/claimed status, no expenses, no members; treated as a reusable, user-customized template. Not yet designed or built | **Build second**, after `redesign-ui` (inherits its empty-state base styling). Mandatory early compliance/security review (user-generated free text moves between trips) before design proceeds. | [Requirements](features/copy-list-from-past-trip/requirements.md) |
+| Share list with other (`share-list-with-other`) | Requirements scoped; **parked on hold (user decision 2026-10-16) — nice-to-have, not scheduled.** | No current action. When picked back up: confirm the permissions recommendation (open questions 1-3), run the early compliance/security review (new unauthenticated endpoint + newly-exposed free text), then architecture/UX/build. | [Requirements](features/share-list-with-other/requirements.md) |
+| Deferred design follow-ups | Not part of current release | Review Miso art disclosure/IP before launch promotion — the new redesign drops Miso from every screen except reference-only boards, so re-check whether this is still needed; dark-mode shopping-list treatment remains deferred. | [UX roadmap](features/ux-revamp/design.md) · [Shopping-list requirements](features/shopping-list/requirements.md) |
 
 ## Product principles and scope
 

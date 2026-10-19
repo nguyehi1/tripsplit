@@ -37,6 +37,15 @@ export function ChevronLeftIcon(props: IconProps) {
   );
 }
 
+/** redesign-ui: the You screen's Privacy/Terms row chevrons (design.md §4.6). */
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m9 18 6-6-6-6" />
+    </Icon>
+  );
+}
+
 export function CloseIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -252,6 +261,30 @@ export function MapPinIcon(props: IconProps) {
     <Icon {...props}>
       <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z" />
       <circle cx="12" cy="10" r="3" />
+    </Icon>
+  );
+}
+
+/** redesign-ui: the "You" tab of `HomeNavBar` (`bottom-nav-bar.tsx`). */
+export function UserIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" />
+    </Icon>
+  );
+}
+
+/** redesign-ui: the "List" tab of `TripNavBar` (`bottom-nav-bar.tsx`). */
+export function ListIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 6h11" />
+      <path d="M9 12h11" />
+      <path d="M9 18h11" />
+      <path d="M4 6h.01" />
+      <path d="M4 12h.01" />
+      <path d="M4 18h.01" />
     </Icon>
   );
 }

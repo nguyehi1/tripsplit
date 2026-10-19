@@ -7,7 +7,9 @@ import "./globals.css";
 const bricolage = Bricolage_Grotesque({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["600", "700"],
+  // "500" added for redesign-ui's type scale (board-level kickers, some button weights) —
+  // additive, no breaking change to any existing 600/700 consumer.
+  weight: ["500", "600", "700"],
 });
 
 const instrumentSans = Instrument_Sans({

@@ -157,9 +157,10 @@ export function NewTripForm({ initialType }: { initialType?: TripType } = {}) {
 
   return (
     <Screen glow texture>
-      <ScreenContent>
+      <ScreenContent padding="px-4">
         <TopBar
           sticky
+          stickyInsetClassName="-mx-4 px-4"
           title="New trip"
           leading={
             <IconButton onClick={() => router.back()}>
@@ -209,7 +210,7 @@ export function NewTripForm({ initialType }: { initialType?: TripType } = {}) {
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="flex-1">
-              <div className="text-[11.5px] text-ink/[0.72]">Start</div>
+              <div className="text-[11.5px] text-muted">Start</div>
               <input
                 type="date"
                 value={startsOn}
@@ -219,7 +220,7 @@ export function NewTripForm({ initialType }: { initialType?: TripType } = {}) {
             </div>
             <div className="h-[34px] w-px bg-ink/10" />
             <div className="flex-1">
-              <div className="text-[11.5px] text-ink/[0.72]">End</div>
+              <div className="text-[11.5px] text-muted">End</div>
               <input
                 type="date"
                 value={endsOn}
@@ -240,7 +241,7 @@ export function NewTripForm({ initialType }: { initialType?: TripType } = {}) {
               <div className="h-3" />
               <Divider />
               <div className="h-3" />
-              <div className="text-[12.5px] text-ink/[0.72]">{tripLength}</div>
+              <div className="text-[12.5px] text-muted">{tripLength}</div>
             </>
           ) : null}
         </Card>
@@ -255,7 +256,7 @@ export function NewTripForm({ initialType }: { initialType?: TripType } = {}) {
             color={{ bg: "var(--color-accent)", fg: "#fff" }}
             size={32}
           />
-          <div className="text-[13px] leading-[1.45] text-ink/[0.72]">
+          <div className="text-[13px] leading-[1.45] text-muted">
             You&apos;ll be the trip&apos;s planner — you invite people and you decide when the
             trip is complete.
           </div>

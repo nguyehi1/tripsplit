@@ -11,7 +11,9 @@ import { getSupabaseEnv } from "@/lib/supabase/env";
 // summary-only invitee view). /trips still requires *some* session (anonymous or permanent)
 // since "your trips" is meaningless with none. See
 // docs/features/simplified-onboarding/architecture.md's "Route/page changes" section.
-const SESSION_REQUIRED_PATTERNS = [/^\/trips/, /^\/feedback/];
+// /you (redesign-ui board O) gated the same way as /trips — "your account" is meaningless with
+// no session at all (architecture.md §2.3/§3.4).
+const SESSION_REQUIRED_PATTERNS = [/^\/trips/, /^\/feedback/, /^\/you/];
 
 function requiresSession(pathname: string) {
   return SESSION_REQUIRED_PATTERNS.some((pattern) => pattern.test(pathname));

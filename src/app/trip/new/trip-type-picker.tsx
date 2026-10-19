@@ -35,7 +35,7 @@ function Tile({
       <div className="flex items-start justify-between">
         {/* Border width is 1.5px in both states, so a tile never changes size on toggle. */}
         <span
-          className={checked ? undefined : "text-ink/[0.74]"}
+          className={checked ? undefined : "text-muted"}
           style={checked ? { color: "var(--color-accent-ink)" } : undefined}
         >
           <Icon size={22} strokeWidth={2} />
@@ -107,7 +107,7 @@ export function TripTypePicker({
         <Kicker canvas>
           <span id="trip-kind-label">What kind of trip?</span>
         </Kicker>
-        <span id="trip-kind-hint" className="text-[12px] text-ink/[0.68]">
+        <span id="trip-kind-hint" className="text-[12px] text-faint">
           Pick any, or none
         </span>
       </div>
@@ -136,7 +136,7 @@ export function TripTypePicker({
           onChange={onToggleOther}
         />
       </div>
-      <p aria-live="polite" className="mt-2.5 px-1 text-[12.5px] leading-[1.45] text-ink/[0.74]">
+      <p aria-live="polite" className="mt-2.5 px-1 text-[12.5px] leading-[1.45] text-muted">
         {sentence}
       </p>
 
@@ -159,12 +159,12 @@ export function TripTypePicker({
             inputClassName={otherError ? "ring-[1.5px] ring-terracotta" : ""}
           />
           <div className="mt-1.5 flex items-start justify-between gap-3 px-1">
-            <p id="trip-other-help" className="text-[12px] text-ink/[0.68]">
+            <p id="trip-other-help" className="text-[12px] text-faint">
               Saved with this trip. Please don&apos;t include names or personal details.
             </p>
             <span
               id="trip-other-count"
-              className={`flex-none text-[12px] tabular-nums text-ink/[0.68] ${
+              className={`flex-none text-[12px] tabular-nums text-faint ${
                 length >= OTHER_TYPE_MAX_LENGTH ? "font-semibold" : ""
               }`}
             >

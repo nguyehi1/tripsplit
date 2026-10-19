@@ -66,7 +66,11 @@ describe("template tiles: analytics on tap only", () => {
 
   it("'Blank trip' fires home_blank_trip_tapped once with no other argument", async () => {
     await mount();
-    const blank = Array.from(dom.container.querySelectorAll("a")).find((a) => a.textContent === "Blank trip")!;
+    // BlankTripTile is now a wide row with a subtitle ("Start with an empty list"), not a bare
+    // "Blank trip" text node — match on href instead of exact textContent (design-audit follow-up,
+    // 2026-10-16: catalog tiles in one row, "Blank trip" as its own dashed row below).
+    const blank = dom.container.querySelector('a[href="/trip/new"]')!;
+    expect(blank.textContent).toContain("Blank trip");
     expect(blank.getAttribute("href")).toBe("/trip/new");
     const event = click(blank);
     expect(trackEventMock.mock.calls).toEqual([["home_blank_trip_tapped"]]);

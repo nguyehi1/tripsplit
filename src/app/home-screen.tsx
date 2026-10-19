@@ -3,7 +3,8 @@
 import { useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightIcon } from "@/components/icons";
-import { LegalLinks } from "@/components/legal-page";
+import { DogFace } from "@/components/brand/dog-face";
+import { Wordmark } from "@/components/brand/wordmark";
 import { TemplateShelf } from "@/components/template-shelf";
 import { Button, Field, ScreenContent } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/auth-errors";
@@ -93,7 +94,7 @@ function SignInForm() {
         in.
       </h1>
       <div className="h-3.5" />
-      <p className="max-w-[290px] text-[15px] leading-[1.5] text-ink/[0.73]">
+      <p className="max-w-[290px] text-[15px] leading-[1.5] text-muted">
         Enter the email you used before — we&apos;ll send a fresh sign-in code.
       </p>
       <div className="h-7" />
@@ -141,39 +142,61 @@ function WelcomeContent() {
 
   return (
     <>
-      {/* Miso art (AC13) — `miso_01.jpg` (design.md section 6.1, "asset swap"), the full
-       *  uncropped photo, no circular mask. Tilted snapshot-on-paper frame + a separate,
-       *  tilted speech-bubble card with the canvas's own flavor line (design.md section 2). */}
-      <div className="flex items-end gap-3">
+      {/* User correction, 2026-10-18 (sixth pass): the card and the dog art must tilt as ONE
+       *  rigid sticker — rotating only the image inside a level card clipped a straight edge
+       *  across the art at an angle, which read as crooked rather than tilted. The `rotate`
+       *  transform now lives on the tile itself (bg fill + clip boundary + `DogFace` all rotate
+       *  together), so the art and its frame are always at the same angle. "Divide by 6?" is a
+       *  thought, not a caption: a two-dot trail (classic thought-bubble shorthand) leads from
+       *  the tilted tile's visual top-right corner up to the bubble. The dot/bubble offsets below
+       *  are hand-placed for the tile's current 8deg rotation — if that angle changes, the trail's
+       *  left/top offsets need to move with it (rotate a 150x150 box around its center and the
+       *  top-right corner traces an arc; these values just plot one point on it). */}
+      <Wordmark width={150} height={42} />
+      <div className="h-2" />
+      <div className="relative" style={{ height: 212 }}>
         <div
-          className="rounded-card bg-white p-1.5 shadow-card"
-          style={{ transform: "rotate(-3.5deg)" }}
+          aria-hidden
+          className="absolute flex items-center justify-center overflow-hidden rounded-[28px] shadow-card"
+          style={{
+            left: 0,
+            top: 52,
+            width: 150,
+            height: 150,
+            background: "var(--color-accent-soft)",
+            transform: "rotate(8deg)",
+          }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element -- no next/image config for
-             public/images/* yet (architecture.md); a plain <img> is fine for this pass. */}
-          <img
-            src="/images/miso_01.jpg"
-            alt="Miso, Splitiful's mascot dog, wearing glasses at a desk with a laptop"
-            width={96}
-            height={96}
-            className="block size-24"
-          />
+          <DogFace width={126} height={93} />
         </div>
+        {/* Thought trail: two dots growing toward the bubble, anchored off the tile's
+         *  rotated-corner position (left:0 top:52, 150x150, rotate(8deg) -> visual top-right
+         *  corner sits ~(160, 63)). */}
+        <span
+          aria-hidden
+          className="absolute rounded-full bg-white shadow-card-sm"
+          style={{ left: 168, top: 59, width: 9, height: 9 }}
+        />
+        <span
+          aria-hidden
+          className="absolute rounded-full bg-white shadow-card-sm"
+          style={{ left: 180, top: 46, width: 15, height: 15 }}
+        />
         <div
-          className="rounded-[18px] rounded-bl-[4px] bg-white px-4 py-2.5 shadow-card-sm"
-          style={{ transform: "rotate(2.5deg)" }}
+          className="absolute whitespace-nowrap rounded-full bg-white px-4 py-2.5 text-[14px] font-semibold text-ink shadow-card"
+          style={{ left: 194, top: 4, maxWidth: 150 }}
         >
-          <span className="text-[13.5px] font-medium text-ink/80">Divide by 6?</span>
+          Divide by 6?
         </div>
       </div>
-      <div className="h-7" />
-      <h1 className="text-display text-[40px] leading-[1.02]">
+      <div className="h-6" />
+      <h1 className="text-display text-[40px] leading-[1.02] -tracking-[0.035em]">
         You have fun.
         <br />
         Miso does the math.
       </h1>
       <div className="h-3.5" />
-      <p className="max-w-[290px] text-[15px] leading-[1.5] text-ink/[0.73]">
+      <p className="max-w-[290px] text-[15px] leading-[1.5] text-muted">
         Add what you spend. Miso works out who owes who — no account needed to start.
       </p>
       <div className="h-7" />
@@ -181,13 +204,13 @@ function WelcomeContent() {
       <TemplateShelf />
       <div className="h-[26px]" />
 
-      <Button variant="accent" className="text-[16px]" onClick={() => router.push("/trip/new")}>
+      <Button variant="accent" className="h-14 text-[16px]" onClick={() => router.push("/trip/new")}>
         Create your first trip
         <ArrowRightIcon size={18} strokeWidth={2.4} />
       </Button>
       <div className="h-2.5" />
       <Button
-        variant="ghost"
+        variant="soft"
         className="h-[52px] text-[15px]"
         style={{ color: "var(--color-accent-strong)" }}
         onClick={() => router.push("/join")}
@@ -203,27 +226,14 @@ function WelcomeContent() {
       >
         Already have a trip? Sign in
       </Button>
-
-      <div className="h-6" />
-      <div className="flex gap-2.5">
-        <div className="flex-1 rounded-chip p-4 pb-3.5" style={{ background: "var(--color-accent-soft)" }}>
-          <div className="text-display text-[30px]">∞</div>
-          <div className="mt-1.5 text-[12.5px] leading-[1.35] text-ink/[0.73]">expenses a day</div>
-        </div>
-        <div className="flex-1 rounded-chip p-4 pb-3.5" style={{ background: "var(--color-terracotta-soft)" }}>
-          <div className="text-display text-[30px]">0</div>
-          <div className="mt-1.5 text-[12.5px] leading-[1.35] text-ink/[0.73]">accounts to join</div>
-        </div>
-      </div>
     </>
   );
 }
 
 export function HomeScreen({ showSignIn }: { showSignIn: boolean }) {
   return (
-    <ScreenContent className="pt-8">
+    <ScreenContent className="pt-8" padding="px-4">
       {showSignIn ? <SignInForm /> : <WelcomeContent />}
-      <LegalLinks />
     </ScreenContent>
   );
 }

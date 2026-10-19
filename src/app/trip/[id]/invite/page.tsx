@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CheckIcon, CloseIcon, CopyIcon, PencilIcon, PlusIcon, ShareIcon } from "@/components/icons";
 import { NamePromptForm } from "@/components/name-prompt-form";
+import { NavBarShell } from "@/components/bottom-nav-bar";
 import {
   Avatar,
-  BottomBar,
   Button,
   Card,
   ConfirmInlineAction,
@@ -715,11 +715,13 @@ export default function TripInvitePage() {
           </>
         ) : null}
       </ScreenContent>
-      <BottomBar>
+      {/* Nav-bar-shell-only change (requirements item 5; design.md §4.5) — same shell, carrying
+         this screen's existing single action as its only content. */}
+      <NavBarShell>
         <Button variant="primary" className="h-[54px] text-[15.5px]" onClick={() => router.push(`/trip/${id}`)}>
           Go to the trip
         </Button>
-      </BottomBar>
+      </NavBarShell>
     </Screen>
   );
 }

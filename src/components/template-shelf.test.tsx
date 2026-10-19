@@ -67,11 +67,12 @@ describe("TemplateShelf", () => {
     ).toBeLessThanOrEqual(3);
   });
 
-  it("wraps labels instead of truncating (criterion 91) and uses the 128px tile", () => {
+  it("wraps labels instead of truncating (criterion 91) and uses the 104px tile (user feedback, 2026-10-16: shorter than the original 128px)", () => {
     const out = html();
     expect(out).toContain("[overflow-wrap:anywhere]");
     expect(out).toContain("[hyphens:auto]");
-    expect(out).toContain("h-[128px]");
+    expect(out).toContain("h-[104px]");
+    expect(out).not.toContain("h-[128px]");
     expect(out).not.toContain("truncate");
     expect(out).not.toContain("whitespace-nowrap");
   });

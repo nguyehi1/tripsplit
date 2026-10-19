@@ -34,6 +34,8 @@ vi.mock("@/lib/data/trips", () => ({
 
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
+  // HomeNavBar (redesign-ui) reads usePathname() to compute which tab is active.
+  usePathname: () => "/trips",
 }));
 
 beforeEach(() => {

@@ -64,7 +64,13 @@ export function SheetShell({
         }}
       />
       <div
-        className="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] text-ink"
+        // max-w-[416px], not max-w-md (448px): the trip page that opens this sheet insets its
+        // own content 16px from the screen edge (`ScreenContent`'s `px-4`), so a sheet panel
+        // capped at the full 448px column reads as wider than the page behind it once the
+        // viewport is wide enough for that column's edges to actually show (desktop-width
+        // preview; on a real phone narrower than 416px this never differs, since `w-full` caps
+        // to the viewport either way) — user feedback, 2026-10-16. 416 = 448 - 2*16.
+        className="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-[416px] flex-col overflow-hidden rounded-t-[28px] text-ink"
         style={{
           maxHeight: "calc(100dvh - 48px)",
           background: "var(--surface-sheet)",
