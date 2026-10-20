@@ -4,7 +4,7 @@ Date: 2026-09-09
 
 Status: historical research. Competitor features, prices, and review data have
 not been re-verified since this date. Current product direction and priorities
-are in [Product principles](ROADMAP.md#product-principles-and-scope); this document
+are in [Product principles](../product/principles.md); this document
 records research context, not current market facts or commitments.
 
 Note: several sources below are SEO comparison blogs written by competing indie apps to rank for

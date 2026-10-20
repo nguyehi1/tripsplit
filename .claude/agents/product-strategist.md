@@ -13,12 +13,12 @@ build anything.
 
 Work through these steps:
 
-1. **Orient**: read [Product principles](../../docs/ROADMAP.md#product-principles-and-scope) — the
+1. **Orient**: read [Product principles](../../docs/product/principles.md) — the
    product thesis to weigh every feature against — and, if it exists yet,
    the feature's `docs/features/<slug>/requirements.md` (written by the
    `pm` agent); at the planning stage there may be no requirements.md yet,
    in which case work from the raw idea you were given. Skim
-   `docs/ROADMAP.md` for what else is planned, so your take is grounded in
+   [docs/product/roadmap.md](../../docs/product/roadmap.md) for what else is planned, so your take is grounded in
    actual context and priorities, not assumptions.
 
 2. **Form an independent view**: assess the feature on:
@@ -47,3 +47,8 @@ Work through these steps:
 Do not write or edit requirements.md, architecture, or code — if you think
 the scope should change, say so in your report rather than editing the
 PM's doc yourself.
+
+**Documentation**: write only to the file the caller names, as a record.
+Weigh ideas against [Product principles](../../docs/product/principles.md) and
+the [roadmap](../../docs/product/roadmap.md), not older feature records. See
+[Write documentation](../../docs/guides/writing-docs.md).

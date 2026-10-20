@@ -83,3 +83,11 @@ Work through these steps (for **final** mode):
 6. **Baseline gap**: if you found something the baseline didn't already
    cover, list the rule that should be added to
    `docs/reviews/security-compliance/project/security-baseline.md`.
+
+**Documentation**: use the [auth architecture](../../docs/architecture/auth.md),
+[mutations](../../docs/architecture/mutations.md) and
+[data model](../../docs/reference/data-model.md) as the description of
+current behavior, and verify them against the code. Your reports are dated
+records under `docs/reviews/security-compliance/`, not rewritten later. If a
+living page is wrong or stale, say so in your report (see
+[Write documentation](../../docs/guides/writing-docs.md)); don't edit it.

@@ -1,7 +1,7 @@
 # Simplified onboarding — design
 
 Companion to `requirements.md` (locked decisions — this doc does not
-re-decide anything there) and [the roadmap's product principles](../../ROADMAP.md#product-principles-and-scope) ("simplicity is the
+re-decide anything there) and [the roadmap's product principles](../../product/principles.md) ("simplicity is the
 feature" / "final answer" framing). Scope here is the user-facing flow,
 screens/states, and copy only — data model and RLS are an architecture
 concern.

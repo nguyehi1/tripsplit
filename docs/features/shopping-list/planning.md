@@ -7,7 +7,7 @@ until the user picks a direction below and `pm` formalizes it next.
 
 Historical planning record: the shared shopping list has since shipped. The
 discussion and open questions below explain its original scope; use the
-[roadmap](../../ROADMAP.md) and current feature requirements for status and
+[roadmap](../../product/roadmap.md) and current feature requirements for status and
 behavior.
 
 ## Raw feature idea
@@ -21,7 +21,7 @@ behavior.
 ## Strategic framing already settled (not re-opened here)
 
 This was already discussed directly with the user. It originally looked like it
-conflicted with the [product principles](../../ROADMAP.md#product-principles-and-scope)' outright rejection of
+conflicted with the [product principles](../../product/principles.md)' outright rejection of
 itemized/subset splits, but the user chose to revise the product direction rather than drop
 the idea. The 2026-09-19 revision's "What changed since the 2026-09-15 draft" section
 carves this exact pattern back into scope — a shared prep-list + opt-in claim + prefill

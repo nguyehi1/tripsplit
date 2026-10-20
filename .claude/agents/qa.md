@@ -58,3 +58,11 @@ Work through these steps:
    to the engineer — do not soften a real failure into a "minor note."
 
 You do not fix implementation bugs yourself — you find and report them.
+
+**Documentation**: use the [data model](../../docs/reference/data-model.md)
+and [code map](../../docs/reference/code-map.md) to find adjacent consumers
+when hunting regressions. Your report is a record, so it goes in
+`docs/features/<slug>/qa-report.md` and is not rewritten later. If an
+`architecture/` or `reference/` page disagrees with the behavior you
+verified, say so in your report (see
+[Write documentation](../../docs/guides/writing-docs.md)); don't edit it.

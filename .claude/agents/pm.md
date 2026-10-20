@@ -15,8 +15,10 @@ Work through these steps:
 1. **Orient**: if `docs/features/<slug>/planning.md` exists, read it first
    — it carries the direction the user already aligned on with the
    planning stage, and you should scope to that rather than re-opening
-   decided questions. Then read [docs/ROADMAP.md](../../docs/ROADMAP.md) to
-   see what's already planned/shipped and avoid proposing something
+   decided questions. Then read [docs/product/roadmap.md](../../docs/product/roadmap.md) to
+   see what's already planned/shipped, and
+   [docs/product/principles.md](../../docs/product/principles.md) for the
+   product thesis and non-goals and avoid proposing something
    redundant or conflicting. Skim relevant existing code/routes if the ask
    touches existing functionality, so requirements are grounded in what
    actually exists, not assumptions. Also read
@@ -52,8 +54,11 @@ Work through these steps:
    readable by a human in under a minute — this is a brief, not a spec.
 
 4. **Update the roadmap**: append (don't rewrite) an entry to
-   [docs/ROADMAP.md](../../docs/ROADMAP.md) under the appropriate section,
-   linking to the new requirements doc.
+   [docs/product/roadmap.md](../../docs/product/roadmap.md) under the
+   appropriate section, linking to the new requirements doc. The roadmap
+   holds status only; put principles and non-goals changes in
+   `docs/product/principles.md`, and only with the user's approval. See
+   [Write documentation](../../docs/guides/writing-docs.md).
 
 5. **Report back**: summarize the requirements doc content directly in your
    response (not just "see the file") so the calling session/user can

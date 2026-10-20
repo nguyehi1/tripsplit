@@ -120,7 +120,7 @@ describe("TripDashboardPage (smoke, via renderToStaticMarkup)", () => {
   // full details" link must carry enough for confirming email to actually join the visitor as a
   // member, instead of leaving them verified but never added, looping back to this exact screen
   // forever. It now does that via the trip's own UUID (`joinTripId`, `join_trip_by_id`) instead
-  // of the invite code — docs/ROADMAP.md's invite-code-rpc-hardening entry, "should-fix" item on
+  // of the invite code — docs/product/roadmap.md's invite-code-rpc-hardening entry, "should-fix" item on
   // `get_trip_summary` leaking the invite code to any UUID holder.
   it('"See full details" link on the summary-only tier includes the trip id, not the invite code (fix for the verify-but-never-join loop)', async () => {
     getUserMock.mockResolvedValueOnce({ data: { user: { id: "user-1", is_anonymous: true } } });

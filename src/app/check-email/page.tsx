@@ -54,7 +54,7 @@ function CheckEmailContent() {
   // Set by `TripSummaryOnly`/`RemovedFromTripScreen` (src/app/trip/[id]/page.tsx, migration
   // 0016) — a visitor who only has the trip's UUID, not an invite code. Joins via
   // `join_trip_by_id` instead of `join_trip`, closing the `get_trip_summary` invite-code leak
-  // (docs/ROADMAP.md's invite-code-rpc-hardening entry) without changing either screen's
+  // (docs/product/roadmap.md's invite-code-rpc-hardening entry) without changing either screen's
   // behavior: the raw invite code just never needs to reach this page at all for these two.
   const joinTripId = params.get("joinTripId");
   const triggerParam = params.get("trigger");

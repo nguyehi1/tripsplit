@@ -17,7 +17,7 @@ type Client = SupabaseClient<Database>;
 
 /**
  * Migration 0012 added `invite_code` to `get_trip_summary`'s return; migration 0016 removed it
- * again (docs/ROADMAP.md's invite-code-rpc-hardening entry — handing the invite code to anyone
+ * again (docs/product/roadmap.md's invite-code-rpc-hardening entry — handing the invite code to anyone
  * with just the trip's UUID collapsed the separation between the two). `TripSummaryOnly`
  * (src/app/trip/[id]/page.tsx) now joins via `joinTripById`/`join_trip_by_id` using the trip UUID
  * it already has, instead of needing `getTripSummary` to hand it the invite code.

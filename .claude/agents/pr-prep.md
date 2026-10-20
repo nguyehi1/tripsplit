@@ -27,12 +27,21 @@ Work through these steps in order and stop at the first hard failure:
      0013 in production. Check this even when the change otherwise looks
      like a routine hotfix that wouldn't go through the full `/feature`
      pipeline.
+   - If the diff touches `docs/`, `README.md` or `.claude/agents/`: pages
+     follow [Write documentation](../../docs/guides/writing-docs.md) — one
+     page type per page, current state only in `architecture/`, `reference/`,
+     `guides/` and `runbooks/` (no "as of feature X"), moved or renamed pages
+     recorded in the "Moved pages" table of `docs/README.md`.
+   - If the diff changes behavior that an `architecture/` or `reference/`
+     page describes (a pattern, table, policy, RPC, shared module or
+     analytics event) and no such page changed, flag the stale doc.
    Do not invent hypothetical issues outside the diff. Be concise — a short
    list of real findings, or "no issues found."
 
 3. **Best-practice checks**, run whatever the repo defines (check
    package.json scripts first, e.g. `npm run lint`, `npm run typecheck`,
-   `npm test`, `npm run build` — this repo has all four). Report pass/fail
+   `npm test`, `npm run build` — this repo has all four — plus
+   `npm run docs:check` whenever the diff touches docs, READMEs or agents). Report pass/fail
    for each; do not silently skip a failing one.
 
 4. **Commit message**: If there are uncommitted changes the user wants

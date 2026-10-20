@@ -14,3 +14,10 @@ Follow [`docs/agent-workflow.md`](docs/agent-workflow.md) for the portable
 team roles, feature stages, review gates, and documentation ownership. Tool-
 specific files (such as `CLAUDE.md` and `.claude/skills/feature/`) are entry
 points; keep shared workflow policy in that document rather than duplicating it.
+
+# Documentation
+
+Follow [`docs/guides/writing-docs.md`](docs/guides/writing-docs.md) for any
+doc change: one page type per page, current state only in `architecture/`,
+`reference/`, `guides/` and `runbooks/`, history in ADRs, features and
+reviews. Run `npm run docs:check` before committing docs.

@@ -7,7 +7,7 @@ until the user picks a direction below and `pm` formalizes it next.
 
 Historical planning record: organizer removal and member self-service leave
 are shipped. The discussion below preserves the original proposal and tradeoffs;
-see the [roadmap](../../ROADMAP.md) for current status.
+see the [roadmap](../../product/roadmap.md) for current status.
 
 ## Raw feature idea
 

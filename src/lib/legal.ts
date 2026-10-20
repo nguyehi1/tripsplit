@@ -5,7 +5,7 @@ export const LEGAL_EFFECTIVE_DATE = "October 1, 2026";
 export const LEGAL_LAST_UPDATED = "October 13, 2026";
 /** Days of inactivity before an unverified anonymous account is auto-deleted (migration 0018). */
 export const ANON_RETENTION_DAYS = 90;
-/** Days we aim to answer privacy requests within (runbook: docs/runbooks/account-deletion-and-export.md). */
+/** Days we aim to answer privacy requests within (runbook: docs/runbooks/README.md). */
 export const REQUEST_RESPONSE_DAYS = 30;
 /** Minimum age to use Splitiful. Matches the "not directed at children under 13" policy text. Counsel to confirm (some EU states use 16). */
 export const MIN_AGE = 13;

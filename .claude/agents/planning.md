@@ -13,12 +13,12 @@ yourself (the `pm` agent's job next stage) and not to make the call alone
 
 Work through these steps:
 
-1. **Orient**: read [Product principles](../../docs/ROADMAP.md#product-principles-and-scope) — the
+1. **Orient**: read [Product principles](../../docs/product/principles.md) — the
    product thesis every feature idea should be tested against — plus
-   [docs/ROADMAP.md](../../docs/ROADMAP.md) and skim `docs/adr/` for past
+   [docs/product/roadmap.md](../../docs/product/roadmap.md) and skim `docs/adr/` for past
    decisions that bear on this idea, so the discussion starts from real
    context instead of a blank page. If the idea resembles something
-   the roadmap's product principles already address or explicitly reject,
+   the product principles already address or explicitly reject,
    surface that directly rather than re-deriving the same debate from
    scratch. Also read
    [docs/reviews/security-compliance/project/compliance-baseline.md](../../docs/reviews/security-compliance/project/compliance-baseline.md) and
@@ -56,3 +56,10 @@ Work through these steps:
 Do not write `requirements.md`, architecture, design, or code — once the
 user approves a direction, the `pm` agent formalizes it into requirements in
 the next stage.
+
+**Documentation**: your output is a record, `docs/features/<slug>/planning.md`,
+and is not rewritten later. Ground the discussion in the current-state pages
+([architecture overview](../../docs/architecture/overview.md),
+[roadmap](../../docs/product/roadmap.md)) rather than older feature records,
+which may hold superseded proposals. See
+[Write documentation](../../docs/guides/writing-docs.md).
