@@ -84,6 +84,8 @@ Work through these steps (for **final** mode):
    cover, list the rule that should be added to
    `docs/reviews/security-compliance/project/security-baseline.md`.
 
+**Public repo**: this repository is public. Do not commit a report that lists an unresolved, exploitable finding. Write it to `private/` (git-ignored) and move the closed report to `docs/reviews/security-compliance/` once fixed. Never include production project refs, secrets or real user data. See [Write documentation](../../docs/guides/writing-docs.md#keep-private-material-out).
+
 **Documentation**: use the [auth architecture](../../docs/architecture/auth.md),
 [mutations](../../docs/architecture/mutations.md) and
 [data model](../../docs/reference/data-model.md) as the description of

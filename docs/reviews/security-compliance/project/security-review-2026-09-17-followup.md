@@ -21,7 +21,7 @@ redirect, ADR-0006 linking) is **not** re-litigated here.
 - **Verified live**, not inferred: calling Supabase's own PostgREST endpoint
   directly with the project's public key —
   ```
-  POST https://abqniurqftnyfaiqcnkp.supabase.co/rest/v1/rpc/get_trip_by_invite_code
+  POST https://<project>.supabase.co/rest/v1/rpc/get_trip_by_invite_code
   {"_code":"aaaaaaaa"}
   ```
   — returns `HTTP 200 []` (empty match), i.e. the exact same unauthenticated,
@@ -35,7 +35,7 @@ redirect, ADR-0006 linking) is **not** re-litigated here.
   attacker doesn't need to inspect this repo to get them, just the browser
   Network tab on `splitiful.app`. Nothing about "route it through our own
   `/api` handler first" stops a scripted attacker from skipping
-  `splitiful.app` entirely and talking to `abqniurqftnyfaiqcnkp.supabase.co`
+  `splitiful.app` entirely and talking to `<project>.supabase.co`
   directly, at whatever rate they like.
 - The same architectural gap applies to `join_trip`: it's `grant`ed to
   `authenticated` (`0002_fix_function_grants.sql:15`, reaffirmed
