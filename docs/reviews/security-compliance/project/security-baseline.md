@@ -26,6 +26,21 @@ same PR adds the rule that would have caught it to this file. See
   current data; never in URLs or logs. Storage needs its own review.
 - The trip invite/join link is a bearer secret. New features must not expose
   it to non-members, log it, or put it in analytics.
+- A column that drives a lifecycle or irreversible action (a hide mark, a
+  status, an erase timestamp) must not be writable through the direct-write
+  path: revoke table-level UPDATE and grant UPDATE only on the columns clients
+  may change (column-level grants), or write it only from a definer function.
+  A policy `with check` alone is not enough. Test as the `authenticated` role,
+  including an anonymous session and a back-dated value.
+- Hard delete of a record is reachable only through a reviewed definer path:
+  drop the DELETE policy **and** revoke the DELETE privilege from anon and
+  authenticated. Do not gate it with a BEFORE DELETE trigger when cascades and
+  account purges must keep working; test those still work.
+- Hiding a row (soft delete, hide mark) is enforced in the table's read
+  policy, not by adding a filter to each query, so a missed query fails closed.
+  Any definer function or view that reads the table bypasses RLS and must
+  filter the mark itself. A static guard test fails when a new, unreviewed
+  query or migration touches that table.
 
 ## Public and unauthenticated surface
 
@@ -92,6 +107,12 @@ same PR adds the rule that would have caught it to this file. See
   that already have rows, and every function/RPC column reference must still
   resolve unambiguously (migration 0013 broke in production on a shadowed
   column name).
+- When a migration replaces an RLS policy, drop it by its **live** name (the
+  latest migration that created it, not the original) and add a test that
+  lists `pg_policies` for the table and asserts the exact expected set.
+  Permissive policies are OR-ed, so a stale policy left beside the new one
+  silently defeats the change (`drop policy if exists` on a wrong name is a
+  no-op).
 - Schema and code deploys are not atomic: the change must be safe with old
   code + new schema and new code + old schema, or ship together by design.
 - Function overloads: no defaults on new parameters; give the new signature its
@@ -102,6 +123,13 @@ same PR adds the rule that would have caught it to this file. See
   empty, boundary and invalid cases) before QA passes; NULL IS DISTINCT FROM
   NULL is false, so padding comparisons with NULL slots silently reject short
   arrays. Text-shape tests of the SQL do not catch this.
+- A scheduled job that is part of a control (erase, purge) is registered in a
+  guarded, idempotent block that cannot fail the migration, and `pg_cron` is
+  optional here, so a control must not depend on it alone: add a second layer,
+  state the maximum delay, and give the operator a check query. An internal
+  function meant only for the scheduler or other definer functions is revoked
+  from public, anon and authenticated explicitly (Supabase grants execute by
+  default).
 
 ## Design documents
 

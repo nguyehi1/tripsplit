@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRightIcon, InfoIcon, LockIcon } from "@/components/icons";
+import { ChevronRightIcon, InfoIcon, LockIcon, MessageSquareIcon } from "@/components/icons";
 import { HomeNavBar } from "@/components/bottom-nav-bar";
 import { Card, Divider, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { getMyDisplayName } from "@/lib/data/trips";
@@ -60,6 +60,18 @@ export default async function YouPage() {
               <InfoIcon size={17} strokeWidth={2.2} />
             </span>
             <span className="min-w-0 flex-1 text-[15px] font-semibold">Terms</span>
+            <ChevronRightIcon size={17} strokeWidth={2.2} className="flex-none text-muted" />
+          </Link>
+          <Divider className="bg-hairline" />
+          <Link href="/feedback" className="flex items-center gap-3 py-[11px]">
+            <span
+              aria-hidden="true"
+              className="flex size-9 flex-none items-center justify-center rounded-[11px]"
+              style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-ink)" }}
+            >
+              <MessageSquareIcon size={17} strokeWidth={2.2} />
+            </span>
+            <span className="min-w-0 flex-1 text-[15px] font-semibold">Send feedback</span>
             <ChevronRightIcon size={17} strokeWidth={2.2} className="flex-none text-muted" />
           </Link>
         </Card>

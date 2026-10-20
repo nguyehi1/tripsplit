@@ -40,6 +40,12 @@ it to this file. See `.claude/skills/feature/SKILL.md`, "Feedback loop".
   forwarded into later URLs, logs or events.
 - Trip or entity previews served to non-members (invite and join pages) must
   not return user-typed free text beyond fields already disclosed there.
+- A feature that hides data and later erases it must state the maximum time
+  from hide to erase, keep hidden rows unreadable by other members in the
+  meantime (enforced in the database read path, not only in the UI), and give
+  the operator a check for rows past that time. If the scheduler that erases is
+  optional (`pg_cron` is in this repo), there must be a second layer, and the
+  design says plainly what is only an operational commitment.
 
 ## Processors and analytics
 
@@ -90,6 +96,11 @@ push, share sheets, prefilled `mailto:`/`sms:` links, notifications.
   what someone owes need an audit trail or an explicit user action.
 - Labels (names) may change without touching the money record, but say so in
   the policy if past trips are rewritten.
+- Irreversible erase of a money record is allowed only for the record's own
+  payer, on an open trip, as an explicit action with an Undo window, enforced
+  in the database, and only while no settled/paid state exists in the app.
+  Adding any settled/paid state requires re-review of every delete and erase
+  path before it ships (see `docs/adr/0017-expense-delete-soft-mark-then-erase.md`).
 
 ## Consumer-facing claims
 
@@ -118,3 +129,6 @@ push, share sheets, prefilled `mailto:`/`sms:` links, notifications.
 - Account-wide display name rewritten on past trips.
 - Erasure for a person who exists only as an organizer-typed placeholder.
 - Retention of feedback free text after erasure.
+- Irreversible erase of an expense with no audit trail (expense delete with
+  Undo): acceptable where a jurisdiction imposes bookkeeping duties on consumer
+  trip ledgers? None known; counsel to confirm.

@@ -255,6 +255,12 @@ feature, the same gate also covers `claim_shopping_list_item`/
 `unclaim_shopping_list_item`/`add_expense_and_log_shopping_items` and the
 plain-RLS add/delete-item policies — a locked trip's list is frozen exactly
 like its expense list already is.
+As of expense-delete-and-polish (migration 0024) the `expenses` delete policy no
+longer exists; an expense is removed only by the payer through `delete_expense`
+on an open trip, with `undo_delete_expense` inside a 15 s server window, and is
+hard-erased from 30 s by `erase_expired_expenses` (pg_cron each minute plus a
+bounded opportunistic erase inside delete/Undo). See
+[ADR 0017](adr/0017-expense-delete-soft-mark-then-erase.md).
 
 **Client-local device state**: not everything needs to be server state.
 Browser `localStorage` is used for small, non-sensitive, per-device
@@ -413,7 +419,9 @@ schema; summarized here as it stabilizes:
   it.
 - `expenses` — one row per logged expense; `paid_by` (set once, at insert,
   to the submitting user) is the **only** ownership signal — there is no
-  separate `created_by` column. `amount` is `numeric(10,2)` dollars,
+  separate `created_by` column. `deleted_at timestamptz null` (migration
+  0024): set by `delete_expense` from the DB clock, cleared by Undo, row hidden
+  by the read policy, erased after 30 s. `amount` is `numeric(10,2)` dollars,
   converted to/from integer cents at the `src/lib/currency.ts` boundary.
   `date` (added by the expense-date-month feature,
   `supabase/migrations/0007_add_expense_date.sql`) is the calendar date the
@@ -458,10 +466,13 @@ schema; summarized here as it stabilizes:
   enum-via-check-constraint style — see `feedback.rating` — rather than a
   Postgres `enum` type), and a nullable `expense_id` (references `expenses`,
   deliberately with **no** `on delete` action — left blocking rather than
-  cascading, so the not-yet-built expense-delete feature is forced to
-  explicitly reconcile a logged item's status rather than relying on a
-  passive `on delete set null` that would otherwise violate this table's own
-  shape-check constraint). Claim/unclaim/log-into-expense are **RPC-only**
+  cascading, so the expense-delete feature (migration 0024) reconciles a
+  logged item's status explicitly: `delete_expense` returns the item to
+  `claimed`/`open` and unlinks it, rather than relying on a passive
+  `on delete set null` that would violate this table's own shape-check
+  constraint). `unlinked_from_expense_id` (FK to `expenses`, `on delete set
+  null`, migration 0024) remembers the link for Undo; cleared by claim,
+  unclaim, Undo and erase. Claim/unclaim/log-into-expense are **RPC-only**
   (`claim_shopping_list_item`, `unclaim_shopping_list_item`,
   `add_expense_and_log_shopping_items` — no `UPDATE` grant on the table at
   all, the same "RPC is the only write path" shape `trip_members` already
@@ -539,15 +550,20 @@ future features touch expenses — see ADRs before changing further):
   was narrowed from "any trip member" and what it doesn't (yet) guarantee
   (`trip_id` isn't independently pinned by this policy — mitigated at the
   application layer today, not the DB).
-- `delete` — still any *verified* member (`is_verified_trip_member`, as of
-  simplified-onboarding), on an open trip — **intentionally not yet scoped
-  to `paid_by`**, because no delete UI/flow exists yet. This is now *more*
-  permissive than `update` on the same table; a future delete feature
-  should revisit whether to apply the same payer-scoping (see ADR 0002's
-  consequences). **As of the shopping-list feature**, a future delete
-  feature also needs to reconcile `shopping_list_items.expense_id`/`status`
-  for any logged item linked to the deleted expense — see that table's
-  entry above and `docs/features/shopping-list/architecture.md`.
+- `delete` — **as of 0024: no policy**, and the table-level DELETE privilege
+  is revoked from `anon` and `authenticated`. The only deletion paths are the
+  definer functions `delete_expense`/`erase_expired_expenses`, trip cascade and
+  the anonymous purge. `delete_expense` reconciles any linked
+  `shopping_list_items` row (back to `claimed`/`open`, remembering the link in
+  `unlinked_from_expense_id` for Undo).
+- Amended by 0024: `select` also requires `deleted_at is null`; `insert` also
+  requires `paid_by = auth.uid()` and `deleted_at is null`; `update` also
+  requires `deleted_at is null`, and table-level UPDATE is revoked and
+  re-granted only on `amount`, `description`, `date`, so `paid_by`, `trip_id`
+  and `deleted_at` are immutable by direct API (closes the `trip_id` gap ADR
+  0002 recorded). Policy names after 0024: `owner or verified member can read
+  live expense detail`, `verified member can add own expenses`, `verified payer
+  can edit their own live expenses`; a QA test asserts this is the exact set.
 
 **RLS on `trip_members`** (`select`): as of simplified-onboarding,
 `is_owner_or_verified_member(trip_id)` — same predicate and same rationale
@@ -705,6 +721,13 @@ this before adding a parallel implementation.
   sibling of `getTripView` wrapping the `get_trip_summary` RPC; see that
   feature's architecture doc). New trip/expense read or write logic belongs
   here, not inlined in a page.
+  As of expense-delete-and-polish, `deleteExpense`/`undoDeleteExpense` live
+  here (RPC calls that throw `ExpenseActionError` from `src/lib/errors.ts`,
+  never the raw error), with the Undo toast state in
+  `src/app/trip/[id]/expense-undo-provider.tsx`. The guard test
+  `src/lib/data/expenses-read-guard.test.ts` pins every reader of `expenses`.
+  Rule: a new reader of `expenses` that bypasses RLS (for example a
+  `security definer` function) must filter `deleted_at`.
   As of the add-placeholder-members feature, this is also where the
   `user_id`-nullable-per-row reality of `trip_members` is translated into a
   stable `trip_members.id`-based identity for every shaped member object it
@@ -1059,3 +1082,4 @@ List notable ones here as they're added:
 - [0014](adr/0014-trip-types-column-checks-and-create-trip-overload.md) — Trip types and the typed "Other" trip type stored as two `trips` columns validated by column CHECKs (inline, locale-independent code-point allowlist, no validator function), a seven-argument `create_trip` overload with no parameter defaults and a not-found-only client fallback, and client-side derived suggestions, over RPC-only validation, defaults on the existing function, a second-step update, an `other` code in `types`, or a separate custom-types table
 - [0015](adr/0015-in-memory-single-item-replay-after-inline-verification.md) — A one-item in-memory pending slot (held in TripVerificationProvider, bound to the tapping user, 10-minute TTL) plus the inline verification widget to add the first tapped suggestion automatically after an unverified organizer verifies, over `pending-action.ts`/sessionStorage with a `/check-email` redirect, loosening RLS for the organizer, or hiding the card until verification
 - [0016](adr/0016-system-preference-dark-theme-via-data-theme-attribute.md) — **Withdrawn, never implemented.** Drafted during `redesign-ui`'s design while dark mode was still in scope (system-preference-driven `data-theme` attribute, set by a pre-paint inline script, over a stored toggle/`next-themes`/CSS-only `prefers-color-scheme`); dark mode was descoped from that feature before this ADR was acted on. Kept as a starting point for whichever future feature actually ships dark mode — see `docs/features/redesign-ui/architecture.md` section 1.1/6.
+- [0017](adr/0017-expense-delete-soft-mark-then-erase.md) — Expense delete as a database-clocked soft mark (hidden by RLS, unwritable by clients), Undo window 15 s, hard erase from 30 s by pg_cron plus an opportunistic in-RPC batch, over client-side re-insert Undo, retained soft delete, cron-only erase, or per-query filters.

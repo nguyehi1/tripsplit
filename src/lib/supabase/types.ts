@@ -52,6 +52,9 @@ export type Database = {
           description: string;
           receipt_photo_url: string | null;
           date: string;
+          // Delete-with-Undo mark (migration 0024): set only by the delete_expense function, hidden
+          // from clients by RLS, so reads through the client never see a non-null value.
+          deleted_at: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["expenses"]["Row"]> & {
@@ -85,6 +88,8 @@ export type Database = {
           claimed_by: string | null;
           status: "open" | "claimed" | "logged";
           expense_id: string | null;
+          // Remembers the expense a deleted purchase was linked to, for Undo (migration 0024).
+          unlinked_from_expense_id: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["shopping_list_items"]["Row"]> & {
@@ -208,6 +213,14 @@ export type Database = {
       };
       unclaim_shopping_list_item: {
         Args: { _item_id: string };
+        Returns: undefined;
+      };
+      delete_expense: {
+        Args: { _expense_id: string };
+        Returns: undefined;
+      };
+      undo_delete_expense: {
+        Args: { _expense_id: string };
         Returns: undefined;
       };
       add_expense_and_log_shopping_items: {

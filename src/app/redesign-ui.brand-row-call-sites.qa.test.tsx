@@ -78,7 +78,7 @@ describe("Home ('/trips') title: wordmark-only at 150x42, no icon (user feedback
     getMyTripsMock.mockResolvedValueOnce([]);
     const { default: TripsDashboardPage } = await import("@/app/trips/page");
     const html = renderToStaticMarkup(await TripsDashboardPage());
-    const topBarIdx = html.indexOf('class="flex items-center justify-between gap-3');
+    const topBarIdx = html.indexOf('class="flex items-center gap-3 px-1 pb-1 pt-5"');
     const firstRunCardIdx = html.indexOf("flex flex-col items-center px-5 py-7 text-center");
     const titleWordmarkHtml = html.slice(topBarIdx, firstRunCardIdx);
     expect(titleWordmarkHtml).toContain("width:150px;height:42px");

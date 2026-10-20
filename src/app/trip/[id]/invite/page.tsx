@@ -477,7 +477,7 @@ export default function TripInvitePage() {
           const canLeave = !isOrganizer && member.id === view.you?.id && !locked;
           return (
             <div key={member.id} className="mb-2.5">
-              <Card className="p-[14px_18px]">
+              <Card className="p-[11px_18px]">
                 {confirmMemberId === member.id ? (
                   canLeave ? (
                     <ConfirmInlineAction
@@ -572,7 +572,7 @@ export default function TripInvitePage() {
 
             {placeholders.map((member) => (
               <div key={member.id} className="mb-2.5">
-                <Card className="p-[14px_18px]">
+                <Card className="p-[11px_18px]">
                   {confirmRemoveId === member.id ? (
                     <ConfirmInlineAction
                       body={<>Remove {displayNameFor(member.displayName, true)}? This changes everyone&apos;s split.</>}

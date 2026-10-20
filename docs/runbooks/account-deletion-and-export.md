@@ -9,7 +9,8 @@ Respond within 30 days (the figure promised on /privacy).
   DNS or forwarding setup is needed).
 - Supabase dashboard: Database > Extensions > enable `pg_cron`, then re-run the last block of
   migration 0018 (or `select cron.schedule('purge-abandoned-anonymous-users', '17 3 * * *',
-  'select public.purge_abandoned_anonymous_users(90)')`). Verify with `select * from cron.job;`.
+  'select public.purge_abandoned_anonymous_users(90)')`). Verify with `select * from cron.job;`. Migration 0024 also
+  schedules `erase-expired-expenses` (section 6).
 
 ## 1. Verify the requester
 
@@ -31,6 +32,11 @@ select jsonb_build_object(
   'feedback',  (select coalesce(jsonb_agg(to_jsonb(f)), '[]') from public.feedback f where f.user_id = '<uid>')
 );
 ```
+
+A deleted expense is hidden from the app at once, can be undone by the payer for 15 seconds
+(server-enforced), and is hard-erased from 30 seconds, at most about 2 minutes after the delete when
+pg_cron is running (section 6). The export query above runs as the operator by `paid_by`, so a row
+still inside that short window is exported like any other row.
 
 Send the JSON to the verified address. (Expense participant splits live on other members' rows;
 include only the requester's own.)
@@ -62,6 +68,11 @@ migration 0020). `feedback` rows hold free-text comments linked to the account, 
 ## 3. Deletion
 
 Two cases, because `expenses.paid_by` has no ON DELETE action and `trips.created_by` cascades:
+
+**Before case A or B:** if the requester deleted an expense in the last few minutes, that row still
+exists until it is erased and will block the user delete on the `paid_by` foreign key (and make the
+"paid no expenses" check below non-empty). Wait about 2 minutes, or run
+`select public.erase_expired_expenses();` as the postgres owner (SQL editor), then run the usual check.
 
 **A. Safe hard delete** — the user paid no expenses and created no trip that anyone else belongs to:
 
@@ -150,3 +161,56 @@ Required before release (not run in CI; none has been executed against a real da
    there and before merging the app change.
 3. Confirm after a PostgREST schema reload that both the old 5-argument and new 7-argument
    `create_trip` calls resolve, and that the 7-argument call as `anon` is denied.
+
+## 6. Expense delete and erase (migration 0024, `expense-delete-and-polish`)
+
+A payer can delete their own expense on an open trip. `delete_expense` marks it (`deleted_at`, database
+clock) and row-level security hides it at once. `undo_delete_expense` works for 15 seconds on the
+server (the app's Undo toast shows 10). `erase_expired_expenses()` hard-erases rows older than 30
+seconds, run by pg_cron every minute (job `erase-expired-expenses`) plus a small opportunistic batch
+inside each delete/Undo. With pg_cron running, a deleted expense is gone at most about 2 minutes
+after the delete. Erase leaves no audit trail (counsel question open, non-blocking). See
+[ADR 0017](../adr/0017-expense-delete-soft-mark-then-erase.md).
+
+**Order: apply migration 0024 BEFORE deploying the app.** New code calls `delete_expense` and
+`undo_delete_expense`, and the Delete button fails against an unmigrated database. (Old code against
+the new schema is safe, but the direct `delete` on `expenses` it never used is now revoked.)
+
+After applying 0024:
+
+1. **pg_cron.** The migration emits a `NOTICE` ("pg_cron not enabled; erase_expired_expenses is NOT
+   scheduled") if the extension is missing and still succeeds. Enable `pg_cron` (Database >
+   Extensions) and re-run the final `cron.schedule` block of 0024. A Vercel cron fallback is not
+   built. Then confirm the job:
+
+   ```sql
+   select jobname, schedule, active from cron.job where jobname = 'erase-expired-expenses';
+   ```
+
+   Expect one active row with schedule `* * * * *`.
+2. **No realtime publication.** Expect zero rows:
+
+   ```sql
+   select * from pg_publication_tables where tablename in ('expenses', 'shopping_list_items');
+   ```
+3. **Smoke test** delete and Undo through the real API, then deploy.
+
+**Recurring overdue check.** Owner: the project owner (Hien Nguyen). Frequency: daily. Expected
+result is `overdue = 0`; any row older than 10 minutes means the job is down:
+
+```sql
+select count(*) as overdue, min(deleted_at) as oldest
+from public.expenses
+where deleted_at is not null and deleted_at < now() - interval '10 minutes';
+select jobname, schedule, active from cron.job where jobname = 'erase-expired-expenses';
+```
+
+If overdue is above 0 or the job is missing or inactive, fix the schedule and clear the backlog with
+`select public.erase_expired_expenses();` as the postgres owner (up to 500 rows per call; repeat
+until overdue is 0).
+
+**The 24-hour cap is an operational commitment, not a code guarantee.** Hiding and balance
+correctness are enforced by the database regardless. But if pg_cron is absent and the app is idle,
+nothing erases the row; only this daily check bounds retention of the expense text to 24 hours.
+
+Account deletion interplay: see "Before case A or B" in section 3; the export note is in section 2.

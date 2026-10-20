@@ -144,12 +144,14 @@ describe("TripsDashboardPage (smoke, via renderToStaticMarkup)", () => {
     expect(html).not.toMatch(/<h1[^>]*>Trips<\/h1>/);
     expect(html).toContain('alt="Splitiful"');
     expect(html).not.toContain("Your trips");
-    expect(html).toContain('title="Send feedback"');
+    // Send feedback moved to You (expense-delete-and-polish criterion 40): no icon on Trips/home.
+    expect(html).not.toContain('title="Send feedback"');
+    expect(html).not.toContain("/feedback");
     expect(html).not.toContain('title="New trip"');
     expect(html.indexOf("Start from a template")).toBeLessThan(html.indexOf("Ongoing"));
-    // Tab order: Feedback, tiles, Blank trip (now the last tile in the 2-column grid, not a
+    // Tab order: tiles, Blank trip (now the last tile in the 2-column grid, not a
     // header link — template-shelf's "Blank trip" restyle), trips, nav bar's "New trip" tab.
-    const order = ["/feedback", "?type=camping", ">Blank trip<", "/trip/trip-1", ">New trip<"].map((x) => html.indexOf(x));
+    const order = ["?type=camping", ">Blank trip<", "/trip/trip-1", ">New trip<"].map((x) => html.indexOf(x));
     expect(order).toEqual([...order].sort((x, y) => x - y));
     expect(order.every((i) => i >= 0)).toBe(true);
   });

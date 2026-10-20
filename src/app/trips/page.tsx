@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { createElement } from "react";
 import { redirect } from "next/navigation";
-import { LockIcon, MapPinIcon, MessageSquareIcon } from "@/components/icons";
+import { LockIcon, MapPinIcon } from "@/components/icons";
 import { HomeNavBar } from "@/components/bottom-nav-bar";
 import { DogFace } from "@/components/brand/dog-face";
 import { Wordmark } from "@/components/brand/wordmark";
 import { TemplateShelf } from "@/components/template-shelf";
 import { iconForTripType } from "@/components/trip-type-icons";
-import { Card, IconLinkButton, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
+import { Card, Kicker, Screen, ScreenContent, TopBar } from "@/components/ui";
 import { formatCents } from "@/lib/currency";
 import { TRIP_LIST_COLUMNS } from "@/lib/data/trip-columns";
 import { getMyTrips, type MyTrip } from "@/lib/data/trips";
@@ -153,17 +153,7 @@ export default async function TripsDashboardPage({
   return (
     <Screen glow texture>
       <ScreenContent className="pt-0.5" padding="px-4">
-        <TopBar
-          title={<Wordmark width={150} height={42} />}
-          titleClassName=""
-          trailing={
-            <>
-              <IconLinkButton title="Send feedback" className="text-muted" href="/feedback">
-                <MessageSquareIcon size={19} strokeWidth={2.2} />
-              </IconLinkButton>
-            </>
-          }
-        />
+        <TopBar title={<Wordmark width={150} height={42} />} titleClassName="" />
         {left ? (
           <>
             <div className="rounded-chip px-4 py-3 text-[13.5px] font-medium" style={{ background: "var(--color-accent-soft)" }}>
@@ -172,8 +162,8 @@ export default async function TripsDashboardPage({
             <div className="h-3" />
           </>
         ) : null}
-        {/* 22px, not the design's 24: with the 40px Feedback button making the top bar taller than
-            the 36px title, 22px lands the kicker 62px below the h1 top, as on board A. */}
+        {/* 22px, not the design's 24: the 42px wordmark row sets the top bar height (the Feedback
+            button that used to sit in it moved to You), and 22px lands the kicker where board A has it. */}
         <div className="h-[22px]" />
 
         <TemplateShelf />
