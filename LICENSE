@@ -1,0 +1,21 @@
+Copyright (c) 2026 Hien Nguyen. All rights reserved.
+
+This repository is published for viewing. No license is granted to copy,
+modify, distribute, sublicense, sell or otherwise use the source code, the
+Miso mascot artwork, the Splitiful name and logo, or any other material in
+this repository, except as follows:
+
+- You may view the repository and, on GitHub, fork it, as GitHub's Terms of
+  Service allow for public repositories.
+
+To ask for permission to use anything here, contact the owner at the address
+on the Privacy Policy page of the deployed app.
+
+Third-party dependencies are not covered by this notice. They are listed in
+package.json and package-lock.json and remain under their own licenses.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE
+USE OF THE SOFTWARE.

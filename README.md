@@ -125,3 +125,8 @@ Deployed on Vercel from this repo:
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, a production build, and a separate
 clean-database migration replay on every push and pull request to `main`.
+
+## License
+
+Copyright (c) 2026 Hien Nguyen. All rights reserved. The repository is public for viewing; see
+[LICENSE](./LICENSE). The Miso mascot art, logo and Splitiful name are not licensed for reuse.
