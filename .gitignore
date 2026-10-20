@@ -47,3 +47,10 @@ supabase/.temp/
 # raw production log captures (scripts/perf-baseline.mjs input) — contain request data (IPs etc.)
 perf-raw.log
 *.perf.log
+
+# local Claude Code settings (machine-specific paths and permissions)
+.claude/settings.local.json
+
+# private working notes: unresolved security findings and counsel material.
+# Move into docs/reviews/ only once the findings are closed. See docs/guides/writing-docs.md.
+/private/

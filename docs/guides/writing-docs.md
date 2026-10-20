@@ -30,7 +30,8 @@ A page is exactly one type. If a draft needs two, split it.
 | A product principle or non-goal | `product/principles.md` |
 | Why a durable technical decision was made | `adr/NNNN-<title>.md` |
 | Scope, design or QA for one feature | `features/<slug>/` |
-| A dated audit, review or measurement | `reviews/` |
+| A dated audit, review or measurement | `reviews/` (closed findings only; see [Keep private material out](#keep-private-material-out)) |
+| An unresolved security finding, or counsel correspondence | `private/` (git-ignored), never the public repo |
 | Dated market or user research | `research/` |
 | A release note | `CHANGELOG.md` |
 
@@ -67,6 +68,20 @@ Last verified: YYYY-MM-DD against <short commit hash>
 8. **Dated content is a record.** If a page has a date in its meaning (an audit, a measurement, research), it goes in `reviews/` or `research/` with the date in its filename.
 9. **Update "Last verified"** whenever you check or change a page against the code.
 10. **Move, don't delete.** When a page is renamed or removed, add a row to the "Moved pages" table in [docs/README.md](../README.md).
+
+## Keep private material out
+
+This repository is public. Never commit:
+
+- **Secrets:** keys, tokens, `.env*` files, service-role keys, connection strings.
+- **Live identifiers:** production project refs and URLs, real user or trip ids, real email addresses. Use `<project>`, `<uid>` or `@example.invalid`.
+- **Unresolved findings:** a security or compliance finding that is still exploitable or still a legal gap. Keep it in `private/` (git-ignored) until it is fixed, then move the closed report to `docs/reviews/`.
+- **Counsel correspondence:** legal review requests and advice. Publishing them can waive privilege.
+- **Local machine detail:** absolute paths, usernames, `.claude/settings.local.json`. `.claude/settings.json` holds only portable rules.
+
+A fixed weakness is fine to document. An open one is a to-do list for an attacker. If a living page must mention a known gap, state the accepted limit without the steps to exploit it.
+
+GitHub secret scanning and push protection are enabled on this repository as a backstop; they don't catch the other categories above.
 
 ## Who updates what
 

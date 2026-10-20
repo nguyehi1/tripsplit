@@ -102,6 +102,8 @@ the same lenses on the documents):
    cover, list the rule that should be added to
    `docs/reviews/security-compliance/project/compliance-baseline.md`.
 
+**Public repo**: this repository is public. Do not commit a report that lists an unresolved legal gap or any counsel correspondence. Write it to `private/` (git-ignored) and move the closed report to `docs/reviews/security-compliance/` once resolved. Never include real user data. See [Write documentation](../../docs/guides/writing-docs.md#keep-private-material-out).
+
 **Documentation**: your constraints and reports are dated records under
 `docs/reviews/security-compliance/`, not rewritten later. Describe current
 behavior from the [data model](../../docs/reference/data-model.md) and
