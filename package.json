@@ -2,6 +2,7 @@
   "name": "splitiful",
   "version": "0.8.1",
   "private": true,
+  "license": "UNLICENSED",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
