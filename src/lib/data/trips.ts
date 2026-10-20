@@ -122,7 +122,7 @@ export async function joinTrip(supabase: Client, input: { inviteCode: string; di
  * Joins a trip by its UUID rather than its invite code (migration 0016) — for the two call
  * sites (`TripSummaryOnly`, `RemovedFromTripScreen` in `src/app/trip/[id]/page.tsx`) that only
  * ever had the trip's UUID in scope to begin with, closing the `get_trip_summary` invite-code
- * leak (docs/ROADMAP.md's invite-code-rpc-hardening entry) without changing who can join.
+ * leak (docs/product/roadmap.md's invite-code-rpc-hardening entry) without changing who can join.
  */
 export async function joinTripById(supabase: Client, input: { tripId: string; displayName: string }) {
   const { data, error } = await supabase.rpc("join_trip_by_id", {
@@ -550,7 +550,7 @@ export type TripView = NonNullable<Awaited<ReturnType<typeof getTripView>>>;
  * trip id (RPC returns zero rows), matching `getTripByInviteCode`'s "not found" shape.
  *
  * No longer surfaces the trip's invite code (migration 0012 added it, migration 0016 removed
- * it — docs/ROADMAP.md's invite-code-rpc-hardening entry): handing the invite code to anyone who
+ * it — docs/product/roadmap.md's invite-code-rpc-hardening entry): handing the invite code to anyone who
  * merely has the trip's UUID collapsed the separation between the public, view-only UUID and the
  * actual join credential. The two callers that used it (`TripSummaryOnly`,
  * `RemovedFromTripScreen` in src/app/trip/[id]/page.tsx) already have the trip UUID directly, so

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 /**
- * QA coverage for the service-role client introduced by migration 0017 (docs/ROADMAP.md's
+ * QA coverage for the service-role client introduced by migration 0017 (docs/product/roadmap.md's
  * invite-code-rpc-hardening entry — a live-confirmed x-forwarded-for spoofing bypass of
  * get_trip_by_invite_code's throttle). Focus: this must fail loudly, not silently fall back to
  * an unprivileged client, when the service-role key isn't configured — a silent fallback here

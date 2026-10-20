@@ -6,8 +6,8 @@ course, taught using **this repo (Splitiful)** as the running example.
 
 This is a learning reference, not the source of truth for current behavior.
 For current product status, architecture, and security/compliance rules, use
-the [roadmap](ROADMAP.md), [architecture](ARCHITECTURE.md), and the baselines
-linked from the [documentation index](README.md). Examples here may lag behind
+the [roadmap](../product/roadmap.md), [architecture](../architecture/overview.md), and the baselines
+linked from the [documentation index](../README.md). Examples here may lag behind
 the application as it changes.
 
 **Who this is for:** you don't need a programming background to read this.
@@ -209,12 +209,12 @@ in the design choices already made. Making them explicit here:
 |---|---|---|---|
 | **Availability** | Can users reach the app when they try to? | Inherits whatever uptime Vercel + Supabase provide; no extra redundancy is built on top of that in this repo | [§5](#5-load-balancer-and-reverse-proxy), [§7](#7-database-relational-replication-sharding) |
 | **Consistency** | Does everyone see the same, latest data? | Strong/immediate — there's exactly one Postgres instance and no replicas, so there's no lag to reason about (yet) | [§7](#7-database-relational-replication-sharding) |
-| **Latency** | How fast does the app respond? | No permanent measurement anywhere in this repo, but the performance-scaling feature added *interim* per-call timing instrumentation (`src/lib/perf/timing.ts`) that logs p50/p95-computable durations for the slowest surfaces — temporary and log-based, not a real APM, see [ADR 0010](adr/0010-interim-per-call-timing-instrumentation.md). A follow-up October 2026 performance code review used that instrumentation's own captured log data to confirm one real, still-open finding and flag one latent indexing gap — see [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s "Performance review notes" section rather than repeating it here | [§4](#4-dns-and-cdn), [§8](#8-caching), [§12](#12-scaling-roadmap-current--future) |
+| **Latency** | How fast does the app respond? | No permanent measurement anywhere in this repo, but the performance-scaling feature added *interim* per-call timing instrumentation (`src/lib/perf/timing.ts`) that logs p50/p95-computable durations for the slowest surfaces — temporary and log-based, not a real APM, see [ADR 0010](../adr/0010-interim-per-call-timing-instrumentation.md). A follow-up October 2026 performance code review used that instrumentation's own captured log data to confirm one real, still-open finding and flag one latent indexing gap — see the [October 2026 performance review](../reviews/performance-review-2026-10.md) rather than repeating it here | [§4](#4-dns-and-cdn), [§8](#8-caching), [§12](#12-scaling-roadmap-current--future) |
 | **Scalability** | How much growth can it absorb before something needs to change? | See the full breakdown | [§12](#12-scaling-roadmap-current--future) |
 | **Security** | Can only the right people see/change the right data? | Row-Level Security is the actual enforcement boundary; sign-in is a one-time passcode; sensitive actions go through least-privilege `security definer` functions; the two guessable-invite-code RPCs are additionally rate-limited at both the app layer (Upstash Redis) and inside Postgres itself, so a caller can't bypass the limit by skipping the app entirely | [§11](#11-security) |
 | **Durability** | Does data survive a crash or restart? | Yes — Postgres persists to disk on Supabase's managed side. Backup/disaster-recovery policy isn't something this repo configures or documents — it's inherited from the platform | [§7](#7-database-relational-replication-sharding) |
 | **Cost** | What does running it cost? | Usage-based, serverless pricing on both Vercel and Supabase — no dedicated always-on server sitting idle | *(a platform choice, outside this repo's code)* |
-| **Maintainability** | How safely can it be changed later? | Small monolith, one typed data-access module ([`src/lib/data/trips.ts`](../src/lib/data/trips.ts)), sequential migrations, and ADRs recording *why* key decisions were made | [§6](#6-application-layer-monolith-modular-monolith-and-microservices) |
+| **Maintainability** | How safely can it be changed later? | Small monolith, one typed data-access module ([`src/lib/data/trips.ts`](../../src/lib/data/trips.ts)), sequential migrations, and ADRs recording *why* key decisions were made | [§6](#6-application-layer-monolith-modular-monolith-and-microservices) |
 
 ### Deep dive — NFRs trade off against each other, they don't stack for free
 This is the part that makes NFRs harder to reason about than FRs: you
@@ -339,19 +339,19 @@ sequenceDiagram
 ```
 
 ### Splitiful example — this one's real code, not a platform feature
-[`src/proxy.ts`](../src/proxy.ts) is a genuine reverse proxy running on
+[`src/proxy.ts`](../../src/proxy.ts) is a genuine reverse proxy running on
 every request (except static files — see the `matcher` at the bottom of
 the file). What it does, in order:
 
 1. Checks whether the requested path even needs a session at all (see
-   `SESSION_REQUIRED_PATTERNS`, [line 16](../src/proxy.ts#L16)) — if not, it
+   `SESSION_REQUIRED_PATTERNS`, [line 16](../../src/proxy.ts#L16)) — if not, it
    skips the whole auth check and lets the request through immediately
-   ([lines 27–29](../src/proxy.ts#L27-L29)), specifically so pages that
+   ([lines 27–29](../../src/proxy.ts#L27-L29)), specifically so pages that
    don't need it aren't slowed down by an extra network round trip.
 2. If the path *does* require a session, it asks Supabase "is this a
-   signed-in user?" ([lines 53–55](../src/proxy.ts#L53-L55)).
+   signed-in user?" ([lines 53–55](../../src/proxy.ts#L53-L55)).
 3. If there's no signed-in user, it redirects to the sign-in flow instead
-   of ever running that page's code ([lines 57–61](../src/proxy.ts#L57-L61)).
+   of ever running that page's code ([lines 57–61](../../src/proxy.ts#L57-L61)).
    Otherwise, it lets the request continue through.
 
 **As of the redesign-ui feature, three path patterns require a session**
@@ -370,7 +370,7 @@ invisibly. There's no config file for it because there's nothing to
 configure; it's part of what you're paying the platform for.
 
 ### Deep dive — the important nuance
-Read the comment on [lines 5–7 of proxy.ts](../src/proxy.ts#L5-L7): it
+Read the comment on [lines 5–7 of proxy.ts](../../src/proxy.ts#L5-L7): it
 calls the proxy's check **"optimistic"** and says *the real enforcement is
 Postgres Row-Level Security*. This is a deliberate, load-bearing design
 decision: the proxy is a **convenience redirect** (so a signed-out user
@@ -386,7 +386,7 @@ pays *two* sequential Supabase-Auth-server round trips per request — one
 inside this proxy check, one again inside the page itself (it needs the
 user id for `getMyTrips`, and doesn't trust the proxy to have guaranteed a
 session for reasons the primer would call "the proxy check is optimistic,
-not authoritative"). [ADR 0011](adr/0011-forward-verified-user-id-header-for-trips-page.md)
+not authoritative"). [ADR 0011](../adr/0011-forward-verified-user-id-header-for-trips-page.md)
 proposes having the proxy forward its own verified user id to the page via
 a trusted request header, explicitly overwriting any client-supplied value
 of the same name — but it's gated behind real latency data from the
@@ -403,8 +403,7 @@ The proxy's own `getUser()` call (the first of the two round trips) is
 untouched, and still isn't directly measured by the app's own timing
 instrumentation, so ADR 0011's proposal above is still exactly where it
 was: a real idea, still not acted on, still waiting on its own latency
-number. See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s "Performance
-review notes" section for the full detail, not repeated here.
+number. See the [October 2026 performance review](../reviews/performance-review-2026-10.md) for the full detail, not repeated here.
 
 ---
 
@@ -437,7 +436,7 @@ flowchart TB
 
 ### Splitiful example
 Splitiful is a monolith, and deliberately so — see
-[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#L15-L24). But there's a more
+[the architecture overview](../architecture/overview.md). But there's a more
 interesting wrinkle than "monolith vs. microservices": **most of
 Splitiful's app layer is skipped entirely.**
 
@@ -460,7 +459,7 @@ flowchart LR
 ```
 
 The one data-access module that wraps all of this is
-[`src/lib/data/trips.ts`](../src/lib/data/trips.ts) — every trip/expense
+[`src/lib/data/trips.ts`](../../src/lib/data/trips.ts) — every trip/expense
 read or write in the whole app funnels through its typed functions
 (`createTrip`, `joinTrip`, `addExpense`, `getTripView`, etc.), even though
 those functions call the database directly rather than calling a custom
@@ -468,13 +467,13 @@ backend.
 
 A real backend route (`src/app/api/`) shows up for two reasons. The first is
 a **secret the browser must never see** — e.g.
-[`src/app/api/trip-email/route.ts`](../src/app/api/trip-email/route.ts)
+[`src/app/api/trip-email/route.ts`](../../src/app/api/trip-email/route.ts)
 needs the Resend API key, which can't be shipped to a browser (the
 browser is fully open to anyone using developer tools — anything sent to
 it is effectively public). The second, added later, is narrower but just
 as real: a **rate-limit chokepoint** in front of an RPC that's guessable
-or low-entropy — see [`src/app/api/trip-invite/[code]/route.ts`](../src/app/api/trip-invite/[code]/route.ts)
-and [`src/app/api/join/route.ts`](../src/app/api/join/route.ts), covered in
+or low-entropy — see [`src/app/api/trip-invite/[code]/route.ts`](../../src/app/api/trip-invite/[code]/route.ts)
+and [`src/app/api/join/route.ts`](../../src/app/api/join/route.ts), covered in
 [§11](#11-security). Neither of those two routes needs a secret; they exist
 purely so a rate limiter (which only runs inside Vercel/Next.js, not
 inside Supabase) actually sits in the request's path.
@@ -500,7 +499,7 @@ between them.
 |---|---|---|---|
 | **Deployment** | Single unit — the one Vercel deployment Splitiful has today | Single unit — still one Vercel deployment; modules ship together even though the code is separated | Multiple, independent units — e.g. a separate "trips service" and a separate "email service," each deployed on its own schedule |
 | **Codebase** | Single, large codebase — today's `src/` tree, where most things are reachable from most things | Single codebase, but split into enforced modules — e.g. a `trips/` module, an `expenses/` module, an `auth/` module, each only exposing a defined interface | Multiple smaller codebases, one per service, often each with its own repo |
-| **Coupling** | Tightly coupled — nothing stops a new page from bypassing [`src/lib/data/trips.ts`](../src/lib/data/trips.ts) and querying Supabase directly | Loosely coupled modules, but tightly deployed — the trips module and expenses module would only talk through defined functions, but a change to either still ships in the same deploy | Very loosely coupled — trips and expenses would be separate processes talking only over the network; either can change independently as long as the network contract holds |
+| **Coupling** | Tightly coupled — nothing stops a new page from bypassing [`src/lib/data/trips.ts`](../../src/lib/data/trips.ts) and querying Supabase directly | Loosely coupled modules, but tightly deployed — the trips module and expenses module would only talk through defined functions, but a change to either still ships in the same deploy | Very loosely coupled — trips and expenses would be separate processes talking only over the network; either can change independently as long as the network contract holds |
 | **Scalability** | Scale the entire app — more Vercel/Supabase capacity for everything at once, even if only expense-adding is actually hot | Scale the entire app — modularity here is a code-organization idea, it doesn't change what gets deployed or scaled | Scale individual services — e.g. the email-sending piece could get its own capacity/queue, independent of the trip-viewing piece |
 | **Operational complexity** | Low — one thing to deploy, one thing to monitor | Low to medium — still one deploy, but you now maintain the discipline of the boundaries themselves (lint rules, documented interfaces) as an ongoing cost | High — multiple deployments, services finding each other, network failures to handle, debugging across services instead of one |
 | **Team dynamics** | One team, or teams with heavy coordination — realistically "one team" for Splitiful today | Teams can own a module, but releases stay coupled — starts to matter once more than one person is regularly touching the codebase | Small, autonomous teams can own and deploy a service independently — needs enough people that "one team per service" is realistic |
@@ -508,8 +507,8 @@ between them.
 
 **Where Splitiful actually sits:** the **Monolith** column, with a hint of
 the **Codebase** row from Modular Monolith already present *informally* —
-[`src/lib/data/trips.ts`](../src/lib/data/trips.ts) and
-[`src/lib/validation/expense.ts`](../src/lib/validation/expense.ts) are
+[`src/lib/data/trips.ts`](../../src/lib/data/trips.ts) and
+[`src/lib/validation/expense.ts`](../../src/lib/validation/expense.ts) are
 documented as the single entry points for their concerns. But look at the
 **Coupling** row: those boundaries aren't enforced by anything, so
 Splitiful doesn't get to claim the Modular Monolith column yet — it's a
@@ -550,7 +549,7 @@ the main reason not to conflate them:
 
 ### Splitiful example — the actual schema
 Splitiful's schema (defined in
-[`supabase/migrations/`](../supabase/migrations), one file per change,
+[`supabase/migrations/`](../../supabase/migrations), one file per change,
 applied in order) has four tables:
 
 ```mermaid
@@ -588,14 +587,14 @@ real-world relational-database decisions, not Splitiful quirks:
 - Splitting an expense between trip members isn't stored anywhere — every
   screen that needs "how much does each person owe" **computes it on the
   fly** from the current member count, in
-  [`src/lib/settlement.ts`](../src/lib/settlement.ts). The tradeoff: less
+  [`src/lib/settlement.ts`](../../src/lib/settlement.ts). The tradeoff: less
   data to keep in sync (if you edit an expense's amount, there's no
   separate "splits" table to update to match), at the cost of recomputing
   it every time it's needed. For Splitiful's scale, that recompute is
   essentially free, so it's a good trade.
 - Money is stored as `numeric(10,2)` (dollars with cents) in the database,
   but converted to whole-number cents at the boundary in
-  [`src/lib/currency.ts`](../src/lib/currency.ts). Doing math in cents
+  [`src/lib/currency.ts`](../../src/lib/currency.ts). Doing math in cents
   (integers) avoids the rounding errors you can get from doing arithmetic
   directly on fractional dollar amounts.
 
@@ -662,8 +661,7 @@ flowchart TB
   once and hashed (migration 0023): on 200k test trips, ~5-9 s dropped
   to ~0.1 s with identical results. The lesson: "add an index" is a
   hypothesis, so check the query plan (`explain analyze`) before
-  believing it. about. See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s `trips`/
-  `trip_members` data-model entries and "Performance review notes" section
+  believing it. about. See the [`trips` and `trip_members` data model](../reference/data-model.md) and the [October 2026 performance review](../reviews/performance-review-2026-10.md)
   for the full detail.
 
 ---
@@ -692,7 +690,7 @@ flowchart LR
 There's **no server-side cache for application data** anywhere in
 Splitiful — nothing between the app and the database that stores a copy of
 trip/expense data to avoid re-querying it. Redis *does* exist in the stack
-now ([Upstash](https://upstash.com), via [`src/lib/rate-limit.ts`](../src/lib/rate-limit.ts))
+now ([Upstash](https://upstash.com), via [`src/lib/rate-limit.ts`](../../src/lib/rate-limit.ts))
 but it's not a cache in this sense — it only stores rate-limit counters
 (see [§11](#11-security)), never a copy of real data, and nothing reads
 from it hoping to avoid a slow query. Worth flagging because "Redis is in
@@ -701,11 +699,11 @@ aren't — a rate limiter and a cache solve different problems even though
 they're often built on the same kind of fast key/value store. The one
 cache-*adjacent* thing that actually serves data is client-side, and it's
 narrow on purpose:
-[`src/lib/remembered-email.ts`](../src/lib/remembered-email.ts) uses the
+[`src/lib/remembered-email.ts`](../../src/lib/remembered-email.ts) uses the
 browser's own storage (`localStorage` — a small key/value store built
 into every browser, private to that one device) to remember the
 last-used sign-in email, purely as a convenience. Per
-[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#L33-L40), the house rule is: this
+[the rendering architecture](../architecture/rendering.md#device-local-state), the house rule is: this
 kind of storage is only for small, non-sensitive, per-device
 conveniences — never for data that needs to be reliable or shared between
 devices, and every read/write is wrapped so the feature just quietly
@@ -774,17 +772,17 @@ sequenceDiagram
 ```
 
 ### Splitiful example
-[`src/app/api/trip-email/route.ts`](../src/app/api/trip-email/route.ts)
+[`src/app/api/trip-email/route.ts`](../../src/app/api/trip-email/route.ts)
 is exactly the synchronous version: it calls `sendTripEmail(...)`
 directly and waits for Resend's response before replying to the browser
-([lines 38–44](../src/app/api/trip-email/route.ts#L38-L44)) — and if
+([lines 38–44](../../src/app/api/trip-email/route.ts#L38-L44)) — and if
 Resend fails, it returns an error (`502`) to the user's browser
-([line 47](../src/app/api/trip-email/route.ts#L47)), even though the
+([line 47](../../src/app/api/trip-email/route.ts#L47)), even though the
 trip itself was already created successfully.
 
 **A narrow, non-queue exception worth distinguishing:** the
 performance-scaling feature's client-side timing beacon
-(`reportClientTiming` in [`src/lib/perf/timing.ts`](../src/lib/perf/timing.ts),
+(`reportClientTiming` in [`src/lib/perf/timing.ts`](../../src/lib/perf/timing.ts),
 posting to `/api/perf-log`) *is* fire-and-forget — the browser doesn't wait
 for its response before moving on, using `fetch(..., { keepalive: true })`
 wrapped in a `try`/`catch` that swallows any failure silently. That's
@@ -844,9 +842,9 @@ flowchart TB
   Supabase's REST-like table calls: `.insert()`, `.update()`, `.select()`.
 - Actions that need extra logic or elevated permission — `create_trip`,
   `join_trip`, `complete_trip` — are **RPC calls** to named Postgres
-  functions (see [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#L26-L31) for
+  functions (see [the mutations architecture](../architecture/mutations.md#locking) for
   `complete_trip`, and the migrations in
-  [`supabase/migrations/`](../supabase/migrations) for how these
+  [`supabase/migrations/`](../../supabase/migrations) for how these
   functions are defined). These are marked `security definer`, meaning
   the function runs with the database's own elevated permissions rather
   than the calling user's — which is *why* it's implemented as an RPC
@@ -910,7 +908,7 @@ flowchart TB
 ```
 
 Splitiful's actual policies on the `expenses` table (from
-[`docs/ARCHITECTURE.md`](ARCHITECTURE.md#L67-L83), defined in the
+[the data model reference](../reference/data-model.md#rls-policies), defined in the
 migrations):
 
 | Action | Who's allowed |
@@ -950,7 +948,7 @@ would still be protected by RLS underneath it.
 RLS answers "is this person allowed to see/change this row at all?" It
 deliberately doesn't answer a different question: "is this person allowed
 to try 10,000 times a second?" A security review
-([`docs/reviews/security-compliance/project/security-review-2026-09-17.md`](reviews/security-compliance/project/security-review-2026-09-17.md))
+([`docs/reviews/security-compliance/project/security-review-2026-09-17.md`](../reviews/security-compliance/project/security-review-2026-09-17.md))
 found exactly that gap: Splitiful's invite codes are only 8 hex characters
 (~32 bits of randomness, generated by `md5(random())`), and the two RPCs
 that consume one — `get_trip_by_invite_code` (preview a trip from its
@@ -976,7 +974,7 @@ flowchart TB
     end
 ```
 
-- **Layer 1 — app-level, in `src/app/api/`**: [`src/lib/rate-limit.ts`](../src/lib/rate-limit.ts)'s
+- **Layer 1 — app-level, in `src/app/api/`**: [`src/lib/rate-limit.ts`](../../src/lib/rate-limit.ts)'s
   `enforceRateLimit` checks a per-IP sliding-window counter stored in
   Upstash Redis before either route does any real work, returning a `429`
   with a `Retry-After` header if the caller's over the limit. Deliberately
@@ -999,7 +997,7 @@ This is the same "defense in depth" idea as `proxy.ts` vs. RLS, just one
 layer further out: even if a caller discovers and skips the app-level
 limiter entirely (exactly what the direct-to-Supabase path does), the
 database-level throttle still holds — see
-[ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md) for the full
+[ADR 0009](../adr/0009-throttle-invite-rpcs-inside-postgres.md) for the full
 reasoning, including why a *different* fix (revoking the RPCs' public
 grants entirely) was rejected specifically for `join_trip`, since that RPC
 genuinely needs the caller's own verified identity (`auth.uid()`) to know
@@ -1056,7 +1054,7 @@ worth watching — 🔧 recommended upgrade at this stage.
 | **§8 Cache** | ✅ None (only `localStorage` for remembered email) | ✅ Still unnecessary | 👀 Consider caching hot computed views if recompute cost grows | 🔧 Add a real cache layer for hot read paths |
 | **§9 Async/Queues** | ✅ None — email (via Resend) sent synchronously in the request | ✅ Still fine while email volume is low | 🔧 Move email off the request path into a queue/background worker | 🔧 Dedicated queue/worker system required (email, exports, notifications) |
 | **§10 Communication** | ✅ REST-style table calls + RPC for named actions | ✅ No change | ✅ No change | 👀 Consider a more formal API layer if new client types appear (mobile app, integrations) |
-| **§11 Security** | ✅ RLS is the enforcement boundary; the two guessable-invite-code RPCs are now rate-limited at both the app layer (Upstash) and inside Postgres itself | 👀 Revisit known deferred gaps (e.g. [ADR 0002](adr/0002-restrict-expense-update-rls-to-payer.md)'s delete-policy note); re-verify the rate limiter's `x-forwarded-for` trust assumption live, per [ADR 0009](adr/0009-throttle-invite-rpcs-inside-postgres.md)'s own follow-up note | 🔧 Formal RLS policy audit; close intentionally-deferred gaps now that more real users hit them | 🔧 Full security review; extend rate limiting to any other RPC that gains a guessable-credential shape; consider moving the highest-risk operations fully server-side |
+| **§11 Security** | ✅ RLS is the enforcement boundary; the two guessable-invite-code RPCs are now rate-limited at both the app layer (Upstash) and inside Postgres itself | 👀 Revisit known deferred gaps (e.g. [ADR 0002](../adr/0002-restrict-expense-update-rls-to-payer.md)'s delete-policy note); re-verify the rate limiter's `x-forwarded-for` trust assumption live, per [ADR 0009](../adr/0009-throttle-invite-rpcs-inside-postgres.md)'s own follow-up note | 🔧 Formal RLS policy audit; close intentionally-deferred gaps now that more real users hit them | 🔧 Full security review; extend rate limiting to any other RPC that gains a guessable-credential shape; consider moving the highest-risk operations fully server-side |
 
 ### Reading the table by column, not just by row
 
@@ -1073,7 +1071,7 @@ worth watching — 🔧 recommended upgrade at this stage.
   [§7](#7-database-relational-replication-sharding)).
 - **§9 Async/queues triggers earlier than §8 Cache.** That's because the
   synchronous email call in
-  [`trip-email/route.ts`](../src/app/api/trip-email/route.ts) has a clear,
+  [`trip-email/route.ts`](../../src/app/api/trip-email/route.ts) has a clear,
   known failure mode today (a slow/failed Resend call blocks the user's
   request) that just gets more frequent as volume grows — whereas caching
   has no clear problem to solve until read load is genuinely high (see
@@ -1106,8 +1104,8 @@ worth watching — 🔧 recommended upgrade at this stage.
   the `trips` read policy made a `/trips` load cost grow with the *total*
   number of trips across the whole app, not with any one user's data. That
   is not evidence that the §7 row should move to 🔧 today. See
-  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s "Performance review notes"
-  section for the full detail, not repeated here.
+  the [October 2026 performance review](../reviews/performance-review-2026-10.md)
+  for the full detail, not repeated here.
 
 ## 13. Containers: Vercel's model vs. Docker, and when to switch
 
@@ -1198,7 +1196,7 @@ as [§8 Caching](#8-caching) and [§9 Async/queues](#9-asynchronism-and-queues):
 the right move is recognizing there's no problem this would solve today,
 not pre-building infrastructure for a scenario that hasn't happened. If
 one of the triggers above ever becomes real, the migration itself is
-small — Next.js has an official ["standalone" output mode](../node_modules/next/dist/docs)
+small — Next.js has an official ["standalone" output mode](../../node_modules/next/dist/docs)
 specifically meant to make writing that first Dockerfile straightforward
 whenever it's actually needed.
 
@@ -1238,7 +1236,7 @@ Quick lookup for terms used throughout this document.
 
 *Companion to the conversation that walked through the
 [system-design-primer](https://github.com/donnemartin/system-design-primer)
-using this codebase. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the
+using this codebase. See the [architecture overview](../architecture/overview.md) for the
 current-state architecture snapshot this document explains, and
-[`adr/`](adr) for the reasoning behind specific decisions referenced
+[`adr/`](../adr) for the reasoning behind specific decisions referenced
 above.*

@@ -19,5 +19,5 @@ folder.
 ## Standing policies
 
 The baselines remain at the docs root because they apply to future work:
-[`../../security-baseline.md`](../../security-baseline.md) and
-[`../../compliance-baseline.md`](../../compliance-baseline.md).
+[`../../security-baseline.md`](project/security-baseline.md) and
+[`../../compliance-baseline.md`](project/compliance-baseline.md).

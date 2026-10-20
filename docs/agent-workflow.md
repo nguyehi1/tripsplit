@@ -16,11 +16,11 @@ this document.
 | PM | Scope, acceptance criteria, risk surface, and roadmap entry | UX or technical design |
 | Compliance reviewer | Privacy, retention, communications, financial-record, and consumer-claim review | Legal advice or feature redesign |
 | Security reviewer | Threat review of requirements, design, and implementation | Implementation fixes |
-| Architect | Data model, module boundaries, migration/API strategy, impact analysis, ADRs, current architecture summary | Feature implementation |
+| Architect | Data model, module boundaries, migration/API strategy, impact analysis, ADRs, and the current-state `architecture/` and `reference/` pages | Feature implementation |
 | UX designer | User flows, states, copy, responsive behavior, and consistency with existing UI | Backend/data decisions |
 | Engineer | Application and migration implementation against approved artifacts | Product decisions or final independent QA |
 | QA | Acceptance, edge-case, and regression verification; QA report | Implementation fixes |
-| Documentation engineer | README and developer-doc updates, changelog proposal, version recommendation | Application logic or release action |
+| Documentation engineer | README, guide, runbook and reference updates; changelog proposal; version recommendation; doc-page placement and checks per [Write documentation](guides/writing-docs.md) | Application logic or release action |
 | PR prep reviewer | Final diff and project-check review; draft commit message | Commit, push, release, or PR creation |
 
 Role-specific instructions may add detail, but should not contradict this
@@ -70,7 +70,7 @@ send the work back through implementation and verification before it advances.
    requirements.
 3. **Requirements.** PM writes acceptance criteria, non-goals, risk surface,
    and the roadmap entry in `docs/features/<slug>/requirements.md` and
-   `docs/ROADMAP.md`.
+   `docs/product/roadmap.md`.
 4. **Early risk review.** If any risk-surface item is present, security and
    compliance review requirements. PM incorporates their constraints into
    acceptance criteria and non-goals. Record why this review was skipped
@@ -78,9 +78,11 @@ send the work back through implementation and verification before it advances.
 5. **User checkpoint: requirements.** Present the scope, risk surface, and
    constraints. Wait for explicit approval or revisions before design.
 6. **Architecture and UX.** Architect and UX designer produce their feature
-   documents. Architect updates `docs/ARCHITECTURE.md` when the system's
-   current architecture changes and records consequential decisions as
-   ADRs.
+   documents. Architect updates the matching `docs/architecture/` page and
+   `docs/reference/data-model.md` or `code-map.md` when the system's
+   current state changes (current state only, no "as of feature X"
+   history), and records consequential decisions as ADRs with a row in
+   the ADR index.
 7. **Design risk review.** When early review ran, security and compliance
    check that their constraints appear in the architecture and design.
    Resolve blocking gaps before implementation.
@@ -106,10 +108,14 @@ send the work back through implementation and verification before it advances.
   continue past a checkpoint while its answer is pending.
 - Surface product, UX, architecture, or legal decisions to the user instead
   of silently choosing when the decision materially changes scope or risk.
-- Keep `docs/ROADMAP.md` as a concise status index and
-  `docs/ARCHITECTURE.md` as the current system-design reference. Keep
-  feature-specific rationale, review evidence, and history in
-  `docs/features/<slug>/` and review records, linked from those summaries.
+- Keep `docs/product/roadmap.md` as a concise status index and the
+  `docs/architecture/` and `docs/reference/` pages as the current-state
+  system reference. Keep feature-specific rationale, review evidence, and
+  history in `docs/features/<slug>/` and review records, linked from those
+  pages.
+- Follow [Write documentation](guides/writing-docs.md) for every doc change:
+  one page type per page, the shared template, current state only in
+  concept, guide and reference pages, and `npm run docs:check` passing.
 - ADRs preserve decisions and rationale; do not use them as a substitute
   for describing the system as it works today.
 - Security and compliance constraints are implementation requirements.
@@ -143,3 +149,21 @@ Security and compliance artifacts live separately under
   security-report.md          final security review, when applicable
   compliance-report.md        final compliance review, when applicable
 ```
+
+## Documentation map
+
+Which role updates which page. The placement rules and page template are in
+[Write documentation](guides/writing-docs.md).
+
+| Page or area | Updated by | When |
+|---|---|---|
+| `docs/architecture/*.md` | Architect | A pattern, access rule or mechanism changes |
+| `docs/reference/data-model.md`, `code-map.md` | Architect (design), documentation engineer (verify) | A table, policy, RPC, trigger or shared module changes |
+| `docs/reference/analytics-events.md` | Documentation engineer | An event is added, renamed or removed |
+| `docs/product/roadmap.md` | PM (entry), documentation engineer (status) | A feature is scoped, shipped or released |
+| `docs/product/principles.md` | PM, with user approval | A product principle or non-goal changes |
+| `docs/adr/` and its index | Architect | A decision has real alternatives |
+| `docs/guides/`, `docs/runbooks/` | Documentation engineer | A procedure changes |
+| `docs/features/<slug>/` | The stage's role | Per feature; point-in-time, not rewritten later |
+| `docs/reviews/` | Security, compliance, QA | Dated; not rewritten later |
+| `CHANGELOG.md` | Documentation engineer | Proposal at the docs stage |

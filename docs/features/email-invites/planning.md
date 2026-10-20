@@ -4,7 +4,7 @@ Date: 2026-10-08
 > Historical proposal (2026-10-08). The shipped scope is in [requirements.md](requirements.md), which wins on any difference.
 
 Current status: the mailto-based invite flow is shipped; counsel follow-up is
-tracked in the [roadmap](../../ROADMAP.md) and its
+tracked in the [roadmap](../../product/roadmap.md) and its
 linked review record. The proposal below preserves the earlier design debate.
 
 Stage: planning. This doc proposes a direction only. After the user picks one, the `pm` agent writes the requirements.

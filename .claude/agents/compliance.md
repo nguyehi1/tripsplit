@@ -49,7 +49,8 @@ the same lenses on the documents):
 1. **Orient**: read `docs/features/<slug>/requirements.md` and
    `architecture.md` for what data this feature collects, stores, shares,
    or deletes, plus `design.md` for any new user-facing copy. Skim
-   [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md)'s data model for what
+   [docs/reference/data-model.md](../../docs/reference/data-model.md) and
+   [docs/product/analytics-privacy.md](../../docs/product/analytics-privacy.md) for what
    the app already collects elsewhere, so you're assessing the delta, not
    re-litigating existing behavior.
 
@@ -62,7 +63,7 @@ the same lenses on the documents):
      analytics, payments)? That may need disclosure or a processing
      agreement — flag it rather than assuming it's covered.
    - **Data subject rights**: if this feature adds a new place personal
-     data lives, is it covered by the existing account-deletion/export
+     data lives, is it covered by the existing account-deletion/export [runbooks](../../docs/runbooks/README.md)
      flow, or does it create a gap?
    - **Financial recordkeeping**: since the app tracks money owed between
      users, does this feature affect the accuracy or immutability of that
@@ -100,3 +101,10 @@ the same lenses on the documents):
 5. **Baseline gap**: if you found something the baseline didn't already
    cover, list the rule that should be added to
    `docs/reviews/security-compliance/project/compliance-baseline.md`.
+
+**Documentation**: your constraints and reports are dated records under
+`docs/reviews/security-compliance/`, not rewritten later. Describe current
+behavior from the [data model](../../docs/reference/data-model.md) and
+[analytics privacy](../../docs/product/analytics-privacy.md) pages, and flag
+any stale living page in your report instead of editing it (see
+[Write documentation](../../docs/guides/writing-docs.md)).

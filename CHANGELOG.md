@@ -16,7 +16,7 @@ this section under a dated heading.
 
 **Release order for migration 0024: apply it by hand to the live database, verify (pg_cron job
 exists, publication check returns zero rows, smoke-test delete and Undo through the real API), then
-deploy the app.** See `docs/runbooks/account-deletion-and-export.md` section 6.
+deploy the app.** See `docs/runbooks/releases/0024-expense-delete.md`.
 
 ### Added
 
@@ -52,7 +52,7 @@ deploy the app.** See `docs/runbooks/account-deletion-and-export.md` section 6.
   canvas-style "New trip" pill pinned above the bottom edge.
 - **Name-only analytics.** `trip_type_selected_camping`, `_airbnb`, `_international`, `_other`,
   `suggestion_add_complete`, and the four Home events `home_template_tapped_camping`, `_airbnb`,
-  `_international` and `home_blank_trip_tapped`, no properties (see `docs/ANALYTICS.md`).
+  `_international` and `home_blank_trip_tapped`, no properties (see `docs/reference/analytics-events.md`).
 - **Privacy policy.** `/privacy` now lists trip types and the typed trip type, adds the
   legitimate-interest purpose (deciding which trip types to suggest, read in aggregate) and
   `LEGAL_LAST_UPDATED` moves to October 13, 2026. Draft copy, not yet reviewed by counsel.
@@ -85,7 +85,7 @@ deploy the app.** See `docs/runbooks/account-deletion-and-export.md` section 6.
   `trips.types`). Apply the FIXED 0022 file: the `trips_types_check` constraint bug found in review
   was corrected inside 0022 itself (0022 is unreleased, so there is no separate fix migration).
   Live verification is required before release (see
-  `docs/runbooks/account-deletion-and-export.md` section 5 and
+  `docs/runbooks/releases/0022-trip-types.md` and
   `docs/features/starter-list-exploration/release-checklist.md`).
 
 ### Fixed

@@ -13,3 +13,10 @@ canonical workflow from start to finish. Invoke the role agents defined in
 `.claude/agents/` for their assigned work. Keep tool-specific invocation
 details here, and treat every user checkpoint as a required stop until the
 user responds.
+
+Documentation rules live in `docs/guides/writing-docs.md` and the
+"Documentation map" in `docs/agent-workflow.md`. When invoking the architect
+and docs-engineer, tell them to follow that guide. Living docs
+(`docs/architecture/`, `docs/reference/`) describe current state only; feature
+history goes in `docs/features/<slug>/` and ADRs. Before the completion
+checkpoint, confirm `npm run docs:check` passes.

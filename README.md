@@ -8,7 +8,7 @@ unlocks invitees' itemized ledger and changes, and unlocks changes for organizer
 
 The core app and roster, expense, invite, and shared-list features are implemented. Trip types,
 starter suggestions, and the home template shelf are implemented in this repository; their release
-checklist is still open. [The roadmap](./docs/ROADMAP.md) is the current status source for shipped
+checklist is still open. [The roadmap](./docs/product/roadmap.md) is the current status source for shipped
 work and outstanding release actions.
 
 ### Shipped capabilities
@@ -25,21 +25,25 @@ work and outstanding release actions.
   does not send or store invitee email addresses.
 - **Interface:** warm-paper visual theme and route-backed add-expense/add-item sheets.
 
-Feature requirements and QA records are linked from the [roadmap](./docs/ROADMAP.md). The trip
+Feature requirements and QA records are linked from the [roadmap](./docs/product/roadmap.md). The trip
 workflow and onboarding details are in
 [docs/features/simplified-onboarding/requirements.md](./docs/features/simplified-onboarding/requirements.md).
 
 ## Project docs
 
-- [Documentation index](./docs/README.md) — guide to current references, historical records, and
-  operational docs.
-- [Roadmap](./docs/ROADMAP.md) — current shipped status, release gates, and open follow-ups.
-- [Architecture](./docs/ARCHITECTURE.md) — system and data-access architecture.
-- [Feature records](./docs/features/README.md) — dated planning, requirements, design, and review evidence.
-- [ADRs](./docs/adr/README.md) — architectural decision history, including superseded decisions.
-- [Agent workflow](./docs/agent-workflow.md) — shared team roles, stages, and review gates.
-- [Analytics](./docs/ANALYTICS.md) — event catalog and dashboard guidance.
-- [User flow](./docs/user-flow.html) — auth and navigation flow (open in a browser).
+Start at the [documentation index](./docs/README.md). The most useful pages:
+
+| To… | Read |
+|---|---|
+| Understand how the system works | [Architecture overview](./docs/architecture/overview.md) |
+| Look up a table, policy or RPC | [Data model](./docs/reference/data-model.md) |
+| See what is shipped or open | [Roadmap](./docs/product/roadmap.md) |
+| Ship a migration | [Apply a schema change](./docs/guides/apply-a-schema-change.md) |
+| Track a new user action | [Add an analytics event](./docs/guides/add-an-analytics-event.md) |
+| Operate production | [Runbooks](./docs/runbooks/README.md) |
+| Understand a past decision | [ADRs](./docs/adr/README.md) and [feature records](./docs/features/README.md) |
+| Work as an agent on a feature | [Agent workflow](./docs/agent-workflow.md) |
+| Write or change docs | [Write documentation](./docs/guides/writing-docs.md) |
 
 Feature planning and requirements files are point-in-time records; they may describe proposals that
 were later changed or dropped. Use the roadmap for delivery status and the current code for exact
@@ -102,7 +106,7 @@ Splitiful uses **Vercel Analytics** to measure performance and understand user b
 
 All events are privacy-first: no personally identifiable information (names, emails, trip IDs, amounts) is collected. Data is retained for 30+ days on Vercel and is not shared with third parties.
 
-See [docs/ANALYTICS.md](./docs/ANALYTICS.md) for the complete event catalog, how to view metrics in the Vercel dashboard, and developer guidance for adding new events.
+See the [analytics events reference](./docs/reference/analytics-events.md) for the complete event catalog, [View analytics in Vercel](./docs/guides/view-analytics-in-vercel.md) for the dashboard, and [Add an analytics event](./docs/guides/add-an-analytics-event.md) for developer guidance.
 
 ## Deployment
 
@@ -117,7 +121,7 @@ Deployed on Vercel from this repo:
 4. Push migrations to the linked Supabase project (`supabase db push`) before or alongside the
    deploy — the app assumes the schema in `supabase/migrations` is already applied. For migration
    0022 this is a hard ordering: apply it **before** deploying, then run the live checks in the
-   [runbook](./docs/runbooks/account-deletion-and-export.md) section 5.
+   [release checklist](./docs/runbooks/releases/0022-trip-types.md).
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, a production build, and a separate
 clean-database migration replay on every push and pull request to `main`.

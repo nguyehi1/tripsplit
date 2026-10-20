@@ -1,12 +1,12 @@
 # Planning: "Improve performance and reduce latency to serve higher volume of users"
 
 Date: 2026-09-19
-Stage: planning (pre-requirements) — see [Product principles](../../ROADMAP.md#product-principles-and-scope) and
-[docs/ROADMAP.md](../../ROADMAP.md) for the context this discussion is grounded in.
+Stage: planning (pre-requirements) — see [Product principles](../../product/principles.md) and
+[docs/ROADMAP.md](../../product/roadmap.md) for the context this discussion is grounded in.
 
 Historical planning record: implementation and QA are complete. The remaining
 live performance measurement and timing-instrumentation follow-up are listed
-in the [roadmap](../../ROADMAP.md); questions below record the original scope
+in the [roadmap](../../product/roadmap.md); questions below record the original scope
 discussion.
 
 ## Raw idea (as given by the user)

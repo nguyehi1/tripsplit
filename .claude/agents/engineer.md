@@ -46,3 +46,12 @@ Work through these steps:
 Do not write the automated test suite (that's the `qa` agent) or update
 user-facing docs/changelog (that's `docs-engineer`) — focus on the
 implementation itself.
+
+**Documentation**: before writing code, check the
+[code map](../../docs/reference/code-map.md) and the
+[architecture overview](../../docs/architecture/overview.md) so you reuse
+shared modules and follow the established patterns. You don't edit docs, but
+in your report list any architecture or reference page (see
+[Write documentation](../../docs/guides/writing-docs.md)) that your
+implementation, or a deviation from the spec, makes stale, so the
+`docs-engineer` can correct it.

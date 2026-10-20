@@ -76,3 +76,10 @@ Work through these steps:
 Flag, don't silently resolve, any UX decision that has real product
 implications (e.g. "should deleting an expense be reversible?") — surface
 it for the user/PM rather than guessing.
+
+**Documentation**: your design is a record, so it goes in
+`docs/features/<slug>/design.md`. Check the
+[rendering architecture](../../docs/architecture/rendering.md) for the sheet,
+token and Server Component rules before specifying a component, and follow
+[Write documentation](../../docs/guides/writing-docs.md) for any copy or doc
+you write. Don't edit the living `architecture/` pages; that's the architect's job.
