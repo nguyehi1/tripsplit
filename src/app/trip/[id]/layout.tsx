@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ExpenseUndoProvider } from "./expense-undo-provider";
 import { TripSheetChrome } from "./trip-sheet-chrome";
 
 /**
@@ -7,6 +8,8 @@ import { TripSheetChrome } from "./trip-sheet-chrome";
  * (unaffected on every subroute other than `/add-expense`, see ADR 0008's "Consequences"); the
  * `@sheet` slot resolves to the add-expense sheet only when that route is active, `null`
  * everywhere else (see `@sheet/default.tsx`, `@sheet/page.tsx`, `@sheet/[...catchAll]/page.tsx`).
+ * The one client leaf is `ExpenseUndoProvider`, which wraps both so a delete made in the edit sheet
+ * can show its Undo toast on the trip page after the sheet closes.
  */
 export default function TripLayout({
   children,
@@ -16,9 +19,9 @@ export default function TripLayout({
   sheet: ReactNode;
 }) {
   return (
-    <>
+    <ExpenseUndoProvider>
       <TripSheetChrome>{children}</TripSheetChrome>
       {sheet}
-    </>
+    </ExpenseUndoProvider>
   );
 }

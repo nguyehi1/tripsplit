@@ -16,7 +16,8 @@ work and outstanding release actions.
 - **Trips and onboarding:** anonymous-first trip creation, public trip summaries, email-code
   verification for details and changes, remembered sign-in email, and one display name per account.
 - **Expense splitting:** equal trip-wide split, expense dates, edit-own-expense, and settle-up
-  summaries. No payment integration or expense delete/undo flow yet.
+  summaries. The payer can delete their own expense on an open trip, with a short Undo (implemented,
+  awaiting release; see the roadmap). No payment integration.
 - **Roster:** name-only placeholder members, organizer removal of a real member, and member
   self-service leave. Removing a member does not rotate the invite link; see [ADR 0012](./docs/adr/0012-post-removal-detection-and-ghost-payer-rendering.md).
 - **Shared list:** members can add and claim items; claimed items can be logged as expenses.

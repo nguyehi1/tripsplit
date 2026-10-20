@@ -4,6 +4,7 @@ import { centsToDollars, dollarsToCents } from "@/lib/currency";
 import { formatDayDate, todayIso } from "@/lib/dates";
 import { timeAsync } from "@/lib/perf/timing";
 import { computeBalances, simplifyDebts } from "@/lib/settlement";
+import { ExpenseActionError, expenseActionErrorCode } from "@/lib/errors";
 import { isTripType } from "@/lib/starter-suggestions";
 import type { TripType } from "@/lib/starter-catalog";
 import type { Database } from "@/lib/supabase/types";
@@ -259,6 +260,23 @@ export async function updateExpense(
     .single();
   if (error) throw error;
   return data;
+}
+
+/**
+ * Deletes an expense through the `delete_expense` function (migration 0024): payer only, open
+ * trip only, marks the row and hides it at once; the row is erased for good shortly after. The
+ * client holds no DELETE privilege on `expenses`, so there is no direct-delete fallback. Throws an
+ * `ExpenseActionError` carrying only a code, never the database error.
+ */
+export async function deleteExpense(supabase: Client, expenseId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_expense", { _expense_id: expenseId });
+  if (error) throw new ExpenseActionError(expenseActionErrorCode(error));
+}
+
+/** Brings a just-deleted expense back (server accepts it for 15 s). Same error contract as above. */
+export async function undoDeleteExpense(supabase: Client, expenseId: string): Promise<void> {
+  const { error } = await supabase.rpc("undo_delete_expense", { _expense_id: expenseId });
+  if (error) throw new ExpenseActionError(expenseActionErrorCode(error));
 }
 
 type TripRow = Pick<

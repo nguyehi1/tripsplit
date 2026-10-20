@@ -10,9 +10,26 @@ a release moves that section under a dated version heading.
 
 ## [Unreleased]
 
-Proposed version: 0.8.0 (backward-compatible feature; package.json not yet bumped).
+Version: 0.8.1 for `expense-delete-and-polish` (user decision 2026-10-19; package.json bumped from
+0.8.0). The `starter-list-exploration` entries below were released as 0.8.0; the release step moves
+this section under a dated heading.
+
+**Release order for migration 0024: apply it by hand to the live database, verify (pg_cron job
+exists, publication check returns zero rows, smoke-test delete and Undo through the real API), then
+deploy the app.** See `docs/runbooks/account-deletion-and-export.md` section 6.
 
 ### Added
+
+- **Delete an expense, with Undo.** The payer can delete their own expense on an open trip. It
+  disappears at once, a toast offers Undo for about 10 seconds (the server accepts Undo for 15), and
+  the row is then permanently erased by the database (pg_cron each minute, about 2 minutes at most,
+  plus a small opportunistic erase). A linked shopping-list item returns to "claimed, not bought".
+  Migration 0024 adds `expenses.deleted_at`, `shopping_list_items.unlinked_from_expense_id`, the
+  `delete_expense` / `undo_delete_expense` RPCs (rate limited) and `erase_expired_expenses`, hides
+  marked rows through RLS and `get_trip_summary`, removes the `expenses` delete policy and DELETE
+  privilege, and restricts direct UPDATE to `amount`, `description` and `date`. ADR 0017. Erase
+  leaves no audit trail (counsel question open, non-blocking). The 24-hour erase cap is an
+  operational daily check in the runbook, not a code guarantee.
 
 - **Trip types on New trip.** The organizer can optionally pick up to three of Camping, Airbnb stay
   and International, and/or "Other" with a short typed trip type (1-30 characters, no emoji or
@@ -43,6 +60,15 @@ Proposed version: 0.8.0 (backward-compatible feature; package.json not yet bumpe
 
 ### Changed
 
+- **Send feedback moved to You.** The You (settings) screen has a "Send feedback" row below Privacy
+  and Terms; trip details keeps its feedback icon; the Trips/home screen no longer links to it.
+  Feedback form, storage and copy are unchanged.
+- **Settle-up on a locked trip** no longer shows the "Trip completed" button; "Create a new trip"
+  and the Locked status stay.
+- **Invite screen member rows** use 11px vertical padding, matching trips and expense rows.
+- **Direct API writes to `expenses` are narrower.** Clients can update only `amount`, `description`
+  and `date` (so `paid_by` and `trip_id` can no longer be rewritten), and cannot delete rows
+  directly (migration 0024).
 - **Home trip rows are restyled and compact.** Each trip on `/trips` is one 68px row (40px icon
   square for the trip's first type, name, "date · people · total", balance on the right, the Locked
   pill on completed trips). The "Trip" pill and the avatar stack are gone, the divider is clearer,

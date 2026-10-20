@@ -48,6 +48,8 @@ Fired **on the tap, before navigation, with no account**: the visitor may be sig
 | `expense_add_complete` | Expense successfully inserted into database | `src/app/trip/[id]/add-expense/page.tsx` after `addExpense()` returns | Measure expense logging success rate; identify form drop-off or validation issues | `{ event: "expense_add_complete" }` |
 | `expense_edit_start` | User opens edit form for existing expense | `/trip/[id]/expense/[expenseId]/edit` page load | Measure data-correction behavior; indicates data quality concerns | `{ event: "expense_edit_start" }` |
 | `expense_edit_complete` | Edited expense successfully saved to database | `src/app/trip/[id]/expense/[expenseId]/edit/page.tsx` after `updateExpense()` returns | Measure edit success rate; identify form drop-off | `{ event: "expense_edit_complete" }` |
+| `expense_delete_complete` | Expense successfully deleted (Undo window opens) | `src/app/trip/[id]/edit-expense-sheet-content.tsx` after `deleteExpense()` returns | Measure how often expenses are deleted | `{ event: "expense_delete_complete" }` |
+| `expense_undo_complete` | Deleted expense successfully restored with Undo | `src/app/trip/[id]/expense-undo-provider.tsx` after `undoDeleteExpense()` returns | Measure how often a delete is undone | `{ event: "expense_undo_complete" }` |
 
 ### Member & Invite Management
 

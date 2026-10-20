@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRightIcon, ChevronLeftIcon, CheckIcon, LockIcon } from "@/components/icons";
+import { ArrowRightIcon, ChevronLeftIcon, LockIcon } from "@/components/icons";
 import { TripNavBarStatic } from "@/components/bottom-nav-bar";
 import { Avatar, BottomBar, Button, Card, Divider, IconButton, Kicker, Screen, ScreenContent, ScreenError, ScreenLoading, TopBar } from "@/components/ui";
 import { displayNameFor } from "@/lib/avatar";
@@ -271,11 +271,6 @@ export default function SettleUpPage() {
       </ScreenContent>
       {/* Real footer nav bar, same stacking as the ongoing branch above and the main trip page. */}
       <BottomBar>
-        <Button variant="muted" className="h-[50px] text-[14px]">
-          <CheckIcon size={16} strokeWidth={2.6} />
-          Trip completed
-        </Button>
-        <div className="h-2" />
         <Button variant="accent" className="text-[16px]" onClick={() => router.push("/trip/new")}>
           Create a new trip
           <ArrowRightIcon size={18} strokeWidth={2.4} />

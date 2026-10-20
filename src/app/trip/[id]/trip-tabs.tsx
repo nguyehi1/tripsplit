@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { PencilIcon } from "@/components/icons";
 import { Avatar, Card, Divider, ProgressBar } from "@/components/ui";
 import { displayNameFor } from "@/lib/avatar";
 import { formatCents } from "@/lib/currency";
@@ -87,12 +86,18 @@ export function TripTabs({
             <p className="text-[13px] text-ink/60">No expenses logged yet.</p>
           </div>
         ) : (
-          <Card className="px-4 py-[3px]">
+          <Card className="px-4">
             {expenses.map((expense, i) => {
               const editable = expense.payer.id === you?.id && !isCompleted;
-              const rowClassName = `flex items-center gap-3 py-[11px] ${
-                i < expenses.length - 1 ? "border-b border-ink/[0.07]" : ""
-              } ${editable ? "cursor-pointer" : ""}`;
+              // The card has no vertical padding so the editable tint can run edge to edge; the
+              // 3px it used to add moves onto the first and last rows to keep the card height.
+              const rowClassName = `flex items-center gap-3 ${i === 0 ? "pt-3.5" : "pt-[11px]"} ${
+                i === expenses.length - 1 ? "pb-3.5" : "pb-[11px] border-b border-ink/[0.07]"
+              } ${
+                editable
+                  ? "-mx-4 cursor-pointer bg-ink/[0.035] px-4 first:rounded-t-card last:rounded-b-card hover:bg-ink/[0.08]"
+                  : ""
+              }`;
               const children = (
                 <>
                   <Avatar initials={expense.payer.initials} color={expense.payer.avatar} />
@@ -108,7 +113,6 @@ export function TripTabs({
                     </div>
                   </div>
                   <div className="text-display text-[17px]">{formatCents(expense.amountCents)}</div>
-                  {editable ? <PencilIcon size={14} strokeWidth={2.2} className="text-ink/40" /> : null}
                 </>
               );
               // A real <a> here (vs. the old div[role=button]) activates on Enter but not

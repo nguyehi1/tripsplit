@@ -18,6 +18,7 @@ import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
 import { deriveSuggestions, suggestionKey, SUGGESTION_ADD_EVENT } from "@/lib/starter-suggestions";
 import { createClient } from "@/lib/supabase/client";
 import { trackEvent } from "@/lib/tracking";
+import { FLOATING_NOTICE_BOTTOM_CLASS } from "./floating-notice";
 import { SuggestedCard } from "./suggested-card";
 import { useTripVerification } from "./verify-inline";
 
@@ -499,7 +500,7 @@ export function ShoppingListTab({
   // the bottom of the page, and an inline pill above it would push every row down under the
   // thumb at the moment of the next "+" tap (design.md 16.2). The polite status line announces it.
   const floatingNotice = addedName ? (
-    <div className="pointer-events-none fixed bottom-[106px] left-1/2 z-10 w-full max-w-md -translate-x-1/2 px-5" aria-hidden="true">
+    <div className={`pointer-events-none fixed ${FLOATING_NOTICE_BOTTOM_CLASS} left-1/2 z-10 w-full max-w-md -translate-x-1/2 px-5`} aria-hidden="true">
       <p
         className="mx-auto w-fit max-w-full rounded-[14px] px-3.5 py-2.5 text-[13px] font-medium text-white"
         style={{ background: "color-mix(in srgb, var(--color-ink) 90%, transparent)" }}

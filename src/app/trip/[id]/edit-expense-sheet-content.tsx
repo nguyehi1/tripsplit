@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, CloseIcon } from "@/components/icons";
+import { CheckIcon, CloseIcon, TrashIcon } from "@/components/icons";
 import {
   Button,
   Card,
   Divider,
+  IconButton,
   IconLinkButton,
   Kicker,
+  LinkButton,
   LockedNotice,
   ScreenContent,
   ScreenLoading,
@@ -17,12 +19,14 @@ import {
 import { redirectToVerify, requireVerifiedSession } from "@/lib/auth-gate";
 import { updateExpense } from "@/lib/data/trips";
 import { todayIso } from "@/lib/dates";
+import { ExpenseActionError, expenseDeleteErrorCopy } from "@/lib/errors";
 import { LOCKED_TRIP_COPY } from "@/lib/locked-trip-copy";
 import { savePendingExpenseDraft, takePendingExpenseDraft } from "@/lib/pending-action";
 import { reportClientTiming, timeClient } from "@/lib/perf/timing";
 import { trackEvent } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { isValidExpenseDate, isValidExpenseInput } from "@/lib/validation/expense";
+import { useExpenseUndo } from "./expense-undo-provider";
 
 /**
  * `null` while still loading/unresolved. `"editable"` is the original, unchanged payer-and-
@@ -49,13 +53,18 @@ type ViewMode = "editable" | "readonly-not-payer" | "readonly-locked";
  */
 export function EditExpenseSheetContent({ tripId: id, expenseId }: { tripId: string; expenseId: string }) {
   const router = useRouter();
+  const { requestDelete } = useExpenseUndo();
   const [mode, setMode] = useState<ViewMode | null>(null);
   const [payerName, setPayerName] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Zero rows from the read (PGRST116): deleted, erased or never existed. Retrying cannot help.
+  const [notFound, setNotFound] = useState(false);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Which action is in flight (both buttons are disabled while either runs); labels only.
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -67,6 +76,7 @@ export function EditExpenseSheetContent({ tripId: id, expenseId }: { tripId: str
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadError(null);
+    setNotFound(false);
     const supabase = createClient();
     Promise.all([
       timeClient("edit-expense", "gating.getUser", () => supabase.auth.getUser()),
@@ -77,6 +87,10 @@ export function EditExpenseSheetContent({ tripId: id, expenseId }: { tripId: str
     ]).then(async ([userResult, expenseResult, tripResult]) => {
       if (cancelled) return;
       const user = userResult.data.user;
+      if (user && expenseResult.error?.code === "PGRST116") {
+        setNotFound(true);
+        return;
+      }
       if (!user || expenseResult.error || !expenseResult.data) {
         setLoadError("Couldn't open that expense — try again.");
         return;
@@ -181,12 +195,51 @@ export function EditExpenseSheetContent({ tripId: id, expenseId }: { tripId: str
     }
   }
 
+  async function handleDelete() {
+    setError(null);
+    setSubmitting(true);
+    setDeleting(true);
+    try {
+      const supabase = createClient();
+      // Same gate as Save: an unverified session is sent to verify and back, nothing is deleted.
+      if (!(await requireVerifiedSession(supabase))) {
+        redirectToVerify(router, "invitee-expense", `/trip/${id}/expense/${expenseId}/edit`);
+        return;
+      }
+      await requestDelete(expenseId);
+      trackEvent("expense_delete_complete");
+      router.push(`/trip/${id}`);
+      router.refresh();
+    } catch (e) {
+      // One neutral line for every failure: the database answers all causes with the same code.
+      setError(expenseDeleteErrorCopy());
+      if (e instanceof ExpenseActionError && e.code === "not_allowed") router.refresh();
+    } finally {
+      setSubmitting(false);
+      setDeleting(false);
+    }
+  }
+
   const closeHref = mode === "readonly-not-payer" || mode === "readonly-locked" ? `/trip/${id}?tab=list` : `/trip/${id}`;
   const closeButton = (
     <IconLinkButton href={closeHref} aria-label="Close">
       <CloseIcon size={18} strokeWidth={2.3} />
     </IconLinkButton>
   );
+
+  if (notFound) {
+    return (
+      <ScreenContent>
+        <TopBar title="Expense" trailing={closeButton} />
+        <div className="h-6" />
+        <p className="text-[15px] text-ink/70">This expense isn&apos;t available anymore.</p>
+        <div className="h-3" />
+        <LinkButton href={`/trip/${id}`} block={false} variant="soft" className="px-5">
+          Back to trip
+        </LinkButton>
+      </ScreenContent>
+    );
+  }
 
   if (loadError) {
     return (
@@ -229,7 +282,20 @@ export function EditExpenseSheetContent({ tripId: id, expenseId }: { tripId: str
       <div className="h-[18px]" />
 
       <Card className="p-[18px]">
-        <Kicker>Amount</Kicker>
+        <div className="-my-1.5 -mr-1.5 flex items-center justify-between">
+          <Kicker>Amount</Kicker>
+          {readOnly ? null : (
+            <IconButton
+              variant="plain"
+              onClick={handleDelete}
+              disabled={submitting}
+              aria-label={deleting ? "Deleting…" : "Delete expense"}
+              style={{ color: "var(--color-terracotta)" }}
+            >
+              <TrashIcon size={18} strokeWidth={2.2} />
+            </IconButton>
+          )}
+        </div>
         <div className="h-1.5" />
         <div className="flex items-baseline">
           <span className="text-display text-[52px]" style={{ color: "var(--color-accent)" }}>
@@ -282,10 +348,12 @@ export function EditExpenseSheetContent({ tripId: id, expenseId }: { tripId: str
       <div className="h-4" />
 
       {readOnly ? null : (
-        <Button variant="primary" className="text-[16px]" onClick={handleSubmit} disabled={submitting}>
-          <CheckIcon size={17} strokeWidth={2.6} />
-          {submitting ? "Saving…" : "Save changes"}
-        </Button>
+        <>
+          <Button variant="primary" className="text-[16px]" onClick={handleSubmit} disabled={submitting}>
+            <CheckIcon size={17} strokeWidth={2.6} />
+            {submitting && !deleting ? "Saving…" : "Save changes"}
+          </Button>
+        </>
       )}
     </ScreenContent>
   );
