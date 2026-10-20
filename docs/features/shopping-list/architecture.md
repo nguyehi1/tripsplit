@@ -6,7 +6,7 @@ Inputs: [requirements.md](requirements.md) (authoritative scope/AC),
 [design.md](design.md) (ux-designer stage — states, copy, a11y, and four items
 explicitly flagged to this stage; treated as settled UX direction, not
 re-litigated below except where it flags an open architecture question),
-[docs/ARCHITECTURE.md](../../ARCHITECTURE.md), ADR 0002, 0004, 0005, 0006,
+[docs/ARCHITECTURE.md](../../architecture/overview.md), ADR 0002, 0004, 0005, 0006,
 0008, 0012, and `supabase/migrations/0001`, `0008`, `0009`, `0013`, `0014`.
 
 ## 0. Existing functionality this reuses (no parallel implementation)

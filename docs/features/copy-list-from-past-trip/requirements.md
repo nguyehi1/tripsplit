@@ -130,7 +130,7 @@ reversible action so a wrong tap costs nothing.
 **Analytics and copy**
 13. If an analytics event is added for the copy tap (optional), it is name-only (no source trip
     name, no item names, no counts) per the existing analytics rules, and listed in
-    [ANALYTICS.md](../../ANALYTICS.md).
+    [ANALYTICS.md](../../reference/analytics-events.md).
 14. No new user-facing copy makes any privacy or security claim (e.g. "only visible to you");
     copied items are described, if at all, the same way existing shared list items are — visible to
     all current trip members.

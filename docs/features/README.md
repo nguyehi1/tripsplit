@@ -20,7 +20,7 @@ under the matching feature slug. Standing review policies remain at
 These are point-in-time records for one feature. Planning and requirements
 may preserve proposals that changed or were dropped; a status line inside an
 older feature document is not necessarily current. For shipped behavior and
-open release work, use [`../ROADMAP.md`](../ROADMAP.md). For the current
-technical design, use [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and the code.
+open release work, use [`../product/roadmap.md`](../product/roadmap.md). For the current
+technical design, use [`../architecture/overview.md`](../architecture/overview.md) and the code.
 Architecture decisions that outlive a single feature belong in
 [`../adr/`](../adr/); a superseded ADR is decision history, not current policy.

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "docs:check": "node scripts/check-doc-links.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "perf:baseline": "node scripts/perf-baseline.mjs",

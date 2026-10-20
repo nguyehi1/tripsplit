@@ -9,9 +9,9 @@ const read = (p: string) => readFileSync(join(root, p), "utf8");
 const norm = (s: string) => s.replace(/\s+/g, " ");
 
 describe("Revision 3: docs and tokens", () => {
-  const analytics = read("docs/ANALYTICS.md");
+  const analytics = read("docs/reference/analytics-events.md");
 
-  it("ANALYTICS.md has a home_template_tapped row per catalog code, plus the blank-trip row", () => {
+  it("analytics-events.md has a home_template_tapped row per catalog code, plus the blank-trip row", () => {
     for (const t of STARTER_TYPES) {
       expect(analytics).toMatch(new RegExp(`\\| \`home_template_tapped_${t.code}\` \\|`));
     }
@@ -19,7 +19,7 @@ describe("Revision 3: docs and tokens", () => {
     expect(analytics).not.toMatch(/\| `home_template_tapped_other` \|/);
   });
 
-  it("ANALYTICS.md says the events fire on the tap, before navigation, with no account, and are a closed set", () => {
+  it("analytics-events.md says the events fire on the tap, before navigation, with no account, and are a closed set", () => {
     const section = norm(analytics.slice(analytics.indexOf("### Home and templates"), analytics.indexOf("### Expense Management")));
     expect(section).toContain("on the tap, before navigation, with no account");
     expect(section).toContain("closed set");

@@ -51,7 +51,7 @@ describe("starter catalog", () => {
   });
 
   it("every code has its analytics event documented", () => {
-    const doc = readFileSync(join(__dirname, "../../docs/ANALYTICS.md"), "utf8");
+    const doc = readFileSync(join(__dirname, "../../docs/reference/analytics-events.md"), "utf8");
     for (const t of STARTER_TYPES) expect(doc).toContain(`trip_type_selected_${t.code}`);
     expect(doc).toContain("trip_type_selected_other");
     expect(doc).toContain("suggestion_add_complete");

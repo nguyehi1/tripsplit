@@ -544,7 +544,7 @@ not edit that large file in place; the exact text to add:
    `ExpenseActionError` in `src/lib/errors.ts`, `src/app/trip/[id]/expense-undo-provider.tsx`, the guard
    test `src/lib/data/expenses-read-guard.test.ts`, and the rule "a new reader of `expenses` that bypasses
    RLS must filter `deleted_at`".
-6. ADR index: "[0017](adr/0017-expense-delete-soft-mark-then-erase.md) — Expense delete as a database-clocked
+6. ADR index: "[0017](../../adr/0017-expense-delete-soft-mark-then-erase.md) — Expense delete as a database-clocked
    soft mark (hidden by RLS, unwritable by clients), Undo window 15 s, hard erase from 30 s by pg_cron plus
    an opportunistic in-RPC batch, over client-side re-insert Undo, retained soft delete, cron-only erase, or
    per-query filters."

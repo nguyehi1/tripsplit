@@ -5,7 +5,7 @@ Stage: planning (pre-requirements). Convened `pm` and `product-strategist`. This
 
 Historical planning record: trip types, starter suggestions, and home templates
 are implemented; release checks remain open as listed in the
-[roadmap](../../ROADMAP.md). This document preserves the earlier scoping debate.
+[roadmap](../../product/roadmap.md). This document preserves the earlier scoping debate.
 
 Constraints from the user: LIGHT MODE ONLY (dark deferred). Phase 1 = screens A-G, I, L. Phase 2 (share/receive H, J, K) is out of scope. Source brief: [brief.md](brief.md).
 
@@ -15,7 +15,7 @@ A new trip starts with a useful list, not a blank one. There are three trip type
 
 ## Orientation: what the repo already says
 
-- The [product principles](../../ROADMAP.md#product-principles-and-scope) do not specifically address templates or trip-type catalogs. At planning time, those additions raised a tradeoff against keeping the core expense and settle-up flows simple; the user approved proceeding, and the features are now implemented.
+- The [product principles](../../product/principles.md) do not specifically address templates or trip-type catalogs. At planning time, those additions raised a tradeoff against keeping the core expense and settle-up flows simple; the user approved proceeding, and the features are now implemented.
 - [shopping-list/planning.md](../shopping-list/planning.md) and the ROADMAP entry list "a cross-trip 'common items' template" as an explicit non-goal. Copy-past-trip, and to a lesser degree trip-type catalogs, reverse that. The user should reverse it consciously.
 - Current release work and follow-ups are in the roadmap. The earlier plan to defer list work behind other priorities is historical; the shared list has shipped. Dark mode remains deferred.
 - Compliance and security baselines: no hard stop is triggered (no outbound message, no new vendor, no special-category data). Three baseline rules do bite. Analytics must be event-name only. Any new bulk write path or cross-trip read needs the abuse case designed at requirements time. Migrations must be safe with old code on the new schema and new code on the old schema. See conflicts 7 and 8 below.
@@ -30,7 +30,7 @@ Verified against the code.
 4. **Trips have no `types`.** `create_trip` takes only name, display name, location and dates. A `types` array needs a migration and a changed RPC signature, which is the non-atomic-deploy case in the security baseline.
 5. **There is no single "Home".** `/` is the welcome page (Create your first trip / invite link / sign in) and `/trips` is the dashboard (Ongoing/Completed, empty state "You're not on any trips yet"). Canvas A (tiles, Blank trip, Your trips) and L ("No trips yet" card) merge two screens that are separate today. Any placement of the tiles is a decision.
 6. **Header icons.** The trip header has Back, Trip roster (people) and Settle up, and shows them only when verified. No Share icon exists, and the share target is phase 2. The brief's acceptance criterion lists three header icons including Share.
-7. **Analytics.** `trackEvent(name)` takes an event name only. [ANALYTICS.md](../../ANALYTICS.md) and the compliance baseline forbid properties such as trip IDs or free text. The brief's events carry `source_trip_id`, `batch_id` and `name_length`. Types and counts are generic, but the IDs are not allowed. The proposed success measure ("first list has >=5 items within a day") is not computable from Vercel events at all. It needs a DB query.
+7. **Analytics.** `trackEvent(name)` takes an event name only. [ANALYTICS.md](../../reference/analytics-events.md) and the compliance baseline forbid properties such as trip IDs or free text. The brief's events carry `source_trip_id`, `batch_id` and `name_length`. Types and counts are generic, but the IDs are not allowed. The proposed success measure ("first list has >=5 items within a day") is not computable from Vercel events at all. It needs a DB query.
 8. **Fields that already match.** New trip already has no invite row (name, location, dates only), so that criterion is already met. The add-item sheet is a separate intercepted route, so keeping suggestions out of it is easy. "Bundled catalog works offline" is only partly true, because the app is not a PWA and the page itself needs a network.
 9. **Other.** The working tree has uncommitted edits to `src/app/trip/[id]/page.tsx` and a new migration 0021. Any engineering work must be sequenced around them. Copy carries other members' free-text item names between trips. AGENTS.md requires reading `node_modules/next/dist/docs/` before any Next.js code, which is a note for the later stages and not done at planning.
 

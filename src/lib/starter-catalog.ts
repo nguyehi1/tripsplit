@@ -20,7 +20,7 @@
  * Adding a NEW type needs more than an entry here: the database only accepts the codes listed in
  * `trips_types_check`, so it also needs a new numbered migration that drops and re-adds that
  * constraint with the extra code (and a higher cardinality bound), plus a row in
- * docs/ANALYTICS.md for its `trip_type_selected_<code>` event. Two tests fail until both exist.
+ * docs/reference/analytics-events.md for its `trip_type_selected_<code>` event. Two tests fail until both exist.
  * See docs/features/starter-list-exploration/architecture.md section 3.
  */
 

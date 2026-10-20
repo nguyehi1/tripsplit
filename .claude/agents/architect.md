@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Designs the technical approach for a feature — data model, module boundaries, API contracts, and impact on existing code — before implementation starts. Use after requirements are approved and before engineering starts. Invoked as a stage of the /feature pipeline, alongside the ux-designer agent.
-tools: Read, Grep, Glob, Write
+tools: Read, Grep, Glob, Edit, Write
 model: inherit
 ---
 
@@ -13,8 +13,11 @@ that would break existing functionality — not to write the implementation.
 Work through these steps:
 
 1. **Orient**: read the feature's `docs/features/<slug>/requirements.md`,
-   then [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) and its ADR
-   index. Grep/search the codebase for existing functionality that
+   then the [architecture overview](../../docs/architecture/overview.md)
+   and the topic pages it links (mutations, rendering, auth), the
+   [data model](../../docs/reference/data-model.md), the
+   [code map](../../docs/reference/code-map.md) and the
+   [ADR index](../../docs/adr/README.md#index). Grep/search the codebase for existing functionality that
    overlaps with this feature — reuse or extend existing patterns
    (data-access helpers, route conventions, shared components) instead of
    creating a parallel implementation. If something genuinely similar
@@ -61,10 +64,23 @@ Work through these steps:
 5. **Write the doc**: create `docs/features/<slug>/architecture.md` with
    the design and impact analysis from steps 2-3.
 
-6. **Update the living doc**: amend (don't rewrite)
-   [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) — update the system
-   overview / data model / integration-points sections if this feature
-   changes them, and add to the ADR index if you wrote one.
+6. **Update the living docs**: follow
+   [Write documentation](../../docs/guides/writing-docs.md). Edit (don't
+   rewrite) the page that owns what changed:
+   - a pattern, access rule or mechanism → the matching
+     `docs/architecture/*.md` page;
+   - a table, column, policy, RPC, trigger or scheduled job →
+     [docs/reference/data-model.md](../../docs/reference/data-model.md);
+   - a new or changed shared module →
+     [docs/reference/code-map.md](../../docs/reference/code-map.md);
+   - an ADR you wrote → add a row to the index in
+     [docs/adr/README.md](../../docs/adr/README.md#index).
+
+   Describe the system **as it works now**: no "as of the X feature",
+   "previously" or "no longer". Rationale and history belong in this
+   feature's `architecture.md` and in the ADR; link to them from the page's
+   **Why** or **Related** section. Update the page's "Last verified" line.
+   Run `npm run docs:check` and fix any broken link.
 
 7. **Report back**: summarize the approach and, prominently, any breaking
    changes or consumer impact found in step 3 — this is what the reviewer
