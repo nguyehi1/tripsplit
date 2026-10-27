@@ -18,9 +18,9 @@ it to this file. See `.claude/skills/feature/SKILL.md`, "Feedback loop".
 - Collect only what the feature needs. Prefer not receiving data at all
   (e.g. the invite-by-email address stays in the browser and goes to the
   user's own mail app; the server never sees it).
-- Any new place personal data lives must be covered by the export query and
-  deletion cases in `docs/runbooks/account-deletion-and-export.md`. Update the
-  runbook in the same PR.
+- Any new place personal data lives must be covered by the export steps in
+  [export-user-data.md](../../../runbooks/export-user-data.md) and the deletion cases in
+  [delete-an-account.md](../../../runbooks/delete-an-account.md). Update both runbooks in the same PR.
 - Any new personal data needs a retention rule (how long, what deletes it).
   Existing jobs: abandoned anonymous accounts, hourly purge of
   `rpc_rate_limits`.

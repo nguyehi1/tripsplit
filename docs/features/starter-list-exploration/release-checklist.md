@@ -17,8 +17,8 @@ database must be ready first. Migration 0022 is this feature's; 0021
    from the current file before going on.
 2. **Run the live suite:** `supabase/migrations/0022_trip_types_and_other_type.live.qa.test.ts`
    with the `LIVE_SUPABASE_*` variables pointing at the same database.
-3. **Run the verify SQL:** `supabase/verify/0022_trip_types_and_other_type.verify.sql` (see
-   `docs/runbooks/account-deletion-and-export.md` section 5).
+3. **Run the verify SQL:** `supabase/verify/0022_trip_types_and_other_type.verify.sql` (its
+   export query is in `docs/runbooks/export-user-data.md`).
 4. **Test creating trips** (against the migrated database): create one with 1 type, one with 2, one
    with 3, and one with "Other" plus a short typed text. Confirm each saves and the List tab shows
    the Suggested card (Other alone gives no suggestions).
