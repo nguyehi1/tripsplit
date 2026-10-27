@@ -1,7 +1,7 @@
 # Email invites (lighter version): requirements
 
 Date: 2026-10-12 (final user rescope)
-Status: implemented; awaiting ship. This is the final spec. Where it differs from [planning.md](planning.md) (a dated proposal from the earlier, abandoned design), this doc wins.
+Status: shipped to `main`; counsel review of the Terms invite clause is still open (see the roadmap). This is the final spec. Where it differs from [planning.md](planning.md) (a dated proposal from the earlier, abandoned design), this doc wins.
 Semver: **feature** (minor bump). Additive. Nothing that exists today changes for existing users.
 
 > **History.** An earlier design had Splitiful send the invite email itself (per-person tokens, Pending rows with stored emails, a suppression list, a bounce webhook, an opt-out page, 30-day auto-removal). The user abandoned it on 2026-10-12 and none of it was built into the shipped version. [ADR 0014](../../adr/0014-email-invites-pending-member-rows-and-non-credential-tokens.md) records it and is marked superseded.

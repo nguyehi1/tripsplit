@@ -61,7 +61,7 @@ These are records. They preserve what was decided or found at the time and are n
 |---|---|
 | [ADRs](adr/README.md) | Durable technical decisions and the [decision index](adr/README.md#index). Superseded ADRs stay as history. |
 | [Feature records](features/README.md) | Planning, requirements, architecture, design and QA for each feature |
-| [Reviews](reviews/ux-consistency-review-2026-09-30.md) | [UX consistency review](reviews/ux-consistency-review-2026-09-30.md), [performance review](reviews/performance-review-2026-10.md), [security and compliance](reviews/security-compliance/README.md) |
+| [Reviews](reviews/performance-review-2026-10.md) | [Performance review](reviews/performance-review-2026-10.md), [security and compliance](reviews/security-compliance/README.md) |
 | [Market research](research/market-research-2026-09.md) | Competitive research dated 2026-09-09. Not a current market source. |
 
 ## Moved pages
@@ -77,6 +77,7 @@ These are records. They preserve what was decided or found at the time and are n
 | `docs/market-research.md` | [research/market-research-2026-09.md](research/market-research-2026-09.md) |
 | `docs/user-flow.html` | [architecture/user-flow.html](architecture/user-flow.html) |
 | `docs/runbooks/account-deletion-and-export.md` | [runbooks/](runbooks/README.md): [export](runbooks/export-user-data.md), [delete](runbooks/delete-an-account.md), [retention](runbooks/anonymous-account-retention.md), [erase job](runbooks/monitor-expense-erase.md), [release 0022](runbooks/releases/0022-trip-types.md), [release 0024](runbooks/releases/0024-expense-delete.md) |
+| `docs/reviews/ux-consistency-review-2026-09-30.md` | Removed as out of date (2026-10-21). Re-run the review when needed; the old text is in git history. |
 
 Applied migrations and released `CHANGELOG.md` entries are immutable and still cite the old paths. Use this table to find them.
 
