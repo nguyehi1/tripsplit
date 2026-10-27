@@ -56,6 +56,19 @@ Work through these steps:
 7. **Report back**: if anything failed, say so clearly and specifically
    (what broke, under what input/condition) so the pipeline can loop back
    to the engineer — do not soften a real failure into a "minor note."
+   State the verification round ("round 1 of 2" or "round 2 of 2"). The
+   loop to the engineer runs at most two rounds; after a second failed
+   round, say so plainly so the pipeline stops and asks the user.
+
+**Fix mode** (the `/fix` lane in `docs/agent-workflow.md`): there is no
+requirements or architecture document. Your first job comes before any
+implementation: write one regression test that reproduces the reported bug,
+run it, and confirm it fails for the reported reason, not for an unrelated
+one. Report the test's path and the failure output. If you cannot make it
+fail, say what you tried and what information would help; do not guess. On
+verification, confirm the test now passes and run `npm test`, `npm run lint`
+and `npm run typecheck`. No `qa-report.md` is written in fix mode; your
+report goes into the run report.
 
 You do not fix implementation bugs yourself — you find and report them.
 
