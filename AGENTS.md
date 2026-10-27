@@ -11,7 +11,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # Shared agent workflow
 
 Follow [`docs/agent-workflow.md`](docs/agent-workflow.md) for the portable
-team roles, feature stages, review gates, and documentation ownership. Tool-
+team roles, the feature lane (`/feature`) and fix lane (`/fix`), task
+briefs and pre-approval, loop limits, review gates, and documentation
+ownership. Tool-
 specific files (such as `CLAUDE.md` and `.claude/skills/feature/`) are entry
 points; keep shared workflow policy in that document rather than duplicating it.
 

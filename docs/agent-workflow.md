@@ -7,6 +7,17 @@ approval rules. The current Claude adapters live in `.claude/agents/` and
 `.claude/skills/feature/`; `AGENTS.md` and `CLAUDE.md` point contributors to
 this document.
 
+## Lanes
+
+| Lane | Entry point | Use for | Owner stops |
+|---|---|---|---|
+| Feature | `/feature <description>` | New capability, behavior change, redesign | Direction, requirements, completion; the first two can be pre-approved by a brief for a small item |
+| Fix | `/fix <bug report>` | A defect in shipped behavior, with no change in intended behavior | Completion only |
+
+A task brief from the workspace orchestrator, or one the user writes, can
+start either lane without an interactive session. See
+[Task briefs and pre-approval](#task-briefs-and-pre-approval).
+
 ## Team roles
 
 | Role | Owns | Does not own |
@@ -47,7 +58,8 @@ flowchart TD
     DesignRisk -->|No| Engineer
     Engineer --> QA[QA verifies acceptance + regressions]
     QA --> QAGate{QA passes?}
-    QAGate -->|No| Engineer
+    QAGate -->|No, round 1 or 2| Engineer
+    QAGate -->|No after round 2| Escalate([Stop: decision card to the user])
     QAGate -->|Yes| FinalReview[Security + compliance<br/>final review in parallel]
     FinalReview --> FinalGate{Blocking findings?}
     FinalGate -->|Yes| Engineer
@@ -57,8 +69,10 @@ flowchart TD
     C3 --> Done([Complete after approval])
 ```
 
-The three checkpoints are required stops. QA or blocking final-review findings
-send the work back through implementation and verification before it advances.
+The three checkpoints are required stops, except that a brief can
+pre-approve the first two for a small item. QA or blocking final-review
+findings send the work back through implementation and verification before
+it advances. The QA loop back to the engineer runs at most two rounds.
 
 ## Feature delivery stages
 
@@ -67,7 +81,7 @@ send the work back through implementation and verification before it advances.
    `docs/features/<slug>/planning.md`.
 2. **User checkpoint: direction.** Present the recommendation and open
    decisions. Wait for the user's explicit direction before writing formal
-   requirements.
+   requirements, unless a brief pre-approved the direction for a small item.
 3. **Requirements.** PM writes acceptance criteria, non-goals, risk surface,
    and the roadmap entry in `docs/features/<slug>/requirements.md` and
    `docs/product/roadmap.md`.
@@ -76,7 +90,9 @@ send the work back through implementation and verification before it advances.
    acceptance criteria and non-goals. Record why this review was skipped
    when every risk item is `none`.
 5. **User checkpoint: requirements.** Present the scope, risk surface, and
-   constraints. Wait for explicit approval or revisions before design.
+   constraints. Wait for explicit approval or revisions before design,
+   unless a brief pre-approved the requirements for a small item and the
+   PM found no risk-surface item.
 6. **Architecture and UX.** Architect and UX designer produce their feature
    documents. Architect updates the matching `docs/architecture/` page and
    `docs/reference/data-model.md` or `code-map.md` when the system's
@@ -89,7 +105,8 @@ send the work back through implementation and verification before it advances.
 8. **Implement and verify.** Engineer implements against approved
    requirements, architecture, design, and risk constraints. QA verifies
    acceptance criteria, relevant regressions, and project checks. Fix
-   failures and repeat verification before continuing.
+   failures and repeat verification before continuing, for at most two
+   rounds (see [Loop limits](#loop-limits)).
 9. **Final security and compliance review.** Review the implementation and
    resolve blocking findings before documentation and PR preparation. A
    late blocking finding should identify the missed earlier check and
@@ -102,10 +119,133 @@ send the work back through implementation and verification before it advances.
     additions, and a draft commit message. Wait for approval. Do not commit,
     push, change the release version, or open a PR without authorization.
 
+## Fix lane
+
+The fix lane repairs a defect in shipped behavior. It does not change what
+the product is meant to do. Its record is the regression test, the commit
+message and the run report; it writes no `docs/features/` folder.
+
+```mermaid
+flowchart TD
+    Bug([Bug report]) --> Repro[QA writes a failing test<br/>that reproduces the bug]
+    Repro --> Fails{Fails for the<br/>reported reason?}
+    Fails -->|No| NoRepro([Stop: decision card<br/>cannot reproduce])
+    Fails -->|Yes| Eng[Engineer makes the<br/>minimal change]
+    Eng --> Verify[QA: the test passes,<br/>full suite and checks pass]
+    Verify --> VGate{Passes?}
+    VGate -->|No, round 1 or 2| Eng
+    VGate -->|No after round 2| Escalate([Stop: decision card])
+    VGate -->|Yes| Risk{Risk surface<br/>touched?}
+    Risk -->|Yes| Review[Security + compliance<br/>review the diff]
+    Risk -->|No| CI
+    Review --> CI[PR prep runs the CI checks]
+    CI --> C3{Checkpoint: user<br/>reviews the fix}
+    C3 --> Done([Complete after approval])
+```
+
+1. **Reproduce first.** QA writes a test that fails on the current code for
+   the reason in the report, and confirms that it fails. No implementation
+   change happens before this test exists. If the bug cannot be reproduced
+   in a test, stop with a decision card that says what was tried and what
+   information would help.
+2. **Minimal change.** The engineer changes only what the failing test
+   needs. No refactors, renames or unrelated cleanup; note those for later.
+   If the fix needs a change in intended behavior, a new migration that
+   changes data shape, or a design decision, stop and recommend the
+   feature lane instead.
+3. **Verify.** QA confirms the new test passes and runs the full suite and
+   project checks. Failures go back to the engineer for at most two rounds.
+4. **Risk review when needed.** If the diff touches the risk surface
+   (authentication, row-level security or policies, personal data,
+   financial records, email or other communications, retention or
+   deletion), the security reviewer, and the compliance reviewer where
+   privacy or records are affected, review the diff. Blocking findings go
+   back to step 2 and count toward the two rounds.
+5. **Run the CI checks.** PR prep runs what `.github/workflows/ci.yml` runs:
+   `npm run lint`, `npx next typegen`, `npm run typecheck`, `npm test` and
+   `npm run build`, plus `npm run docs:check` when docs changed and
+   `supabase db reset --local` when a migration changed and the CLI is
+   available. Every check passes before the completion checkpoint.
+6. **User checkpoint: completion.** Present the bug, the failing test, the
+   diff summary, check results, any review findings and a draft commit
+   message. This stop cannot be pre-approved.
+
+## Task briefs and pre-approval
+
+A task brief is a short file that starts a lane without a live
+conversation. The workspace orchestrator writes it, or the user does. It
+holds:
+
+- **Goal**: the feature or the bug, in the user's words.
+- **Lane**: feature or fix.
+- **Pre-approved stops**: none, `direction`, or `direction` and
+  `requirements`. Only the feature lane uses this field.
+- **Decisions already made**: answers to questions the planning stage would
+  otherwise ask, such as scope limits or copy.
+- **Git permission**: `none` (default) or `branch-and-draft-pr`, which
+  allows committing to an `agent/<slug>` branch, pushing it and opening a
+  draft pull request. Merging, releasing and changing the version always
+  need the user.
+- **Budget**: the spending cap for the run.
+
+**Small item.** A brief can pre-approve the direction and requirements stops
+only for a small item, which means all of the following hold:
+
+- every risk-surface item in the requirements is `none`;
+- no new migration, no new third-party service and no change to auth or
+  policies;
+- the change stays inside one existing feature area, with no new route or
+  table.
+
+**How pre-approval works.** The planning facilitator still writes
+`planning.md` and records "Direction pre-approved by brief" with the brief's
+decisions. The PM still writes `requirements.md`. If the PM finds any
+risk-surface item, or the work fails the small-item test, the pre-approval
+lapses and the run stops at the requirements checkpoint with a decision
+card. The completion checkpoint is never pre-approved.
+
+## Loop limits
+
+- QA back to the engineer: at most **two rounds** per feature or fix. QA
+  states the round number in its report. After a second failed round, stop
+  and send a decision card; do not start a third round.
+- A blocking final-review finding sent back to the engineer starts the same
+  verification loop and counts toward the same two rounds.
+- A brief's budget is a hard stop. When it runs out, stop and send a run
+  report with status `needs_decision`.
+
+## Run report
+
+Every lane ends with this block, so the orchestrator can build the user's
+digest without reading the whole conversation:
+
+```text
+status: done | needs_decision | failed
+lane: feature | fix
+slug: <slug>
+stage_reached: <stage>
+branch: <branch or none>
+pr: <url or none>
+checks: lint=<pass|fail> typecheck=<pass|fail> test=<pass|fail> build=<pass|fail> docs=<pass|fail|n/a>
+qa_rounds: <n> of 2
+decision_cards:
+  - question: <what the user should decide>
+    options: [<a>, <b>]
+    recommendation: <a>
+    default_if_no_answer: <what happens next if the user does not answer>
+```
+
+A decision card is how the pipeline waits for the user without blocking a
+live session: the run stops, and the next run resumes from the card's
+answer.
+
 ## Shared rules
 
 - User decisions are hard gates. Do not infer approval from silence or
-  continue past a checkpoint while its answer is pending.
+  continue past a checkpoint while its answer is pending. A brief's
+  pre-approval is an explicit decision made in advance, not silence; it
+  covers only the stops and the small items described in
+  [Task briefs and pre-approval](#task-briefs-and-pre-approval).
 - Surface product, UX, architecture, or legal decisions to the user instead
   of silently choosing when the decision materially changes scope or risk.
 - Keep `docs/product/roadmap.md` as a concise status index and the

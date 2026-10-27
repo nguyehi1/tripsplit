@@ -20,3 +20,12 @@ and docs-engineer, tell them to follow that guide. Living docs
 (`docs/architecture/`, `docs/reference/`) describe current state only; feature
 history goes in `docs/features/<slug>/` and ADRs. Before the completion
 checkpoint, confirm `npm run docs:check` passes.
+
+**Briefs and limits.** When a task brief starts the pipeline, follow
+"Task briefs and pre-approval" in `docs/agent-workflow.md`: skip the
+direction and requirements checkpoints only when the brief pre-approves
+them and the item is small, and stop at requirements if the PM finds a
+risk-surface item. Cap the QA loop back to the engineer at two rounds (see
+"Loop limits"). Work on an `agent/<slug>` branch and open a draft pull
+request only when the brief grants `branch-and-draft-pr`. End every run,
+finished or stopped, with the "Run report" block from that document.

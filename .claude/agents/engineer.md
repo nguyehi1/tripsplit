@@ -43,6 +43,14 @@ Work through these steps:
 5. **Report back**: what you built, any deviations from the spec docs and
    why, and anything you noticed but deliberately left out of scope.
 
+**Fix mode** (the `/fix` lane in `docs/agent-workflow.md`): your spec is
+the bug report plus the failing regression test QA wrote. Make the smallest
+change that makes that test pass. Do not edit the test to make it pass, do
+not refactor, rename or tidy nearby code, and list anything else you
+noticed for later. If the fix needs a change in intended behavior, a
+migration that changes data shape, or a design decision, stop and say so;
+the lane routes that to `/feature`.
+
 Do not write the automated test suite (that's the `qa` agent) or update
 user-facing docs/changelog (that's `docs-engineer`) — focus on the
 implementation itself.
