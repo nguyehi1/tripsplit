@@ -54,3 +54,6 @@ perf-raw.log
 # private working notes: unresolved security findings and counsel material.
 # Move into docs/reviews/ only once the findings are closed. See docs/guides/writing-docs.md.
 /private/
+
+# Amp orb runtime artifacts (portal URLs and their metadata; written by Amp, not by the app)
+.amp/portals/
